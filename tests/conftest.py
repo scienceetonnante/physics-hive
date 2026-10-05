@@ -1,0 +1,106 @@
+"""Fixtures for the workspace-script tests: a toy workspace written file by file."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "scripts"))
+
+
+class ToyWorkspace:
+    """A temporary workspace with helpers to add cards, artefacts and records."""
+
+    def __init__(self, root: Path, shared: bool = False, leads: tuple[str, ...] = ("lead",)):
+        self.root = root
+        hub = '[hub]\nworkspace = "org/toy"\ntraces = "org/toy-traces"\n' if shared else "[hub]\n"
+        people = f"[people]\nleads = {list(leads)!r}\n".replace("'", '"')
+        (root / "project.toml").write_text(f'[method]\nphysics_intern_version = "test"\n\n{hub}\n{people}')
+        for folder in ("claims", "derivations", "computations", "critiques", "literature", "sessions", "feedback"):
+            (root / folder).mkdir(parents=True, exist_ok=True)
+        (root / "problem.md").write_text("# Problem\n\nToy question.\n")
+        (root / "plan.md").write_text("# Plan\n")
+
+    def write(self, rel: str, meta: dict, body: str = "") -> Path:
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        header = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()
+        path.write_text(f"---\n{header}\n---\n{body}")
+        return path
+
+    def card(self, card_id: str, kind: str = "claim", statement: str = "", **fields) -> Path:
+        session = card_id.split("-")[1] if card_id.split("-")[1].startswith("S") else None
+        meta = {
+            "id": card_id,
+            "kind": kind,
+            "statement": statement or f"statement of {card_id}",
+            "depends_on": fields.pop("depends_on", []),
+            "produced_by": fields.pop("produced_by", {"kind": "agent", "model": "m", "operator": "op"}),
+            "session": fields.pop("session", session),
+            "supersedes": fields.pop("supersedes", []),
+            "refutes": fields.pop("refutes", []),
+            "answers": fields.pop("answers", []),
+            **fields,
+        }
+        return self.write(f"claims/{card_id}.md", meta, "Body.\n")
+
+    def derivation(self, art_id: str, supports: list[str]) -> None:
+        self.write(f"derivations/{art_id}.summary.md", {"id": art_id, "kind": "derivation", "supports": supports}, "Summary.\n")
+        (self.root / f"derivations/{art_id}.tex").write_text("\\documentclass{article}\n")
+
+    def computation(self, art_id: str, supports: list[str]) -> None:
+        self.write(f"computations/{art_id}.md", {"id": art_id, "kind": "computation", "supports": supports}, "Summary.\n")
+        (self.root / f"computations/{art_id}.py").write_text("print(1)\n")
+
+    def review(self, review_id: str, verdict: str, supports: list[str]) -> None:
+        target, rest = review_id.split("_R-")
+        folder = "derivations" if target.startswith("D-") else "computations"
+        meta = {
+            "id": review_id,
+            "kind": "review",
+            "target": target,
+            "supports": supports,
+            "claim": "the claim",
+            "verdict": verdict,
+            "by": {"kind": "agent"},
+            "session": rest.split("-")[0],
+            "date": "2026-10-05",
+        }
+        self.write(f"{folder}/{review_id}.md", meta, "Review.\n")
+
+    def promotion(self, target: str, user: str = "lead", kind: str = "human", stamp: str = "20261006T100000") -> Path:
+        by = {"kind": kind, "user": user} if kind == "human" else {"kind": "agent", "model": "m", "operator": "op"}
+        meta = {"kind": "promotion", "target": target, "by": by, "date": "2026-10-06T10:00:00Z", "session": None}
+        return self.write(f"feedback/promotion-{target}-{user}-{stamp}.md", meta, "")
+
+    def verification(self, user: str, stamp: str, supports: list[str], target: str | None = None, verdict: str = "confirmed") -> None:
+        review_id = f"R-{user}-{stamp}"
+        meta = {"id": review_id, "kind": "review", "target": target, "supports": supports, "verdict": verdict,
+                "by": {"kind": "human", "user": user}, "date": "2026-10-06T10:00:00Z"}
+        self.write(f"feedback/review-{supports[0]}-{user}-{stamp}.md", meta, "Checked by hand.\n")
+
+    def git_init(self) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.name", "tester"], cwd=self.root, check=True)
+        self.commit("init")
+
+    def commit(self, message: str) -> str:
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=self.root, check=True)
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
+
+
+@pytest.fixture
+def toy(tmp_path):
+    return ToyWorkspace(tmp_path)
+
+
+@pytest.fixture
+def shared_toy(tmp_path):
+    return ToyWorkspace(tmp_path, shared=True)
