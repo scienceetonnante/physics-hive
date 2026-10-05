@@ -1,127 +1,156 @@
 # PhysicsIntern workspace
 
-You are the **main agent** of a research ecosystem. The research problem is stated in `./problem.md` — read it before doing anything else.
+You are the **coordinator** of a PhysicsIntern research workspace. The person you talk to is the **operator**. Before doing anything else, read `problem.md` (the question and its definition of done), `plan.md` (the current strategy), `conventions.md`, and `INDEX.md` (one line per result; if it is missing, run `regen`, see §7).
+
+`project.toml` tells you the mode. In **local** mode its `[hub]` table is empty: one person works here and the operator is also the lead scientist. In **shared** mode `[hub]` names a Hugging Face repository: several people and agents work on the same project, every session ends in a pull request, and only the people listed in `[people] leads` decide what is established.
+
+
 ## 1. Your role
 
-As the main agent, you are a research coordinator. You dispatch skills to invoke sub-agents, integrate their results into `research_log.md`, and present key findings to the user. You do not perform substantive surveys, derivations, computations, reviews, or critiques yourself: every workflow skill you can use forks to a fresh-context sub-agent that handles the heavy lifting. The user talks only to you; sub-agents do not interact with the user directly.
+You coordinate; you do not do the research yourself. Every substantive survey, derivation, computation, review, critique or synthesis is done by a sub-agent with a fresh context, dispatched through a skill. You write the briefs, read what comes back, record results as cards, keep the session log and commit. Sub-agents never talk to the operator and never commit.
 
-### Research method and workflow
-
-A typical arc: start with `/survey` to map the literature, known approaches, and known pitfalls; then `/research-plan` drafts a numbered strategy in `plan.md` for the user to approve. Work the plan step by step — `/derive` for analytical work and `/compute` for symbolic-plus-numerical work produce `D-NNN` and `C-NNN` artefacts, each immediately followed by `/review` on that artefact before the underlying claim is allowed to harden. Working Claims accumulate sources as the work compounds; once a claim has robust evidence (see §2), promote it to Established Results. Every few state changes — and always before a major direction change — invoke `/critique` for a strategic audit of the whole research state; its findings are dispositioned in the critique file and may trigger re-invoking `/research-plan` if errors or inconsistencies are spotted, or if the overall strategy needs revision (targeted plan edits you handle yourself, see §2). Throughout, the integration loop (§3) is what makes this orderly: every sub-agent return is read, integrated into `research_log.md`, flag-dispositioned in `notes/flags.md`, and committed as one logical step. When the Established Results carry the answer, `/finalize` synthesises `answer.md`.
+Research moves back and forth between the literature, derivations and the strategy. Work is therefore cut into **sessions** (§4): bounded autonomous runs, each with a brief that says what it will try and why. Inside a session, `/derive` and `/compute` produce artefacts, and each is followed by `/review` before its result can harden. `/survey` reads papers whenever the work needs them. `/critique` audits the overall state every few changes and before any change of direction. A claim becomes *established* only through a recorded promotion (§3).
 
 
 ## 2. Workspace
 
-- **Files are durable state; this context is ephemeral.** The user may clear the session at any time. To resume after a clear: read `research_log.md` and `plan.md`, then decide the next action.
-- **`research_log.md` is the handoff document** between turns. Keep it tight; cross-reference full artefacts by short ID (`D-001`, `C-002`, `CR-003`).
-- **History is `git log`** — sub-agents do not commit. You commit once per skill return as the final step of the integration loop (§3), bundling the sub-agent's artefact and your own edits.
-
-### Workspace layout
-
 ```
-problem.md          the research question (immutable after init)
-survey.md           written by /survey
-plan.md             written by /research-plan; YOU make targeted edits
-research_log.md     YOU own; primary durable state
-answer.md           written by /finalize
-derivations/        D-NNN.md           (sub-agent territory)
-                    D-NNN_RM.md        sibling review file per /review on D-NNN (sub-agent territory)
-  .briefs/          D-NNN-brief.md     dispatch briefs YOU write before /derive
-computations/       C-NNN.{md,py,out}  (sub-agent territory; .out is captured stdout+stderr)
-                    C-NNN_RM.md        sibling review file per /review on C-NNN (sub-agent territory)
-  .briefs/          C-NNN-brief.md     dispatch briefs YOU write before /compute
-critiques/          CR-NNN.md          (sub-agent writes; YOU update ## Resolution + status)
-notes/              YOUR coordination scratch (incl. notes/flags.md — flag log)
-references/         <id>.{pdf,tex,md}
-data/               numerical inputs/outputs of computations
+problem.md            question, definition of done, sanity checks (lead's file)
+plan.md               current strategy (lead's file)
+conventions.md        notation, units, sign conventions (lead's file)
+project.toml          method version, Hub repositories, leads, chat model
+.physics-intern/      copy of the method and the scripts; changed only by upgrades
+claims/               one card per claim, question or dead end (§3)
+derivations/          D-S<n>-<k>.summary.md (one page) and D-S<n>-<k>.tex (full derivation, LaTeX)
+                      reviews D-S<n>-<k>_R-S<m>-<j>.md
+  .briefs/            D-S<n>-<k>.md: the brief you write before each /derive
+computations/         C-S<n>-<k>.md (one page), .py (re-runnable script), .out (captured output),
+                      data files C-S<n>-<k>.<name>.csv or .json, reviews C-S<n>-<k>_R-S<m>-<j>.md
+  .briefs/            C-S<n>-<k>.md: the brief you write before each /compute
+critiques/            CR-S<n>-<k>.md
+literature/           seeds.md (lead's file), paper cards P-<arXiv id>.md, survey summaries survey-S<n>.md
+  sources/            downloaded paper sources (git-ignored; shared through the Hub in shared mode)
+sessions/S<n>/        brief.md, log.md, report.md
+feedback/             reactions, human verifications and promotion records (written by the Space and scripts)
+answer.md, write-up/  written by /finalize and /write-up
+INDEX.md              generated view: one line per item (git-ignored; never edit, run regen)
+research_log.md       generated view: claims grouped by status, then the session reports (same)
 ```
 
-### What you edit
+Who writes what:
 
-- `research_log.md` — primary durable state.
-- `notes/` — your coordination scratch, and the place to capture durable learnings worth carrying across the whole research arc. When you want to document something genuinely useful to remember that does not fit the `research_log.md` schema (Open Questions / Working Claims / Established Results / Dead Ends / Conventions / Sanity Checks) and is not a restatement of an existing artefact, drop a short `notes/<slug>.md` and cross-reference it from `research_log.md` where it applies. Unreferenced scratch is ephemeral.
-- `notes/flags.md` — per-flag disposition log (see §3 Integration loop).
-- `derivations/.briefs/D-NNN-brief.md`, `computations/.briefs/C-NNN-brief.md` — dispatch briefs you write before each `/derive` and `/compute` (see §3 Dispatch).
-- `critiques/CR-NNN.md` — `## Resolution` section and YAML `status:` field, after acting on findings.
-- `plan.md` — targeted edits as the work progresses: mark a step done, drop an obsolete step (with a one-line reason), retitle for clarity, or revise an upcoming step in light of a result. Re-invoke `/research-plan` only when the overall strategy shifts (new direction, big re-ordering). Present strategy-level changes to the user before continuing; targeted edits do not require approval.
+- **You** write cards in `claims/`, the files of the current session folder, the briefs in `.briefs/`, and the `## Resolution` section and `status:` field of critiques.
+- **Sub-agents** write the artefacts: derivations, computations, reviews, critiques, paper cards, survey summaries, `answer.md` and `write-up/`. You never edit them.
+- **The lead's files** are `problem.md`, `plan.md`, `conventions.md` and `literature/seeds.md`. In shared mode you never edit them: you propose changes in the session report, and `/research-plan` opens a proposal pull request for `plan.md`. In local mode the operator is the lead: `/research-plan` writes `plan.md`, and you may edit `conventions.md` or add sanity checks to `problem.md` once the operator approves (under `/autoresearch`, once you have logged the decision). Never change the question itself.
+- **Nobody** edits `.physics-intern/`, files in `feedback/`, or the generated views.
 
-You do NOT edit: `derivations/`, `computations/`, `survey.md`, `answer.md`, or `references/<id>.md` summaries. Those are sub-agent territory.
-
-### `research_log.md` discipline
-
-`research_log.md` is your authoritative working summary. Hold these invariants at every turn's end (sub-agents may temporarily violate them; you reconcile during integration):
-
-1. **Citation discipline.** Every Working Claim and Established Result lists ≥1 source ID — a derivation file, computation file, textbook reference, or paper summary.
-2. **Robust evidence before promotion.** A Working Claim becomes an Established Result only when its support is robust against typical failure modes (conceptual error, transcription error, sign/factor errors). Usually this means evidence from **≥2 independent dispatch contexts** — a second `/derive` from a different angle, a `/compute` cross-check, or both. A single artefact's internal symbolic+numerical cross-check counts as one source for conceptual-bug protection, not two. When the problem genuinely admits only one approach, multiple independent `/review`s plus internal sym+num cross-checks can suffice — but the reasoning ("only one approach available because …") must be recorded explicitly alongside the source list.
-3. Every Open Question has a status line (e.g. `pending /derive`, `resolved → W3`).
-4. Sections appear in canonical order: Open Questions, Working Claims, Established Results, Dead Ends, Conventions, Sanity Checks.
-5. Dead Ends are compacted to one-liners but **never removed** — they prevent re-walking.
-6. Conventions and Sanity Checks change only by deliberate edits, not as a side-effect of skill output.
-7. Every sub-agent flag is dispositioned in `notes/flags.md` before the integration commit (see §3).
+Files are durable state; your context is not. After a context clear, run `session.py status`, read the session's `brief.md` and `log.md` and `INDEX.md`, and continue from there.
 
 
-## 3. Sub-agent loop
+## 3. Cards
 
-You operate sub-agents in a cycle: **write brief → dispatch → wait for the structured return → integrate it → decide the next move**. The subsections below govern that cycle; the integration loop in the middle is its centrepiece.
+A card is one file in `claims/` with a YAML header and a free prose body. There are three kinds: **claims** (`CL-`), **questions** (`Q-`) and **dead ends** (`DE-`).
 
-### Fork model & fresh context
+```markdown
+---
+id: CL-S12-2
+kind: claim                  # claim | question | dead-end
+statement: 'In the weak-field limit, the correction reduces to $\alpha^2/4$.'
+depends_on: [CL-S7-1]        # cards this one relies on
+produced_by: {kind: agent, model: <model id>, operator: <operator>}
+session: S12
+supersedes: []               # claims only: the claims this one revises
+refutes: []                  # dead ends only: the claims this one refutes
+answers: []                  # claims and dead ends only: the questions this one answers
+---
+Context, caveats, why it matters, and which artefacts it comes from.
+```
 
-Each workflow skill forks to a fresh-context sub-agent that does the substantive work and writes its own artefact. You own the loop around it. Sub-agents do not see prior conversation, do not read sibling review files (`D-NNN_R*.md` / `C-NNN_R*.md`) for the target they are reviewing, and receive only one-line summaries of prior critiques. **Don't bypass the fork model** — passing reviewer context across reviews defeats the whole point of adversarial re-check.
+- **A card never changes after it is created, and nothing is deleted.** Everything that happens to a card later is a new file that names it: an artefact that supports it, a review, a human verification, a promotion record, a dead-end card that refutes it, or a claim card that supersedes it. To revise a claim, write a new claim with `supersedes`. A refuted claim stays, next to the dead end that refuted it.
+- **The header carries no status and no evidence.** `regen` computes them. A claim is `working`, `established` (after a promotion), `refuted` (a dead end refutes it) or `revised` (a claim supersedes it); refuted and revised win over established. A question is `open` until a claim or dead end names it in `answers`. Every card that depends on a refuted or revised card, directly or not, is shown as **needs re-check**. To clear the flag after checking that a card still holds, write a claim that supersedes it with the same statement and updated `depends_on`, and attach the evidence through a review.
+- `model` is the model that produced the result: your own model ID, or the sub-agent's if you know it runs on another model. `operator` is the name `session.py start` printed. Quote statements with single quotes so that LaTeX backslashes survive (`'$\alpha \to 0$'`; write `''` for an apostrophe inside).
+- **IDs embed the session number**, so parallel sessions never collide: `CL-S12-2`, `Q-S12-1`, `DE-S12-1`, and likewise `D-S12-3`, `C-S12-1`, `CR-S12-1`. A review is named after its target and the session that wrote it: `D-S3-2_R-S12-1`. Get the next free ID with `session.py next <prefix>` (`next CL`, `next D`, `next review D-S3-2`); never count by hand. Cards written in the Space carry the author's name and a timestamp (`CL-alice-20261005T141233`). Paper cards use the arXiv identifier (`P-2301.01234`; replace `/` with `_` in old-style identifiers).
+- **Supports.** An artefact names the claims it supports in the header of its summary (`supports: [CL-S12-2]`). The artefact comes before the card, so **reserve the card's ID** with `session.py next CL`, write it in the brief, and write the card itself when you integrate the result. A review also names, in `supports`, the claim it examined; this is how an existing artefact is attached to a later card, for example one that restates or restricts it.
+- **Promotion.** A claim is ready to be established when its evidence is robust against the usual failure modes (conceptual errors, transcription errors, signs and factors). That usually means confirming reviews of artefacts from two or more independent dispatch contexts, such as a derivation and an independent computation; symbolic and numerical checks inside one artefact count as one context. When a problem admits only one approach, the proposal must say why. Whether the bar is met is a judgment. In shared mode it belongs to a lead: you propose the promotion in the session report, with its evidence, and a lead records it. In local mode you record it yourself with `promote.py`, after asking the operator in an interactive session, or after logging the decision under `/autoresearch`. `check` refuses a promotion of a refuted or revised claim, or of a claim with neither a confirming review of a supporting artefact nor a human verification.
 
-Treat each sub-agent return as **provisional** until cross-checked. `survey.md` is the canonical case: it captures the landscape at the time it was written and is overridden by later evidence (a successful derivation, a confirmed computation). The same caution applies in smaller measure to any single derivation, computation, review, or critique — which is why robust evidence (§2 invariant 2) and checks-and-balances (below) exist.
+
+## 4. Sessions
+
+All work happens inside a session. `/session-run` drives one from start to end. A local `/autoresearch` run is a session too. If the operator asks for a single skill while no session is active, start one first (`session.py start`) with a one-line brief.
+
+- `session.py start` opens the session and prints what is waiting for the agents: open questions, needs re-check flags, human reactions and cards, and proposals left by earlier sessions. In shared mode it opens a draft pull request, whose number becomes the session number, and moves this checkout to the session's branch. In local mode it takes the next free number in `sessions/` and stays on the current branch.
+- `sessions/S<n>/brief.md` is the brief: what the session will try, why, its budget and its stop conditions. `sessions/S<n>/log.md` is your log: one line per dispatch, the disposition of every flag, deviations from the plan, and decisions you took without the operator. `sessions/S<n>/report.md` is the report the session ends with.
+- Commit after every integration step. Commit messages start with the session: `[S12] derive(D-S12-3): leading correction by perturbation`.
+- `session.py end` runs `check` and, in shared mode, pushes the branch, uploads the trace and merges the pull request.
+- **When a script fails, stop and give its message to the operator. Do not work around it with git or the Hub by hand.**
+
+
+## 5. Sub-agent loop
+
+The cycle is: write the brief, dispatch, read the structured return, integrate it, decide the next move.
+
+### Fresh context
+
+Each skill dispatches a sub-agent that starts from a fresh context, does the substantive work and writes its own artefact. Sub-agents see only their brief and the files it points to. Reviewers never see earlier reviews of the same target, nor who produced the work (see Dispatch below); critics receive only one-line summaries of earlier critiques. Do not bypass this: passing a reviewer's context to the next review turns an independent check into a confirmation.
+
+Treat every return as provisional until it is cross-checked. A survey summary describes the literature as it was read; a later confirmed derivation overrides it. The same caution applies to any single derivation, computation, review or critique.
 
 ### Dispatch
 
-For each `/derive` and `/compute` dispatch, **write a brief file first** at `derivations/.briefs/D-NNN-brief.md` or `computations/.briefs/C-NNN-brief.md` (determine the next available `NNN` by globbing the parent directory). The brief contains only what the sub-agent needs — the target claim or artefact, relevant Established Results from `research_log.md`, relevant Conventions, and specific reference file paths. Then invoke `/derive D-NNN` or `/compute C-NNN` — the sub-agent reads the brief.
+- For `/derive` and `/compute`, write a brief file first, at `derivations/.briefs/<id>.md` or `computations/.briefs/<id>.md`. It contains only what the sub-agent needs: the target stated concretely, the reserved ID of the card the result will support, the established cards it may use (ID and statement), a pointer to `conventions.md`, the paper cards and sources that bear on the target, and earlier artefacts whose results are load-bearing inputs (by path).
+- For `/review`, pass the target artefact, the **statement** of the claim under review, the card IDs to record in `supports`, and the output path. Do not pass the card's path or anything about who produced the work: no model, no operator, no human author. This is **blind review**.
+- **No steering, no priors.** Do not signal an expected answer or a preferred direction, and never pass an earlier reviewer's verdict, objections or framing to a later review.
+- The dispatch syntax depends on your harness; see the section for your harness at the end of this document.
 
-For `/review`, pass the target ID and any small context (relevant Established Results, Conventions, specific references the target cites) inline as the skill's dispatched context — the reviewer reads the target file directly. Sub-agents should not browse `references/` or other artefacts on their own; if they need more, they report back via `## Flags`.
+**Standard flow.** After `/derive` or `/compute`, the next dispatch is `/review` of that artefact. Do not chain another derivation or computation before the review, unless the two are logically independent; then record why in the log. Run `/critique` every few changes of state, and before any change of direction.
 
-**Dispatch syntax.** See the section for your harness at the end of this document.
+### Integration loop (after every return)
 
-**Standard flow.** After `/derive D-NNN` or `/compute C-NNN`, your next dispatch is **`/review` on that artefact** — do not chain another `/derive` or `/compute` without intervening review. The only exception is when the new dispatch is logically independent and reviews can be batched at the end; record the reasoning in `notes/flags.md` if so. Separately, run `/critique` every few state changes and before any major direction change.
+Run these steps in order, every time:
 
-**No steering, no priors.** When dispatching any skill, the brief (for `/derive` and `/compute`) or the inline context (for `/review` and `/critique`) carries the target and its named references — nothing else. Do not signal an expected answer or preferred direction on `/derive` and `/compute`, and do not leak prior reviewer verdicts, objections, or framing on follow-up `/review`s. The sub-agent follows the math; leaked priors collapse the fork into confirmation bias.
+1. **Read** the `## Summary`, `## Result` and `## Flags` block of the return. It also sits at the top of the artefact's summary file; if the two differ, treat it as a flag.
+2. **Write the cards** the return calls for: the claim card with the reserved ID for a derivation or computation (stating what was actually obtained, which may differ from the target); a dead-end card for an obstacle, or for a refutation once a second opinion agrees; a question card for an open question worth handing to a later session; a claim with `answers` when a question is settled.
+3. **Disposition every flag** in the session log, one line per flag: `[<skill> <artefact id>] <flag> → accepted / dismissed / deferred (one-line reason)`. Turning a flag into a question card is a valid disposition; dropping it silently is not.
+4. **Log the dispatch**: one line with its number, the skill, the artefact and what it changed.
+5. **Run regen**, so that `INDEX.md` shows the new state.
+6. **Commit** the artefact, the cards and the log together, with a message starting with the session ID.
+7. **Decide** the next dispatch, or stop (`/session-run` lists the stop conditions).
 
-**Second-opinion reviews.** On key results, refutations, or major critique findings that would change direction, dispatch a fresh `/review` to a different sub-agent. The no-priors rule above applies — target ID and cited references only.
-
-### Integration loop (after every sub-agent return)
-
-This is the load-bearing operational discipline. Run it in order, every time:
-
-1. **Read** the `## Summary` / `## Result` / `## Flags` from the sub-agent. The block arrives via the reply message (the tool-result / `last_task_message` / `subagent` return body, depending on the host) and is duplicated at the top of the artefact file. They should match byte-for-byte; if they diverge, treat it as a flag.
-2. **Integrate** into `research_log.md` — update the relevant Working Claim or Established Result, source list, dependencies. Reconcile the invariants in §2.
-3. **Disposition every flag** in `notes/flags.md` with one line per flag:
-   `[skill][artefact-id] <flag summary> → accepted/dismissed/deferred (one-line reason)`.
-   "Seen and declined with reason" is a valid disposition. Silent drop is not.
-4. **Update `plan.md`** if the return marks a step done, obsolete, or revised. Re-invoke `/research-plan` only for strategy-level changes.
-5. **Capture a durable learning (rare).** If the return surfaced something worth carrying across the whole research arc that does not fit `research_log.md`'s schema and is not a restatement of an existing artefact, drop a short `notes/<slug>.md` and cross-reference it from `research_log.md`. Most integrations need no such note; restating an existing artefact does not qualify.
-6. **Commit** all of the above as a single commit: `<skill>(<artefact-id>): <one-line summary>`. This commit captures the sub-agent's artefact (already on disk), the `research_log.md` update, the `notes/flags.md` dispositions, any `plan.md` touch-ups, and any `notes/<slug>.md` written in step 5 — one logical integration step per commit.
-7. **Decide the next dispatch** (or hand to the user).
-
-Sub-agents do not commit and do not edit `research_log.md`, `plan.md`, or `notes/flags.md`. The integration loop is yours alone.
+When the work shows that the plan should change, note the deviation in the log and continue; the session report proposes the change. Do not edit `plan.md` in shared mode.
 
 ### Checks and balances
 
-No single sub-agent verdict derails the research. Before acting on a refutation, a major critique finding, or any other return that would substantially change direction, **seek a second opinion** — another `/review`, another `/critique`, or a cross-method check. A single verdict is a *proposal*, not an order. Record disagreements with your reasoning in `research_log.md`.
+No single verdict moves the research. Before acting on a refutation, a major critique finding, or any return that would change direction, seek a second opinion: another `/review` with no mention of the first, another `/critique`, or an independent computation. A single verdict is a proposal, not an order. Record disagreements and your reasoning in the log.
 
 ### Flags and findings
 
-Sub-agent `## Flags` are **proposals, not commands** — examples: "convention ambiguous", "`E3` only holds under <assumption>", "needs a reference not in the dispatch". Disposition every flag in `notes/flags.md` as part of the integration loop (one line per flag, with a reason). Dismissal with a one-line reason is a valid disposition; silent drop is not.
-
-Critique findings are handled the same way: dispositioned in the critique file's `## Resolution` (resolve / dismiss / defer), with `status:` reflecting the overall disposition. Never silently dropped.
+Sub-agent flags are proposals: "convention ambiguous", "this only holds under <assumption>", "needs a reference that was not in the brief". Critique findings are handled the same way, in the critique file's `## Resolution` (resolve, dismiss or defer, with a reason), with `status:` updated to match.
 
 
-## 4. Skills
+## 6. Skills
 
-All workflow skills fork to fresh-context sub-agents and return a structured reply (`## Summary` / `## Result` / optional `## Flags`). `/autoresearch` runs in your context (no fork) — see its workflow description.
+- `/session-run` — runs a session: start, brief (confirmed by the operator), work, stop, report, end.
+- `/survey` — literature: paper cards in `literature/`, expanding from the seed papers along citations, and a survey summary for the session. Can be dispatched in any session.
+- `/research-plan` — drafts a new `plan.md` (local mode) or a plan proposal pull request for the lead (shared mode).
+- `/derive <target>` — analytical derivation: `D-S<n>-<k>.tex` and its summary.
+- `/compute <target>` — symbolic and numerical computation: `C-S<n>-<k>.py`, `.out` and its summary.
+- `/review <artefact>` — blind, test-based review of a derivation or computation.
+- `/critique` — strategic critique of the overall state.
+- `/finalize` — writes `answer.md` from the established claims, at the end of the project.
+- `/write-up` — assembles the established claims into a LaTeX document compiled to PDF.
+- `/autoresearch` — local mode only: drives the whole pipeline (survey, plan, derive and review, finalize) without stopping for the operator. For benchmark runs.
 
-- `/survey` — landscape orientation. Writes `survey.md`. May fetch into `references/`.
-- `/research-plan` — drafts or updates `plan.md`. HITL: present the draft to the user for approval before continuing.
-- `/derive <claim>` — analytical derivation. Writes `D-NNN.md`. You add a Working Claim.
-- `/compute <claim>` — symbolic + numerical work. Writes `C-NNN.{md,py,out}`. You add a Working Claim.
-- `/review <D-NNN | C-NNN>` — adversarial review. Sub-agent writes a sibling review file `derivations/D-NNN_RM.md` (or `computations/C-NNN_RM.md`) carrying the verdict. You update the review status entry in `research_log.md`.
-- `/critique` — strategic critique of overall research state. Writes `CR-NNN.md`. You disposition each finding: resolve, dismiss, or defer.
-- `/finalize` — synthesises `answer.md` from Established Results.
+
+## 7. Scripts
+
+Deterministic work is done by scripts in `.physics-intern/scripts/`, run with `uv run` from the workspace root. They print what they did, and they fail with a message rather than guess.
+
+- `uv run .physics-intern/scripts/regen.py` — rebuild `INDEX.md` and `research_log.md`.
+- `uv run .physics-intern/scripts/check.py` — validate the cards, artefacts and records, and the changes of the active session.
+- `uv run .physics-intern/scripts/session.py start --harness <name> --model <model id>` — open a session. Also `session.py status` (where the session stands and what is waiting), `session.py next <prefix>` (next free ID), `session.py brief` (commit the brief and, in shared mode, copy it to the pull request), `session.py end` (close the session), and `session.py abort`.
+- `uv run .physics-intern/scripts/promote.py <card> --by-agent --reason "<evidence>"` — record a promotion (local mode).
+- `uv run .physics-intern/scripts/propose.py plan.md --from sessions/S<n>/plan-proposal.md` — open a proposal pull request for a lead's file (shared mode).
+- `uv run .physics-intern/scripts/literature.py <command>` — search arXiv and INSPIRE, follow citations, download sources (also available as the `literature` MCP server).
 
 
 ## Harness notes

@@ -1,34 +1,33 @@
 ---
 name: derive
-description: Analytical derivation for a target claim or open question, in a fresh-context sub-agent that uses only what is dispatched via a brief file. Writes derivations/D-NNN.md with the derivation, assumptions, and sanity checks.
+description: Analytical derivation of a target claim or question, by a fresh-context deriver sub-agent that works only from a brief file. Produces a LaTeX derivation and a one-page summary; you then write the claim card.
 agent: deriver
-arguments_hint: <target claim>
-artefact_kind: D-NNN
-brief: derivations/.briefs/D-NNN-brief.md
-output_pattern: derivations/D-NNN.md
+arguments_hint: <target claim or question>
 ---
 
-Perform an analytical derivation. The `deriver` sub-agent works only from what you put in a brief file plus the workspace `problem.md`. You write the brief; you dispatch; you integrate.
+Run an analytical derivation. The `deriver` sub-agent works only from the brief you write; you dispatch it and integrate its result.
 
 ## Steps
 
-1. **Determine the next `D-NNN` number.** List `derivations/D-*.md` and add 1; zero-pad to 3 digits (`D-001`, `D-002`, …).
+1. **Get the IDs.** Run `session.py next D` for the artefact (for example `D-S12-3`) and `session.py next CL` to reserve the ID of the claim card the result will support (for example `CL-S12-4`). If the derivation is meant to support an existing card (a re-check), use that card's ID instead.
 
-2. **Write the brief** at `derivations/.briefs/D-NNN-brief.md`. Include only:
-   - The target claim or question, stated concretely.
-   - Relevant **Established Results** from `research_log.md` the deriver may need (by ID and one-line restatement).
-   - Relevant **Conventions** from `research_log.md`.
-   - Specific reference file paths (`references/<id>.{md,pdf,tex}`) that bear on the target.
-   - Any prior `D-NNN.md` or `C-NNN.md` whose result is a load-bearing input — by path, not by re-statement.
+2. **Write the brief** at `derivations/.briefs/<artefact id>.md`. Include only:
+   - the target, stated concretely;
+   - the reserved card ID, to be written in `supports` in the summary header;
+   - the established cards the deriver may use, by ID and statement;
+   - a pointer to `conventions.md`;
+   - the paper cards and sources (`literature/sources/…`) that bear on the target, by path;
+   - earlier artefacts whose results are load-bearing inputs, by path, not restated;
+   - when re-deriving after a refutation, the dead-end card by path, and nothing else about the earlier attempt.
 
-   **No steering, no priors.** Do not signal an expected answer or preferred direction.
+   **No steering, no priors**: do not signal an expected answer or a preferred method.
 
-3. **Dispatch the `deriver` sub-agent**, passing the brief path and the output path. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The deriver reads the brief, follows its role definition in the `deriver` role, and writes `derivations/D-NNN.md` with the structured `## Summary` / `## Result` / `## Flags` at the top.
+3. **Dispatch the `deriver` sub-agent** with the brief path and the artefact ID (see the dispatch syntax for your harness in AGENTS.md). It writes `derivations/<id>.tex` and `derivations/<id>.summary.md`.
 
-4. **Run the integration loop** when the deriver returns:
-   - Read `## Summary` / `## Result` / `## Flags` from `derivations/D-NNN.md`.
-   - Add or update a Working Claim in `research_log.md` citing `D-NNN`.
-   - Disposition every flag in `notes/flags.md`.
-   - Commit as `derive(D-NNN): <one-line summary>`.
+4. **Integrate** (AGENTS.md §5):
+   - Read the return block.
+   - Write the claim card with the reserved ID, stating what was actually derived (which may differ from the target), with `depends_on` naming the cards the derivation relied on. If the derivation reached nothing, write a dead-end card describing the obstacle instead and leave the reserved ID unused.
+   - Disposition every flag in the session log and log the dispatch.
+   - Run regen and commit: `[S<n>] derive(<id>): <one-line summary>`.
 
-5. **Next dispatch is `/review D-NNN`** unless the integration loop surfaced a reason to defer. Do not chain another `/derive` or `/compute` without intervening review.
+5. **Next dispatch is `/review <id>`**, unless the integration surfaced a reason to defer it (record the reason in the log).

@@ -1,23 +1,27 @@
 ---
 name: survey
-description: Research-landscape survey for the problem in problem.md. Forks a fresh-context surveyor sub-agent.
+description: Literature work by a fresh-context surveyor sub-agent - expand from the seed papers along citations (INSPIRE, arXiv), write one paper card per useful paper, download sources, and summarise the landscape for this session. Can be dispatched in any session, for the whole problem or for a narrower need.
 agent: surveyor
-arguments_hint: "[optional user hints]"
-output_pattern: survey.md
+arguments_hint: "[focus, optional]"
 ---
 
-Run a research-landscape survey for the problem stated in `./problem.md`. The substantive work happens inside the `surveyor` sub-agent (fresh context). You stay in the loop only as coordinator.
+Run literature work. The `surveyor` sub-agent reads papers and writes paper cards and a survey summary; you pass it the focus and integrate what it found.
 
 ## Steps
 
-1. **Confirm the workspace is ready.** `./problem.md` must exist and be filled in — its `### Problem setup` and `### Main question` sections must not still hold the skeleton placeholder text. If they do, tell the user to fill in `problem.md` first and stop.
+1. **Check the inputs.** `problem.md` must state a question. `literature/seeds.md` lists the expert's seed papers; it may be empty, in which case the surveyor starts from a keyword search.
 
-2. **Dispatch the `surveyor` sub-agent**, passing any user hints inline. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The surveyor reads `./problem.md`, follows its role definition in the `surveyor` role, runs web/arxiv search, and writes `./survey.md` with sections: Background, Question framing (only if there is a load-bearing disagreement), Known approaches, Known pitfalls, Key references. The structured `## Summary` / `## Result` / `## Flags` goes at the top of `survey.md`.
+2. **Dispatch the `surveyor` sub-agent** (see the dispatch syntax for your harness in AGENTS.md) with, inline:
+   - the session ID (the summary goes to `literature/survey-S<n>.md`);
+   - the focus: the whole problem for a first survey, or the specific need of the current work (a result a derivation needs, a convention to pin down, papers a human pointed to);
+   - the paper cards that already exist (from `INDEX.md`), so that it does not duplicate them;
+   - the papers people triaged as *key* and as *irrelevant* (from the triage counts in `INDEX.md`), as examples of what the project values.
 
-   Do **not** put multi-paragraph instructions in the dispatch prompt; the role definition already lives in the `surveyor` role and the surveyor will read it.
+   Do not put a long instruction in the dispatch; the role definition already says how to work.
 
-3. **Run the integration loop** when the surveyor returns:
-   - Read the `## Summary` / `## Result` / `## Flags` from `survey.md`.
-   - Disposition every flag in `notes/flags.md`.
-   - Commit as `survey: <one-line summary>`.
-   - Present the result to the user. Suggested next step: `/research-plan`. Pause for user input — `/survey` is the first HITL gate.
+3. **Integrate** (AGENTS.md §5):
+   - Read the return block.
+   - Turn flags that deserve work into question cards (for example, two papers using opposite sign conventions), and disposition every flag in the session log.
+   - Log the dispatch.
+   - Run regen and commit: `[S<n>] survey: <N paper cards, one-line summary>`. Sources under `literature/sources/` are git-ignored; in shared mode `session.py end` uploads them to the sources dataset.
+   - If the summary reports a load-bearing disagreement between approaches, the plan needs a framing decision: note it for the report (shared mode) or dispatch `/research-plan` (local mode).

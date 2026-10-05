@@ -1,31 +1,29 @@
 ---
 name: review
-description: Adversarial review of a derivation (D-NNN) or computation (C-NNN), in a fresh-context reviewer sub-agent that sees only the target's # Task and ## Derivation / ## Computation — never prior reviews.
+description: Blind, test-based review of a derivation (D-…) or computation (C-…) against the statement of a claim, by a fresh-context reviewer sub-agent that is told nothing about who produced the work and never sees earlier reviews. Writes one review file next to the target.
 agent: reviewer
-arguments_hint: <D-NNN | C-NNN target id>
+arguments_hint: <artefact id> [claim id]
 ---
 
-Run an independent adversarial review on a target artefact. The `reviewer` sub-agent writes a sibling review file `derivations/D-NNN_RM.md` (or `computations/C-NNN_RM.md`) carrying the verdict (`confirmed` / `refuted` / `inconclusive`). Each review starts fresh — no prior verdicts are passed.
+Run an independent review of an artefact. The `reviewer` sub-agent checks whether the artefact establishes a stated claim, runs tests with a clear outcome first, and writes its verdict (`confirmed`, `refuted` or `inconclusive`) in a new file next to the target.
 
 ## Steps
 
-1. **Resolve the target path.** For `D-NNN`, the path is `derivations/D-NNN.md`. For `C-NNN`, the path is `computations/C-NNN.md`. Confirm the file exists.
+1. **Resolve the target and the claim.** The target is a derivation (`derivations/<id>.summary.md` and `.tex`) or a computation (`computations/<id>.md`, `.py`, `.out`). The claim under review is normally the card the artefact supports; for a re-check or to attach an existing artefact to a later card, it is that later card. Copy the claim's **statement** from its card.
 
-2. **Assemble a small dispatch context** (no separate brief file — the relevant ER + Conventions are short enough to pass inline). Include only:
-   - The target file path.
-   - Relevant **Established Results** from `research_log.md` (by ID + one-line restatement) the reviewer needs as cross-checks.
-   - Relevant **Conventions** from `research_log.md`.
-   - Specific reference file paths cited in the target.
+2. **Get the output path** with `session.py next review <target id>` (for example `derivations/D-S3-2_R-S12-1.md`).
 
-   **No priors.** Do not leak prior reviewer verdicts, objections, or framing for follow-up reviews on the same target. Target file path and named references only.
+3. **Dispatch the `reviewer` sub-agent** (see the dispatch syntax for your harness in AGENTS.md) with, inline:
+   - the target ID and its files;
+   - the statement of the claim under review, and the card ID(s) to record in `supports`;
+   - the output path and the session ID;
+   - if useful as cross-checks, a few established statements (statements only) and a pointer to `conventions.md` and to the references the target cites.
 
-3. **Dispatch the `reviewer` sub-agent**, passing the target file path inline plus the cross-check context. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The reviewer reads the target file in full, does NOT read any sibling `_R*.md` review files, forms an independent verdict, computes its own output path (`derivations/D-NNN_R<M>.md` or `computations/C-NNN_R<M>.md` where `M = (count of existing matching siblings) + 1`), and writes the verdict file there with YAML frontmatter and prose body per the `reviewer` role.
+   **Blind and without priors.** Do not pass the card's path, the model or operator that produced the work, or the name of a human author. Do not pass earlier verdicts, objections or framing. The reviewer reads the target directly.
 
-4. **Second-opinion reviews** are separate dispatches. On key results, refutations, or major critique findings that would change direction, dispatch a fresh `/review` to a different sub-agent without leaking the prior verdict. The second review will automatically claim the next `_R<M+1>` slot.
-
-5. **Run the integration loop** when the reviewer returns:
-   - Read the verdict from the reviewer's structured return (and confirm the new `_R<M>.md` file exists).
-   - Update the source list in `research_log.md` (e.g., `sources: D-007 (review: confirmed)` for a single review, or `D-002 (R1: refuted, R2: confirmed)` for multiple).
-   - On `refuted` or `inconclusive`, do **not** unilaterally demote — seek a second opinion before acting (see AGENTS.md §3 Checks and balances).
-   - Disposition every flag in `notes/flags.md`.
-   - Commit as `review(<target-id>_R<M>): <verdict, one line>`.
+4. **Integrate** (AGENTS.md §5):
+   - Read the verdict and check that the review file exists.
+   - A confirming review needs no card: `regen` counts it as evidence for the cards in `supports`.
+   - On `refuted` or `inconclusive`, do not act yet. Dispatch a second `/review` of the same target, with no mention of the first. If the second also refutes, write a dead-end card that refutes the claim (and names the reason, such as the equation at fault); then decide whether a new `/derive` or `/compute` should attempt the corrected claim. If the two reviews disagree, record the disagreement in the log and seek a third, independent check (often a `/compute`).
+   - Disposition every flag in the session log and log the dispatch.
+   - Run regen and commit: `[S<n>] review(<review id>): <verdict, one line>`.

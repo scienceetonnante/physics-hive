@@ -1,36 +1,32 @@
 ---
 name: compute
-description: Symbolic + numerical computation for a target claim, in a fresh-context sub-agent that uses only what is dispatched via a brief file. SymPy + NumPy by default. Symbolic and numerical run together when feasible; disagreement is flagged.
+description: Symbolic and numerical computation for a target claim, by a fresh-context computer sub-agent that works only from a brief file. SymPy and NumPy by default, with both paths run together when feasible and any disagreement flagged. You then write the claim card.
 agent: computer
-arguments_hint: <target claim>
-artefact_kind: C-NNN
-brief: computations/.briefs/C-NNN-brief.md
-output_pattern: computations/C-NNN.md
+arguments_hint: <target claim or quantity>
 ---
 
-Perform symbolic + numerical computation. The `computer` sub-agent writes a script, executes it, and captures the output; you write the brief and integrate the result.
+Run a symbolic and numerical computation. The `computer` sub-agent writes a script, runs it and captures its output; you write the brief and integrate the result.
 
 ## Steps
 
-1. **Determine the next `C-NNN` number.** List `computations/C-*.md` and add 1; zero-pad to 3 digits.
+1. **Get the IDs.** Run `session.py next C` for the artefact (for example `C-S12-1`) and `session.py next CL` to reserve the ID of the claim card the result will support. If the computation is meant to support existing cards (an independent second route, a re-check), use their IDs instead; a computation may support several cards.
 
-2. **Write the brief** at `computations/.briefs/C-NNN-brief.md`. Include only:
-   - The target claim or quantity to compute, stated concretely.
-   - Relevant **Established Results** from `research_log.md` (by ID and one-line restatement).
-   - Relevant **Conventions** from `research_log.md` (units, signatures, normalizations).
-   - Specific reference file paths (`references/<id>.{md,pdf,tex}`) that bear on the target.
-   - Any prior `D-NNN.md` or `C-NNN.md` whose result is a load-bearing input — by path, not by re-statement.
-   - Any prior `data/<slug>.*` files the computer may reuse — by path only.
+2. **Write the brief** at `computations/.briefs/<artefact id>.md`. Include only:
+   - the target claim or quantity, stated concretely;
+   - the card ID(s) to write in `supports` in the summary header;
+   - the established cards it may use, by ID and statement;
+   - a pointer to `conventions.md`;
+   - the paper cards, sources and earlier artefacts that are load-bearing inputs, by path;
+   - earlier data files it may reuse (`computations/<id>.<name>.csv`), by path.
 
-   **No steering, no priors.** Do not signal an expected answer or preferred direction.
+   **No steering, no priors**: do not signal an expected answer. When the computation is an independent check of a derivation, give the statement to check, not the derivation's intermediate steps.
 
-3. **Dispatch the `computer` sub-agent**, passing the brief path and the output path. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The computer reads the brief, follows its role definition in the `computer` role, runs both symbolic and numerical paths together when feasible (flagging disagreement), writes `computations/C-NNN.py` and `computations/C-NNN.md`, and captures stdout+stderr to `computations/C-NNN.out`.
+3. **Dispatch the `computer` sub-agent** with the brief path and the artefact ID (see the dispatch syntax for your harness in AGENTS.md). It writes `computations/<id>.py`, `.out`, any data files, and the summary `computations/<id>.md`.
 
-4. **Run the integration loop** when the computer returns:
-   - Read `## Summary` / `## Result` / `## Flags` from `computations/C-NNN.md`.
-   - Add or update a Working Claim in `research_log.md` citing `C-NNN`.
-   - Note any new `data/<slug>.*` files mentioned in `## Data outputs` in `research_log.md` Conventions or near the relevant claim.
-   - Disposition every flag in `notes/flags.md`.
-   - Commit as `compute(C-NNN): <one-line summary>` — include the `.py` script and the `.out` log in the commit.
+4. **Integrate** (AGENTS.md §5):
+   - Read the return block.
+   - Write the claim card with the reserved ID (or none, if the computation supports existing cards), stating what was actually computed. If the symbolic and numerical paths disagree, do not write a claim; record the disagreement as a question card or a flag disposition.
+   - Disposition every flag in the session log and log the dispatch.
+   - Run regen and commit: `[S<n>] compute(<id>): <one-line summary>`. The commit includes the script, its output and its data files.
 
-5. **Next dispatch is `/review C-NNN`** unless the integration loop surfaced a reason to defer.
+5. **Next dispatch is `/review <id>`**, unless the integration surfaced a reason to defer it.

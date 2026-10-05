@@ -1,21 +1,16 @@
 ---
 name: finalize
-description: Synthesise answer.md — the final research deliverable — from Established Results and supporting artefacts. Runs in a fresh-context finalizer sub-agent.
+description: Write answer.md, the final answer to problem.md, from the established claims, with a fresh-context finalizer sub-agent. For the end of the project, not the end of a session.
 agent: finalizer
-arguments_hint: "[optional emphasis from main agent]"
-output_pattern: answer.md
+arguments_hint: "[emphasis, optional]"
 ---
 
-Synthesise the final answer. The `finalizer` sub-agent reads `research_log.md`, `problem.md`, `plan.md`, and selectively traces into `derivations/`, `computations/`, `critiques/`, `references/`. The load-bearing inputs are the **Established Results** in `research_log.md`.
+Write the final answer. The `finalizer` sub-agent reads the problem, the generated views and the cards and artefacts behind the established claims, and writes `answer.md`.
 
 ## Steps
 
-1. **Sanity-check before dispatch.** The Established Results in `research_log.md` should carry the answer. If they don't — if the answer depends on Working Claims that haven't been promoted — pause and tell the user. `/finalize` will still produce an honest partial answer, but the user should know.
+1. **Check before dispatching.** The established claims in `INDEX.md` should carry the answer, and none of them should need a re-check. If the answer depends on working claims, tell the operator (or, in a session that cannot ask, say it in the report): `/finalize` will still write an honest partial answer.
 
-2. **Dispatch the `finalizer` sub-agent**, passing any optional emphasis (areas to highlight, audience hints, length guidance) inline. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The finalizer follows its role definition in the `finalizer` role, traces citations into the relevant artefacts and references, and writes `./answer.md`. The structured `## Summary` / `## Result` / `## Flags` goes at the top of `answer.md`.
+2. **Dispatch the `finalizer` sub-agent** (see the dispatch syntax for your harness in AGENTS.md), with any emphasis inline.
 
-3. **Run the integration loop** when the finalizer returns:
-   - Read `## Summary` / `## Result` / `## Flags` from `answer.md`.
-   - Disposition every flag in `notes/flags.md`. Suggestions for additional review before publishing may translate to one more `/review` or `/critique` cycle.
-   - Commit as `finalize: <one-line summary>`.
-   - Present the headline result to the user.
+3. **Integrate** (AGENTS.md §5): read the return block, disposition every flag in the session log (a suggestion of further checks may become one more `/review` or `/critique`), log the dispatch, run regen and commit: `[S<n>] finalize: <one-line summary>`. Present the headline result.

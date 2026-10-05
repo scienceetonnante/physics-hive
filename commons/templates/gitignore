@@ -1,0 +1,31 @@
+# Generated views, rebuilt by .physics-intern/scripts/regen.py
+/INDEX.md
+/research_log.md
+
+# Harness files, rendered locally from .physics-intern/ by init
+/AGENTS.md
+/CLAUDE.md
+/.claude/
+/.codex/
+/.agents/
+/.opencode/
+/opencode.json
+/.pi/
+/.mcp.json
+
+# Local state of this checkout
+/.active-session
+/literature/sources/
+
+# Build products
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+.DS_Store
+write-up/*.aux
+write-up/*.log
+write-up/*.out
+write-up/*.fls
+write-up/*.fdb_latexmk
+write-up/*.synctex.gz

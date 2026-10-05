@@ -200,21 +200,29 @@ def _render_agent_yaml_md(meta: dict, body: str, host: dict, target: Path) -> No
 
 
 def _render_agent_toml(meta: dict, body: str, host: dict, target: Path) -> None:
-    """Codex role file: name, description and the role prompt as developer_instructions."""
+    """Codex role file: name, description and the role prompt as developer_instructions.
+
+    The prompt goes in a TOML multi-line basic string, where backslashes are
+    escape sequences, so LaTeX in a role (`\\documentclass`) is escaped first.
+    """
     if '"""' in body:
         raise ValueError(f"Agent body for {meta['name']!r} contains a triple quote")
+    instructions = body.strip().replace("\\", "\\\\")
     lines = [
         f"name = {toml_basic_string(meta['name'])}",
         f"description = {toml_basic_string(meta['description'])}",
         "",
         'developer_instructions = """',
-        body.strip(),
+        instructions,
         '"""',
         "",
     ]
+    text = "\n".join(lines)
+    if tomllib.loads(text)["developer_instructions"].strip() != body.strip():
+        raise ValueError(f"Agent body for {meta['name']!r} does not survive the TOML round trip")
     out_path = target / host["agents_dir"] / f"{meta['name']}.toml"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(lines))
+    out_path.write_text(text)
 
 
 def render_agents(host: dict, target: Path) -> int:

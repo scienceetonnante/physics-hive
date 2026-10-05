@@ -1,23 +1,27 @@
 ---
 name: research-plan
-description: Draft or update plan.md — the numbered research strategy. Forks a fresh-context planner sub-agent. HITL after return.
+description: Draft the research strategy with a fresh-context planner sub-agent. In local mode it writes plan.md and you present it to the operator; in shared mode it drafts a proposal that becomes a pull request for the lead, and plan.md on main is never written by agents.
 agent: planner
-arguments_hint: "[optional feedback or scope hints]"
-output_pattern: plan.md
+arguments_hint: "[feedback or scope hints, optional]"
 ---
 
-Draft or update `plan.md` for the problem in `./problem.md`, using `survey.md` and `research_log.md` as inputs. The substantive work happens inside the `planner` sub-agent (fresh context).
+Draft or revise the plan. The `planner` sub-agent reads the problem, the current plan, the cards, the survey summaries and the plan-change proposals of earlier sessions, and writes a draft.
 
 ## Steps
 
-1. **Dispatch the `planner` sub-agent**, passing any user feedback or scope hints inline. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The planner reads `./problem.md`, `./survey.md` (if it exists), and `./research_log.md`; follows its role definition in the `planner` role; and writes `./plan.md`. If `plan.md` already exists, the planner marks completed steps, drops or revises as warranted. The structured `## Summary` / `## Result` / `## Flags` goes at the top of `plan.md`.
+1. **Collect the plan-change proposals.** `session.py start` (or `session.py status`) lists the `## Proposed plan changes` of session reports merged since `plan.md` last changed. Add any feedback from the operator.
 
-2. **Run the integration loop** when the planner returns:
-   - Read the `## Summary` / `## Result` / `## Flags` from `plan.md`.
-   - Disposition every flag in `notes/flags.md`. Suggested Conventions/Sanity Checks from the planner go to the appropriate `research_log.md` sections.
-   - Commit as `research-plan: <one-line summary>`.
-   - **Present the plan to the user for approval.** This is the post-plan HITL gate — do not start dispatching `/derive` or `/compute` until the user confirms.
+2. **Dispatch the `planner` sub-agent** (see the dispatch syntax for your harness in AGENTS.md) with, inline: the proposals and feedback, and the path to write:
+   - local mode: `plan.md`;
+   - shared mode: `sessions/S<n>/plan-proposal.md`.
 
-## Notes
-
-- Targeted edits to `plan.md` (marking a step done, dropping an obsolete step, retitling) are handled by you directly without re-invoking this skill. Re-invoke only for strategy-level changes.
+3. **Integrate** (AGENTS.md §5):
+   - Read the return block (the planner returns it in its reply only).
+   - Disposition every flag in the session log. Proposed conventions or sanity checks go to the operator in local mode (you may then edit `conventions.md` or `problem.md`), and to the report in shared mode.
+   - Log the dispatch, run regen and commit: `[S<n>] research-plan: <one-line summary>`.
+   - **Shared mode:** open the proposal for the lead:
+     ```
+     uv run .physics-intern/scripts/propose.py plan.md --from sessions/S<n>/plan-proposal.md --title "[S<n>] Plan proposal: <one line>"
+     ```
+     It opens a pull request that touches only `plan.md`, which the lead merges, edits or closes. Record its number in the log and in the report. Do not wait for the lead.
+   - **Local mode, interactive:** present the plan to the operator and wait for approval before working from it. Under `/autoresearch`, log the decision instead.
