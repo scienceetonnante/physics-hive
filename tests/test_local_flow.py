@@ -6,6 +6,7 @@ simulated by writing the files they would write.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +17,8 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def run(*args, cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, *map(str, args)], cwd=cwd, capture_output=True, text=True)
+    env = {**os.environ, "PHYSICS_INTERN_NO_WARMUP": "1"}  # no dependency installs in tests
+    return subprocess.run([sys.executable, *map(str, args)], cwd=cwd, capture_output=True, text=True, env=env)
 
 
 def git(cwd: Path, *args: str) -> str:

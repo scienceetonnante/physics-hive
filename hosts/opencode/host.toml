@@ -38,6 +38,7 @@ glob = "glob"
 grep = "grep"
 web_search = "websearch"
 web_fetch = "webfetch"
+literature = "literature_*"           # the MCP server in opencode.json
 
 [file_backed]
 section = "section.md"

@@ -1,0 +1,106 @@
+{
+ "offset": 0,
+ "data": [
+  {
+   "citedPaper": {
+    "paperId": "032274e57f7d8b456bd255fe76b909b2c1d7458e",
+    "externalIds": {
+     "DBLP": "conf/iclr/PaulusXS18",
+     "MAG": "2612675303",
+     "ArXiv": "1705.04304",
+     "CorpusId": 21850704
+    },
+    "title": "A Deep Reinforced Model for Abstractive Summarization",
+    "year": 2017,
+    "citationCount": 1679,
+    "authors": [
+     {
+      "authorId": "2896063",
+      "name": "Romain Paulus"
+     },
+     {
+      "authorId": "2228109",
+      "name": "Caiming Xiong"
+     },
+     {
+      "authorId": "2166511",
+      "name": "R. Socher"
+     }
+    ]
+   }
+  },
+  {
+   "citedPaper": {
+    "paperId": "43428880d75b3a14257c3ee9bda054e61eb869c0",
+    "externalIds": {
+     "MAG": "2950686565",
+     "DBLP": "journals/corr/GehringAGYD17",
+     "ArXiv": "1705.03122",
+     "CorpusId": 3648736
+    },
+    "title": "Convolutional Sequence to Sequence Learning",
+    "year": 2017,
+    "citationCount": 3564,
+    "authors": [
+     {
+      "authorId": "2401865",
+      "name": "Jonas Gehring"
+     },
+     {
+      "authorId": "2325985",
+      "name": "Michael Auli"
+     },
+     {
+      "authorId": "2529182",
+      "name": "David Grangier"
+     },
+     {
+      "authorId": "13759615",
+      "name": "Denis Yarats"
+     },
+     {
+      "authorId": "2921469",
+      "name": "Yann Dauphin"
+     }
+    ]
+   }
+  },
+  {
+   "citedPaper": {
+    "paperId": "4550a4c714920ef57d19878e31c9ebae37b049b2",
+    "externalIds": {
+     "MAG": "2952564229",
+     "DBLP": "journals/corr/BritzGLL17",
+     "ACL": "D17-1151",
+     "ArXiv": "1703.03906",
+     "DOI": "10.18653/v1/D17-1151",
+     "CorpusId": 2201909
+    },
+    "title": "Massive Exploration of Neural Machine Translation Architectures",
+    "year": 2017,
+    "citationCount": 549,
+    "authors": [
+     {
+      "authorId": "3908643",
+      "name": "D. Britz"
+     },
+     {
+      "authorId": "46684455",
+      "name": "Anna Goldie"
+     },
+     {
+      "authorId": "1707242",
+      "name": "Minh-Thang Luong"
+     },
+     {
+      "authorId": "2827616",
+      "name": "Quoc V. Le"
+     }
+    ]
+   }
+  }
+ ],
+ "citingPaperInfo": {
+  "title": "Attention is All you Need"
+ }
+}

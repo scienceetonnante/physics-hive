@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "literature": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"]
+    }
+  }
+}

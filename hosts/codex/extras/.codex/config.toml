@@ -2,14 +2,26 @@
 #
 # Codex only loads this file after the user marks the project as trusted.
 # The first time you launch `codex` in this directory, accept the trust
-# prompt; subsequent launches will pick up the sandbox settings below.
+# prompt; subsequent launches will pick up the settings below.
 #
 # Sub-agent roles are NOT registered here: current Codex auto-discovers them
 # from the .codex/agents/*.toml files the renderer writes, so this file only
-# carries the workspace sandbox + web-search settings.
+# carries the workspace sandbox, web-search and MCP server settings.
 
 sandbox_mode = "workspace-write"
 web_search = "cached"
 
 [sandbox_workspace_write]
 network_access = true
+
+# Literature tools (search INSPIRE and arXiv, follow citations, download
+# sources). The first start installs the script's dependencies, hence the long
+# startup timeout. Tools run without approval prompts: they only read the web
+# and write under literature/sources/.
+[mcp_servers.literature]
+command = "uv"
+args = ["run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"]
+env_vars = ["SEMANTIC_SCHOLAR_API_KEY"]
+startup_timeout_sec = 120
+tool_timeout_sec = 180
+default_tools_approval_mode = "approve"

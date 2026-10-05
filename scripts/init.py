@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -192,6 +193,19 @@ def regen(target: Path) -> None:
     )
 
 
+def warm_up(target: Path) -> None:
+    """Install the literature tools' dependencies once, so that the harnesses' first start of the
+    MCP server does not spend its startup timeout installing them. Failures are not fatal."""
+    if os.environ.get("PHYSICS_INTERN_NO_WARMUP") or not shutil.which("uv"):
+        return
+    say("Preparing the literature tools (installing their dependencies once)…")
+    try:
+        subprocess.run(["uv", "run", "--quiet", ".physics-intern/scripts/literature.py", "--help"], cwd=target,
+                       capture_output=True, timeout=300, check=False)
+    except subprocess.TimeoutExpired:
+        say("  (not finished; the first literature call will finish it)")
+
+
 def check_new_dir(target: Path) -> None:
     if not target.exists():
         return
@@ -229,6 +243,7 @@ def create_local(target: Path, harnesses: list[str], chat_model: str, hub: dict 
     (target / "project.toml").write_text(project_toml(method_version(), hub, leads or [], chat_model))
     write_skeleton(target)
     render(target, harnesses)
+    warm_up(target)
 
 
 def refresh(target: Path, harnesses: list[str] | None) -> None:
@@ -372,6 +387,7 @@ def main() -> int:
         target = Path(dir_value or (ask("Folder to clone into", default_dir) if asking else default_dir))
         target = target.expanduser().resolve()
         join(target, repo, harnesses, render, regen, check_new_dir)
+        warm_up(target)
         say_next_steps(harnesses, mode)
         return 0
 

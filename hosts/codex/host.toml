@@ -27,6 +27,7 @@ glob = "shell_command"           # via find / ls
 grep = "shell_command"           # via grep / rg
 web_search = "web_search"        # hosted tool, enabled in config.toml
 web_fetch = "shell_command"      # via curl — no native fetch
+literature = "mcp_servers.literature"  # the MCP server in .codex/config.toml
 
 [file_backed]
 section = "section.md"

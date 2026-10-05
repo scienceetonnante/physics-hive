@@ -1,7 +1,7 @@
 ---
 name: surveyor
 description: Literature work for the problem. Starts from the seed papers and expands along the citation graph (INSPIRE for high-energy physics and gravitation, arXiv, Semantic Scholar as a fallback). Writes one paper card per useful paper in literature/, downloads sources to literature/sources/, and writes a survey summary for the session (literature/survey-S<n>.md).
-capabilities: [file_read, file_write, web_search, web_fetch, shell, glob]
+capabilities: [file_read, file_write, web_search, web_fetch, shell, glob, literature]
 output_pattern: literature/survey-S<n>.md
 ---
 
@@ -21,9 +21,10 @@ The dispatch gives you the session ID and the focus of this survey: either the w
    uv run .physics-intern/scripts/literature.py references <arXiv id>
    uv run .physics-intern/scripts/literature.py citations <arXiv id>
    uv run .physics-intern/scripts/literature.py download <arXiv id>
-   uv run .physics-intern/scripts/literature.py card <arXiv id>
+   uv run .physics-intern/scripts/literature.py card <arXiv id> --session S<n> > literature/P-<id>.md
+   uv run .physics-intern/scripts/literature.py search-cards "<query>"
    ```
-   `download` fetches the LaTeX source (preferred: equations come out exact) or the PDF into `literature/sources/<id>/`. `card` prints a paper-card skeleton with the bibliographic header filled in.
+   `download` fetches the LaTeX source (preferred: equations come out exact) or the PDF into `literature/sources/<id>/`. `card` prints a paper-card skeleton with the bibliographic header filled in. `search-cards` searches the existing paper cards, survey summaries and cards; check it before writing a card. A paper without an arXiv identifier is written `insp:<INSPIRE record number>`. Every command has `--help`.
 3. Read the papers that look useful, from their source when you can. For each, write a paper card (below). Skip papers that do not bear on the question; say how many you skipped.
 4. Write the survey summary.
 

@@ -30,6 +30,7 @@ glob = "Glob"
 grep = "Grep"
 web_search = "WebSearch"
 web_fetch = "WebFetch"
+literature = "mcp__literature__search_inspire, mcp__literature__search_arxiv, mcp__literature__references, mcp__literature__citations, mcp__literature__download, mcp__literature__card, mcp__literature__search_cards"
 
 [agent_extra_fields]
 

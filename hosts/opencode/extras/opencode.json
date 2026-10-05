@@ -8,5 +8,13 @@
     "websearch": "allow",
     "task": "allow",
     "skill": "allow"
+  },
+  "mcp": {
+    "literature": {
+      "type": "local",
+      "command": ["uv", "run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"],
+      "enabled": true,
+      "timeout": 180000
+    }
   }
 }

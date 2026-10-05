@@ -26,6 +26,7 @@ glob = "ls, find"
 grep = "grep"
 web_search = "web_search"
 web_fetch = "fetch_content"
+literature = "bash"                     # no MCP in Pi: literature.py through the shell
 
 [agent_extra_fields]
 thinking = "high"

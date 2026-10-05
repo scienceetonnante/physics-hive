@@ -1,4 +1,5 @@
 {
+  "enabledMcpjsonServers": ["literature"],
   "permissions": {
     "allow": [
       "Bash(git add:*)",
@@ -10,7 +11,8 @@
       "Bash(python:*)",
       "Bash(uv run:*)",
       "Bash(mkdir:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "mcp__literature"
     ]
   }
 }

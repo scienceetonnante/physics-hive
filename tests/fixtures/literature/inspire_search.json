@@ -1,0 +1,225 @@
+{
+ "hits": {
+  "hits": [
+   {
+    "metadata": {
+     "citation_count": 416,
+     "core": true,
+     "first_author": {
+      "affiliations_identifiers": [
+       {
+        "schema": "ROR",
+        "value": "https://ror.org/04pp8hn57"
+       }
+      ],
+      "full_name": "Alday, Luis F.",
+      "last_name": "Alday",
+      "first_name": "Luis F.",
+      "recid": 1019648
+     },
+     "control_number": 763100,
+     "dois": [
+      {
+       "value": "10.1088/1126-6708/2007/11/068"
+      }
+     ],
+     "arxiv_eprints": [
+      {
+       "categories": [
+        "hep-th"
+       ],
+       "value": "0710.1060"
+      }
+     ],
+     "titles": [
+      {
+       "title": "Comments on gluon scattering amplitudes via AdS/CFT"
+      },
+      {
+       "source": "arXiv",
+       "title": "Comments on gluon scattering amplitudes via AdS/CFT"
+      }
+     ],
+     "author_count": 2,
+     "earliest_date": "2007-10"
+    },
+    "id": "763100"
+   },
+   {
+    "metadata": {
+     "citation_count": 223,
+     "core": true,
+     "first_author": {
+      "full_name": "Maldacena, Juan Martin",
+      "ids": [
+       {
+        "schema": "INSPIRE ID",
+        "value": "INSPIRE-00304313"
+       },
+       {
+        "schema": "INSPIRE BAI",
+        "value": "Juan.M.Maldacena.1"
+       },
+       {
+        "schema": "ORCID",
+        "value": "0000-0002-9127-1687"
+       }
+      ],
+      "last_name": "Maldacena",
+      "first_name": "Juan Martin",
+      "recid": 999108
+     },
+     "control_number": 629588,
+     "titles": [
+      {
+       "title": "TASI 2003 lectures on AdS / CFT"
+      },
+      {
+       "title": "ANTI-DE SITTER"
+      },
+      {
+       "title": "CONFORMAL FIELD THEORY"
+      },
+      {
+       "title": "THEORETICAL ADVANCE STUDY INSTITUTE"
+      },
+      {
+       "source": "arXiv",
+       "title": "Lectures on AdS/CFT."
+      }
+     ],
+     "arxiv_eprints": [
+      {
+       "categories": [
+        "hep-th"
+       ],
+       "value": "hep-th/0309246"
+      }
+     ],
+     "author_count": 1,
+     "earliest_date": "2003-09"
+    },
+    "id": "629588"
+   },
+   {
+    "metadata": {
+     "citation_count": 214,
+     "core": true,
+     "first_author": {
+      "full_name": "Hawking, Stephen",
+      "last_name": "Hawking",
+      "first_name": "Stephen",
+      "recid": 1006450
+     },
+     "control_number": 524081,
+     "dois": [
+      {
+       "value": "10.1088/1126-6708/2001/05/001"
+      }
+     ],
+     "arxiv_eprints": [
+      {
+       "categories": [
+        "hep-th"
+       ],
+       "value": "hep-th/0002145"
+      }
+     ],
+     "titles": [
+      {
+       "title": "de Sitter entropy, quantum entanglement and AdS / CFT"
+      },
+      {
+       "title": "Anti-de Sitter"
+      },
+      {
+       "title": "Conformal Field Theory"
+      },
+      {
+       "source": "arXiv",
+       "title": "DeSitter entropy, quantum entanglement and AdS/CFT."
+      }
+     ],
+     "author_count": 3,
+     "earliest_date": "2000-02"
+    },
+    "id": "524081"
+   },
+   {
+    "id": "593382",
+    "metadata": {
+     "citation_count": 22799,
+     "core": true,
+     "collaborations": [
+      {
+       "record": {
+        "$ref": "https://inspirehep.net/api/experiments/1778061"
+       },
+       "value": "GEANT4"
+      }
+     ],
+     "first_author": {
+      "full_name": "Agostinelli, S.",
+      "last_name": "Agostinelli",
+      "first_name": "S.",
+      "recid": 1915302
+     },
+     "control_number": 593382,
+     "dois": [
+      {
+       "value": "10.1016/S0168-9002(03)01368-8"
+      }
+     ],
+     "titles": [
+      {
+       "title": "GEANT4 - A Simulation Toolkit"
+      },
+      {
+       "source": "arXiv",
+       "title": "GEANT4: A simulation toolkit."
+      }
+     ],
+     "author_count": 127,
+     "earliest_date": "2002-08"
+    }
+   },
+   {
+    "id": "51188",
+    "metadata": {
+     "citation_count": 15559,
+     "core": true,
+     "first_author": {
+      "full_name": "Weinberg, Steven",
+      "ids": [
+       {
+        "schema": "INSPIRE ID",
+        "value": "INSPIRE-00135339"
+       },
+       {
+        "schema": "INSPIRE BAI",
+        "value": "Steven.Weinberg.1"
+       }
+      ],
+      "last_name": "Weinberg",
+      "first_name": "Steven",
+      "recid": 983868
+     },
+     "control_number": 51188,
+     "dois": [
+      {
+       "value": "10.1103/PhysRevLett.19.1264"
+      }
+     ],
+     "titles": [
+      {
+       "title": "A Model of Leptons"
+      }
+     ],
+     "author_count": 1,
+     "earliest_date": "1967-11"
+    }
+   }
+  ],
+  "total": 6
+ }
+}
