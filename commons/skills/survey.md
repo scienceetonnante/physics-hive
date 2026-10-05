@@ -12,9 +12,9 @@ Run a research-landscape survey for the problem stated in `./problem.md`. The su
 
 1. **Confirm the workspace is ready.** `./problem.md` must exist and be filled in — its `### Problem setup` and `### Main question` sections must not still hold the skeleton placeholder text. If they do, tell the user to fill in `problem.md` first and stop.
 
-2. **Dispatch the `surveyor` sub-agent**, passing any user hints inline. See {{workspace_doc}} §3 (Dispatch syntax) for the exact tool invocation. The surveyor reads `./problem.md`, follows its role definition in `{{agents_dir}}/surveyor{{agent_ext}}`, runs web/arxiv search, and writes `./survey.md` with sections: Background, Question framing (only if there is a load-bearing disagreement), Known approaches, Known pitfalls, Key references. The structured `## Summary` / `## Result` / `## Flags` goes at the top of `survey.md`.
+2. **Dispatch the `surveyor` sub-agent**, passing any user hints inline. See the dispatch syntax for your harness in AGENTS.md for the exact tool invocation. The surveyor reads `./problem.md`, follows its role definition in the `surveyor` role, runs web/arxiv search, and writes `./survey.md` with sections: Background, Question framing (only if there is a load-bearing disagreement), Known approaches, Known pitfalls, Key references. The structured `## Summary` / `## Result` / `## Flags` goes at the top of `survey.md`.
 
-   Do **not** put multi-paragraph instructions in the dispatch prompt; the role definition already lives in `{{agents_dir}}/surveyor{{agent_ext}}` and the surveyor will read it.
+   Do **not** put multi-paragraph instructions in the dispatch prompt; the role definition already lives in the `surveyor` role and the surveyor will read it.
 
 3. **Run the integration loop** when the surveyor returns:
    - Read the `## Summary` / `## Result` / `## Flags` from `survey.md`.

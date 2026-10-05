@@ -29,7 +29,7 @@ Normal flow has the main agent pause for user approval at three gates:
 
 In autoresearch mode the main agent **skips these gates** and proceeds, recording each skipped decision in `notes/auto-decisions.md` (see schema below).
 
-Everything else stays the same: the integration loop ({{workspace_doc}} §3) runs after every sub-agent return, sub-agents remain fresh-context, `## Flags` are dispositioned in `notes/flags.md`, commits land per integration step.
+Everything else stays the same: the integration loop (AGENTS.md §3) runs after every sub-agent return, sub-agents remain fresh-context, `## Flags` are dispositioned in `notes/flags.md`, commits land per integration step.
 
 
 ## Auto-decisions log

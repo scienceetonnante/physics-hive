@@ -1,14 +1,18 @@
 # Pi host configuration.
 #
-# The renderer reads this file to know how to map capabilities to tool names,
-# where to write rendered files, and how to shape host-specific frontmatter.
+# Pi discovers project skills in .pi/skills/ and prompt templates (slash
+# commands) in .pi/prompts/, so everything Pi needs lives under .pi/ and no
+# package.json or `pi install -l .` is required. Each skill is rendered as a
+# thin stub under .pi/skills/<name>/SKILL.md plus the full workflow under
+# .pi/prompts/<name>.md, with the Pi tool-discipline preamble prepended.
 
 name = "pi"
-workspace_doc = "AGENTS.md"
+display_name = "Pi"
 agents_dir = ".pi/agents"
 agent_ext = ".md"
-skills_dir = "skills"            # Pi keeps skills/ at workspace top level
-prompts_dir = "prompts"          # Pi prompts/ for slash-command workflow expansion
+skills_dir = ".pi/skills"
+prompts_dir = ".pi/prompts"
+skills_layout = "pi"
 
 agent_frontmatter_order = ["name", "description", "thinking", "tools", "output"]
 
@@ -17,7 +21,7 @@ file_read = "read"
 file_write = "write"
 file_edit = "edit"
 shell = "bash"
-# Pi's "glob" capability is the pair (ls, find). Joined to "ls, find".
+# Pi's "glob" capability is the pair (ls, find).
 glob = "ls, find"
 grep = "grep"
 web_search = "web_search"
@@ -26,9 +30,7 @@ web_fetch = "fetch_content"
 [agent_extra_fields]
 thinking = "high"
 
-# File-backed values: each is loaded from hosts/<host>/<filename> at render
-# time. Missing files yield an empty string.
 [file_backed]
 preamble = "preamble.md"
-dispatch_example = "dispatch_example.md"
+section = "section.md"
 skill_stub_template = "skill_stub.md.tmpl"
