@@ -21,6 +21,7 @@ Usage: uv run .physics-intern/scripts/promote.py <card id> [--reason TEXT] [--by
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -32,7 +33,7 @@ from common import ScriptError, git, load_active, now_iso, operator_name, say  #
 
 def promotion_record(card_id: str, by: dict, session: str | None, reason: str) -> tuple[str, str]:
     """Return (path, content) of a promotion record."""
-    who = by.get("user") or "agent"
+    who = re.sub(r"[^A-Za-z0-9._-]+", "-", by.get("user") or "agent").strip("-") or "unknown"
     path = f"feedback/promotion-{card_id}-{who}-{utc_stamp()}.md"
     meta = {"kind": "promotion", "target": card_id, "by": by, "date": now_iso(), "session": session}
     return path, dump_front_matter(meta, (reason.strip() + "\n") if reason.strip() else "")
