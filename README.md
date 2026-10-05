@@ -1,204 +1,142 @@
 # PhysicsIntern
 
-A methodology package for using AI coding agents (Claude Code, Pi, OpenAI Codex CLI, OpenCode) to conduct theoretical physics and mathematics research. Drop a research question into `problem.md`, run a single bootstrap command, launch your agent, and run `/survey` to begin. The agent handles the rest — surveying the literature, drafting a plan, dispatching analytical derivations and numerical computations to fresh-context sub-agents, reviewing each result, and synthesising the final answer into `answer.md`.
+PhysicsIntern is a method for using AI coding agents (Claude Code, OpenAI Codex CLI, OpenCode, Pi) to do research in theoretical physics and mathematics. A lead scientist states the question and what counts as done. Agents then work in bounded sessions: they read the literature, derive and compute in sub-agents that start from a fresh context, review every result blindly, and record results as small files called **cards**. Scripts compute each card's status and evidence, so that every result can be traced to who produced it, how, and with which version of the method.
 
-PhysicsIntern is **host-agnostic**: the same methodology runs on four coding-agent hosts, with the host chosen at workspace-creation time. Files are durable state, the session is ephemeral — you can clear the context at any time and the agent picks up from `research_log.md` and `plan.md`.
+A workspace is either **local** (one person, one machine, a git repository) or a **shared space** on the Hugging Face Hub, private by default, where several people and many agents work on the same problem:
 
-> **Working on the methodology itself?** See [DOCUMENTATION.md](DOCUMENTATION.md) for the developer documentation: render pipeline, agent/skill authoring contracts, host glue, and the audit workflow.
+- **Leads** own the question (`problem.md`), the strategy (`plan.md`) and the conventions, and are the only ones who mark a claim as *established*.
+- **Operators** run agent sessions from their terminal, each with the harness and model of their choice. Each session ends in a pull request that merges on its own.
+- **Reviewers** use only a browser: in the project's private Space they read results, react, write question and claim cards, verify claims, and ask an explainer chat.
+
+> **Working on the method itself?** See [DOCUMENTATION.md](DOCUMENTATION.md): render pipeline, workspace format, scripts, Hub operations, authoring contracts and the audit workflow.
 
 
 ## Prerequisites
 
-- **Git** and **Python 3.11+** (the renderer uses `tomllib`; no third-party packages).
-- One of the supported coding-agent hosts installed:
-  - **[Claude Code](https://claude.com/claude-code)** (default) — `claude` on your PATH.
-  - **[Pi](https://pi.dev)** — `pi` on your PATH.
-  - **[OpenAI Codex CLI](https://github.com/openai/codex)** — `codex` on your PATH.
-  - **[OpenCode](https://opencode.ai)** — `opencode` on your PATH.
-
-The agent host provides web search, Python execution, and sub-agent dispatch. PhysicsIntern does not need any API keys of its own.
+- **git** and **[uv](https://docs.astral.sh/uv/)** (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`). The scripts run through uv with their dependencies declared inline; nothing else needs installing by hand.
+- At least one harness: **[Claude Code](https://claude.com/claude-code)** (`claude`), **[Codex CLI](https://github.com/openai/codex)** (`codex`), **[OpenCode](https://opencode.ai)** (`opencode`) or **[Pi](https://pi.dev)** (`pi`).
+- For a shared space: a Hugging Face account, membership of the organisation that will own the project, and `hf auth login` on each operator's machine. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project).
+- Optional: `SEMANTIC_SCHOLAR_API_KEY`, which raises the rate limit of the citation lookups for papers outside INSPIRE.
 
 
-## Quick start
+## Quick start (local)
 
 ```bash
-git clone <this-repo> physics-intern
-cd physics-intern
-
-./init-physics-intern.sh ../my-new-workspace    # prompts you to pick a host (default: Claude Code)
-cd ../my-new-workspace
-
-# Edit problem.md — fill in the '### Problem setup' and '### Main question' blocks.
-$EDITOR problem.md
-
-claude                                          # launch Claude Code in this directory
-> /survey                                       # begin (the agent reads problem.md directly)
+git clone <this repo> physics-intern
+./physics-intern/init-physics-intern.sh
 ```
 
-That's it. The agent will work through the research arc, dispatching sub-agents, integrating their results, and committing after each step. You can intervene at any point: edit files directly, ask the main agent a question, or run a slash command yourself.
+The script asks what to do (start a local workspace, create a shared space, or join one), which harnesses you will use on this machine (a tick list, with the installed ones ticked), and where (the current folder by default). Then:
 
-> **Prefer not to clone the methodology repo?** Each host has an installable bootstrap that scaffolds a workspace for you:
-> - [`huggingface/physics-intern-claude-plugin`](https://github.com/huggingface/physics-intern-claude-plugin) (Claude Code) — marketplace plugin
-> - [`huggingface/physics-intern-codex-plugin`](https://github.com/huggingface/physics-intern-codex-plugin) (Codex CLI) — marketplace plugin
-> - [`huggingface/physics-intern-opencode-plugin`](https://github.com/huggingface/physics-intern-opencode-plugin) (OpenCode) — clone + `./install.sh` (OpenCode has no plugin marketplace)
->
-> See the per-host instructions under [Hosts](#hosts) below.
+1. Write the question and its definition of done in `problem.md`, and 5 to 10 seed papers in `literature/seeds.md` if you have them. Both are free text. You can also ask the coordinator to write them with you.
+2. Launch your harness in the workspace folder (`claude`, `codex`, `opencode` or `pi`).
+3. Run **`/session-run`** (in Codex, `$session-run`). The coordinator proposes a brief; you adjust and confirm it; it works on its own until a stop condition and writes a report.
 
+For a benchmark problem whose shape is known in advance, `/autoresearch` runs the whole pipeline (survey, plan, derive and review, finalize) in one session without stopping for you.
 
-## Hosts
-
-Pick a host at workspace-creation time via `--host`. If you omit it, the bootstrap prompts you to choose one interactively (defaulting to Claude Code when run non-interactively). Same methodology in every case; the launch sequence differs.
-
-### Claude Code (default)
+Every question of the init script also has a flag, for scripts and the plugin bootstraps:
 
 ```bash
-./init-physics-intern.sh --host=claude ../my-workspace
-cd ../my-workspace
-claude
-> /survey
+./init-physics-intern.sh --mode local --harness claude,opencode --dir ../my-problem --yes
 ```
 
-**Or install the Claude Code plugin** for a discoverable, one-command bootstrap (no clone needed):
+Run it again inside a workspace to add a harness or refresh the rendered files (`--harness codex`), or with `--upgrade` to replace the workspace's copy of the method with a newer one.
 
-```
-/plugin marketplace add huggingface/physics-intern-claude-plugin
-/plugin install physics-intern@physics-intern-claude
-```
 
-Restart Claude Code, then run `/init-physics-intern` in an empty folder for your problem. (Plugin repo: [`huggingface/physics-intern-claude-plugin`](https://github.com/huggingface/physics-intern-claude-plugin), built from this one via `build-plugin.sh`; see [DOCUMENTATION.md](DOCUMENTATION.md#distribution-as-a-claude-code-plugin).)
+## Shared spaces on the Hub
 
-### Pi
+**Create** (a lead, once):
 
 ```bash
-./init-physics-intern.sh --host=pi ../my-workspace
-cd ../my-workspace
-pi install -l .                                 # register the workspace as a local Pi package
-pi                                              # auto-installs pi-subagents + pi-web-access
-> /survey
+./init-physics-intern.sh --mode create --org our-lab --name x-correction
 ```
 
-### OpenAI Codex CLI
+This creates the local workspace, the private dataset repositories `our-lab/x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/x-correction-space`; it pushes the first commit and prints the line to send to collaborators. The creator is the first lead (`[people] leads` in `project.toml`).
+
+**Join** (every operator, once per checkout):
 
 ```bash
-./init-physics-intern.sh --host=codex ../my-workspace
-cd ../my-workspace
-codex                                           # on first run, accept the "trust this project" prompt
-                                                # — otherwise .codex/config.toml (sandbox + web search) is ignored
-> $survey
+./init-physics-intern.sh --mode join --repo our-lab/x-correction
 ```
 
-Sub-agent roles auto-discover from the rendered `.codex/agents/*.toml` files (no config registration). Dispatch uses `spawn_agent` + `wait_agent`; subagents are enabled by default in current Codex.
+This clones the workspace and renders the harness files you selected from the workspace's own copy of the method, so that every operator and the Space run exactly the same prompts and scripts. Harness files are personal: they are git-ignored, and only research content and the method copy are shared.
 
-**Or install the Codex plugin** for a discoverable, one-command bootstrap (no clone needed):
+**What happens in a session.** `/session-run` claims a session by opening a draft pull request; its number is the session number (`S12`). It puts your checkout on the branch `session/S12`, lists what is waiting (open questions, cards that need a re-check, reactions and cards written by people, plan-change proposals, other open sessions), and proposes a brief. You confirm it; this is the only step that needs your attention. The session then works on its own within its budget (20 dispatches by default) and stops when the goal is reached, the budget is spent, four dispatches pass without progress, or the work shows that `problem.md` should change. At the end, `session.py end` checks the workspace, pushes the branch, uploads the trace, and merges the pull request, rebasing on `main` first if other sessions merged in the meantime.
 
-```
-codex plugin marketplace add huggingface/physics-intern-codex-plugin
-codex plugin add physics-intern@physics-intern-codex
-```
+**What needs a lead.** A merge adds cards, artefacts, reviews and a report; it makes nothing established by itself. Promotion to *established* is a separate, recorded decision by a lead, made from the Space or with `uv run .physics-intern/scripts/promote.py <card>`. The lead's files (`problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`) change only by a lead's own edit or by a pull request a lead merges; `/research-plan` drafts plan proposals as such pull requests. To push their own edits from a terminal, leads can use `uv run .physics-intern/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
 
-Restart Codex, then run `$physics-intern:init-physics-intern` in an empty folder for your problem. (Plugin repo: [`huggingface/physics-intern-codex-plugin`](https://github.com/huggingface/physics-intern-codex-plugin), built from this one via `build-codex-plugin.sh`; see [DOCUMENTATION.md](DOCUMENTATION.md#distribution-as-a-codex-cli-plugin).)
-
-### OpenCode
-
-```bash
-./init-physics-intern.sh --host=opencode ../my-workspace
-cd ../my-workspace
-opencode                                        # commands and sub-agents auto-discovered from .opencode/
-> /survey
-```
-
-Sub-agent dispatch on OpenCode uses the native `task` tool (`subagent_type="<role>"`) or an `@<role>` mention. Commands (`.opencode/commands/`) and agents (`.opencode/agents/`) are auto-discovered — no registration step. **Caveat:** dispatching *custom* sub-agents has been version-dependent (some builds hardcode `subagent_type` to the built-ins `explore`/`general`/`mary` — see [opencode #29616](https://github.com/anomalyco/opencode/issues/29616)); if your build can't, the workspace `AGENTS.md` explains the in-context fallback.
-
-**Or install the OpenCode bootstrap** for a global, one-command `/init-physics-intern` (no methodology clone needed). OpenCode has no plugin marketplace, so installation is a clone + installer:
-
-```
-git clone https://github.com/huggingface/physics-intern-opencode-plugin
-cd physics-intern-opencode-plugin && ./install.sh
-```
-
-Restart OpenCode, then run `/init-physics-intern` in an empty folder for your problem. (Repo: [`huggingface/physics-intern-opencode-plugin`](https://github.com/huggingface/physics-intern-opencode-plugin), built from this one via `build-opencode-plugin.sh`; see [DOCUMENTATION.md](DOCUMENTATION.md#distribution-as-an-opencode-plugin).)
+**The Space** is where reviewers work: an overview of the question, the strategy and the active sessions; the results with their computed status and evidence and equations rendered; the literature with triage; the session reports with their proposals; the queue of open questions; reactions, question and claim cards, human verifications and, for leads, promotions; an editor for the lead's files; and an explainer chat that answers from the project's files, cites them, and can turn an unanswered question into a question card for the agents.
 
 
-## What `init-physics-intern.sh` does
+## Plugins
 
-The bootstrap script renders a workspace from this repo's templates:
+Each harness also has an installable bootstrap that asks the init questions in the chat and runs the same script:
 
-- Creates `CLAUDE.md` (Claude) or `AGENTS.md` (Pi, Codex, OpenCode) — the main-agent prompt encoding the entire research methodology.
-- Renders the seven sub-agent role prompts and eight workflow skills into the host's expected layout.
-- Scaffolds `problem.md` with empty `### Problem setup` and `### Main question` blocks if you haven't written one.
-- Creates artefact directories (`derivations/`, `computations/`, `critiques/`, `notes/`, `references/`, `data/`, plus `.briefs/` under `derivations/` and `computations/`).
-- Seeds `notes/flags.md` (where the main agent logs its handling of sub-agent flags).
-- Initialises git and makes the first commit.
+- **Claude Code**: `/plugin marketplace add huggingface/physics-intern-claude-plugin`, then `/plugin install physics-intern@physics-intern-claude`; run `/init-physics-intern` in an empty folder.
+- **Codex CLI**: `codex plugin marketplace add huggingface/physics-intern-codex-plugin`, then `codex plugin add physics-intern@physics-intern-codex`; run `$physics-intern:init-physics-intern`.
+- **OpenCode** (no marketplace): `git clone https://github.com/huggingface/physics-intern-opencode-plugin && cd physics-intern-opencode-plugin && ./install.sh`; run `/init-physics-intern`.
 
-Re-running on an existing workspace prompts for a reset (preserves `problem.md`, wipes everything else and re-renders from the current templates).
+After the bootstrap, restart the harness in the workspace folder so that the workspace's skills and agents load.
 
 
-## Workspace layout
+## Harness notes
 
-After `init-physics-intern.sh`, your workspace looks like this:
+- **Claude Code** reads `CLAUDE.md`, a one-line import of `AGENTS.md`. Skills are slash commands.
+- **Codex CLI** reads `AGENTS.md`; skills are `$name`. Accept the project-trust prompt on first launch, otherwise `.codex/config.toml` (which allows the network access the session scripts need) is ignored.
+- **OpenCode** reads `AGENTS.md`; skills are slash commands. Dispatching custom sub-agents has depended on the OpenCode version ([opencode #29616](https://github.com/anomalyco/opencode/issues/29616)); `AGENTS.md` explains the fallback.
+- **Pi** reads `AGENTS.md`; skills are slash commands from `.pi/prompts/`. It installs `pi-subagents` and `pi-web-access` on first launch.
+
+A workspace rendered for several harnesses opens in any of them without running anything again. `AGENTS.md` holds the method and one short section per harness.
+
+
+## What a workspace looks like
 
 ```
-my-workspace/
-├── problem.md             the research question (you write this)
-├── CLAUDE.md / AGENTS.md  the main-agent prompt (don't edit during a run)
-├── research_log.md        primary durable state — Working Claims, Established Results, …
-├── plan.md                research plan (written by /research-plan)
-├── survey.md              landscape orientation (written by /survey)
-├── answer.md              final synthesis (written by /finalize)
-├── derivations/           D-NNN.md analytical derivations + D-NNN_R*.md reviews
-│   └── .briefs/           dispatch briefs the main agent writes before /derive
-├── computations/          C-NNN.{md,py,out} symbolic + numerical work + reviews
-│   └── .briefs/           dispatch briefs the main agent writes before /compute
-├── critiques/             CR-NNN.md strategic critiques
-├── notes/                 main-agent scratch + notes/flags.md (flag-disposition log)
-├── references/            papers / textbooks the agent fetches and summarises
-└── data/                  numerical inputs/outputs of computations
+problem.md            question, definition of done, sanity checks (lead's file)
+plan.md               current strategy (lead's file)
+conventions.md        notation, units, signs (lead's file)
+project.toml          method version, Hub repositories, leads, chat model
+.physics-intern/      copy of the method: prompts, renderer, scripts, Space app
+claims/               one card per claim, question or dead end
+derivations/          D-S12-3.summary.md (one page) + D-S12-3.tex (full LaTeX) + reviews
+computations/         C-S12-1.md (one page) + .py + .out + reviews
+critiques/            strategic critiques
+literature/           seeds.md, one card per paper (P-<arXiv id>.md), one survey summary per session
+sessions/S12/         brief.md, log.md, report.md
+feedback/             reactions, human verifications, promotion records
+answer.md, write-up/  the final answer and the LaTeX write-up
+INDEX.md              generated: one line per item with its status and evidence (git-ignored)
+research_log.md       generated: claims grouped by status, then the session reports (git-ignored)
 ```
 
-You only ever need to edit `problem.md` (and optionally any of the above if you want to intervene). The agent handles the rest.
+**Cards.** A claim, question or dead end is one file in `claims/` with a small YAML header and a free prose body. A card never changes after it is created; everything that happens to it later is a new file that names it (an artefact that supports it, a review, a human verification, a promotion record, a dead end that refutes it, a claim that supersedes it). The scripts compute each claim's status (`working`, `established`, `refuted`, `revised`) and evidence, and flag as *needs re-check* every card that depends on a refuted or revised one. IDs embed the session number (`CL-S12-2`), so parallel sessions never collide and their pull requests never conflict.
 
 
-## Skills (slash commands)
+## Skills
 
 | Skill | What it does |
 |---|---|
-| `/survey` | Landscape orientation. Writes `survey.md`. Provisional — later evidence overrides it. |
-| `/research-plan` | Drafts or updates `plan.md`. Pauses for your approval before continuing. |
-| `/derive <claim>` | Analytical derivation in a fresh-context sub-agent. Writes `derivations/D-NNN.md`. |
-| `/compute <claim>` | Symbolic + numerical work (SymPy + NumPy by default). Writes `computations/C-NNN.{md,py,out}`. Disagreement between symbolic and numerical is flagged. |
-| `/review <D-NNN \| C-NNN>` | Fresh-context adversarial review of a derivation or computation. Writes a sibling `_R<M>.md` with verdict `confirmed` / `refuted` / `inconclusive`. |
-| `/critique` | Fresh-context strategic critique of the whole research state. Writes `critiques/CR-NNN.md`. |
-| `/finalize` | Synthesises `answer.md` from Established Results. |
-| `/autoresearch` | Drives the whole pipeline autonomously, skipping the three HITL gates. Records each skipped decision in `notes/auto-decisions.md`. Use for methodology validation or problems where course correction is unlikely. |
+| `/session-run` | Runs one session: start, a brief you confirm, autonomous work within a budget, report, end (and merge, in shared mode). |
+| `/survey` | Literature: expands from the seed papers along citations (INSPIRE, arXiv), writes paper cards and a survey summary. Usable in any session. |
+| `/research-plan` | Drafts the strategy: `plan.md` in local mode, a proposal pull request for the lead in shared mode. |
+| `/derive <target>` | Analytical derivation in LaTeX with a one-page summary, by a fresh-context sub-agent. |
+| `/compute <target>` | Symbolic and numerical computation (SymPy, NumPy), with both paths compared. |
+| `/review <artefact>` | Blind, test-based review: dimensions, limits, symmetries and spot checks first, then located remarks with a severity. |
+| `/critique` | Strategic critique of the overall state. |
+| `/finalize` | Writes `answer.md` from the established claims, at the end of the project. |
+| `/write-up` | Assembles the established claims into a LaTeX document compiled to PDF, each statement naming its card. |
+| `/autoresearch` | Local mode: the whole pipeline in one session, without stopping for you; for benchmark runs. |
 
+## Scripts
 
-## How a workspace runs (high-level)
-
-A workspace is a git repository. You fill in `problem.md`, talk to the main agent, and it acts as a **coordinator only** — every substantive step (survey, derivation, computation, review, critique) is dispatched to a fresh-context sub-agent.
-
-After each sub-agent return, the main agent runs the **integration loop**:
-
-1. Read the sub-agent's `## Summary` / `## Result` / `## Flags`.
-2. Update `research_log.md` — Working Claims, Established Results, source lists, dependencies.
-3. Log each flag in `notes/flags.md` with a one-line disposition (accepted / dismissed / deferred).
-4. Update `plan.md` if a step is done, obsolete, or revised.
-5. Commit everything as one logical step.
-6. Decide the next dispatch — or hand back to you.
-
-A Working Claim becomes an Established Result only when its evidence is robust against typical failure modes — usually **≥2 independent dispatch contexts** (a second derivation from a different angle, a computation cross-check, or both). No single sub-agent verdict moves the research forward.
-
-The full operational rules live in `CLAUDE.md` / `AGENTS.md` inside your workspace; the agent reads them at every turn.
-
-
-## Intervening during a run
-
-You can edit any file, ask the main agent a question, or run a slash command yourself at any time. After a context clear, the main agent resumes from `research_log.md` and `plan.md` alone — no other handoff state.
-
-If you want to inspect what the agent has been doing, `git log` is authoritative: there's one commit per integration step, with the artefact, the research-log update, and the flag dispositions bundled together.
+The deterministic work is done by scripts in `.physics-intern/scripts/`, which the skills call with `uv run`: `regen.py` (rebuild the generated views), `check.py` (validate cards, references, immutability and the promotion rule), `session.py` (start, status, next ID, brief, end, abort), `promote.py`, `propose.py`, `export_trace.py`, `literature.py` (arXiv and INSPIRE search, citations, sources; also an MCP server), and `hubgit.py`.
 
 
 ## Limitations and next steps
 
-- **No MCP integrations ship today.** `/compute` uses SymPy + NumPy; `/survey` uses the host's built-in web search. Planned but not implemented: `mcp-arxiv`, `mcp-papers` (index `references/`), `mcp-mathematica` (symbolic backend for licence-holders), tensor-algebra backends.
-- **Four hosts supported.** Claude Code, Pi, OpenAI Codex CLI, OpenCode. Gemini CLI, Goose are not implemented yet — adding one is a folder under `hosts/`; see [DOCUMENTATION.md](DOCUMENTATION.md#adding-a-new-host).
-- **No workspace upgrade path.** Changes to the methodology propagate to **new** workspaces on the next `init-physics-intern.sh` run. Existing workspaces keep whatever version they were created with, unless you re-run the bootstrap with reset (which preserves `problem.md` only).
+- Agents run only on operators' machines; nothing runs agents in the cloud or from the Space.
+- Shared spaces are private; there are no public spaces.
+- Model diversity between authors and reviewers is not enforced. Every card and trace records the models used, and the reviewer benchmark (`bench/reviewer/`) measures how often each reviewer configuration catches planted errors and raises false alarms, which will tell whether the rule should come back.
+- Trace export is complete for OpenCode and Claude Code, best effort for Codex and Pi.
+- Existing workspaces in the earlier format keep working with their own rendered files; they are not converted. Migrating cards when the card format itself changes is not designed yet.
+- A Mathematica backend for licence holders, as a second symbolic engine next to SymPy, is not implemented.

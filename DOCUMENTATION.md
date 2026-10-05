@@ -1,531 +1,324 @@
 # PhysicsIntern — Developer Documentation
 
-This document is for contributors working on the PhysicsIntern methodology itself: adding or editing agents, skills, and hosts; understanding the render pipeline; or auditing runs. For installation and end-user usage, see [README.md](README.md).
+This document is for people who work on the PhysicsIntern method itself: the prompts, the renderer, the workspace scripts, the Space, the plugins and the audit skill. For installing and using PhysicsIntern, see [README.md](README.md). The design behind the card-based format and shared spaces is in `design/DESIGN-shared-spaces.md`.
 
 ## Contents
 
-1. [What this repo is (and isn't)](#what-this-repo-is-and-isnt)
+1. [What this repo is](#what-this-repo-is)
 2. [Repo layout](#repo-layout)
-3. [Architecture: commons + hosts + render](#architecture-commons--hosts--render)
+3. [Architecture](#architecture)
 4. [The render pipeline](#the-render-pipeline)
-5. [Authoring agents](#authoring-agents)
-6. [Authoring skills](#authoring-skills)
-7. [Host glue](#host-glue)
-8. [The workspace doc and research log](#the-workspace-doc-and-research-log)
-9. [The bootstrap script](#the-bootstrap-script)
-10. [Workspace runtime: how the methodology executes](#workspace-runtime-how-the-methodology-executes)
-11. [Design choices worth remembering](#design-choices-worth-remembering)
-12. [Adding a new host](#adding-a-new-host)
-13. [Adding a new agent or skill](#adding-a-new-agent-or-skill)
-14. [Auditing a run: `investigate-run`](#auditing-a-run-investigate-run)
-15. [Validation workflow](#validation-workflow)
+5. [The workspace format](#the-workspace-format)
+6. [The workspace scripts](#the-workspace-scripts)
+7. [Sessions and the Hub](#sessions-and-the-hub)
+8. [The init script](#the-init-script)
+9. [Authoring agents](#authoring-agents)
+10. [Authoring skills](#authoring-skills)
+11. [Host glue](#host-glue)
+12. [The Space](#the-space)
+13. [Literature tools](#literature-tools)
+14. [The reviewer benchmark](#the-reviewer-benchmark)
+15. [Distribution: plugins](#distribution-plugins)
+16. [Tests](#tests)
+17. [Design choices worth remembering](#design-choices-worth-remembering)
+18. [Adding a host, an agent or a skill](#adding-a-host-an-agent-or-a-skill)
+19. [Auditing a run: investigate-run](#auditing-a-run-investigate-run)
+20. [Validation workflow](#validation-workflow)
 
 
-## What this repo is (and isn't)
+## What this repo is
 
-This repo holds the **methodology** — the prompts, the render pipeline, and the workspace template — that turn an AI coding harness (Claude Code, Pi, Codex CLI, OpenCode) into a research collaborator for theoretical physics and mathematics. The host already provides tool-use loops, sub-agent dispatch, sandboxed Python, web search, and slash-command-as-skill; we don't rebuild those. We layer on top: structured survey, explicit plan, fresh-context derivations and adversarial reviews, strategic critique, systematic symbolic + numerical cross-checking, citation discipline.
+This repo holds the **method**: the prompts that turn an AI coding harness (Claude Code, Codex CLI, OpenCode, Pi) into a research coordinator with fresh-context sub-agents; the renderer that writes them in each harness's format; the **workspace scripts** that do the deterministic work (computing views, validating, opening and closing sessions, Hub operations, trace export); the **Space** app for browser-only reviewers; the plugin bootstraps; and the audit skill used to improve all of this from real runs.
 
-What lives here:
-
-- **`commons/`** — host-agnostic methodology source. The workspace doc, the seven sub-agent role prompts, the nine skill workflows, the research-log template.
-- **`hosts/<host>/`** — host-specific glue: tool-name maps, frontmatter shapes, dispatch syntax, and any settings/package files that ship into a workspace.
-- **`init-physics-intern.sh`** + **`commons/render.py`** — bootstrap a new workspace by rendering `commons/` through `hosts/<host>/`.
-- **`.claude/skills/investigate-run/`** — the post-mortem audit skill, used while iterating on the methodology.
-- **`workspaces/`**, **`problems/`**, **`references/`**, **`results/`** — sample workspaces, benchmark problem corpus, and run outputs used to drive methodology iteration.
-
-What does **not** live here: workspace-specific research artefacts. Those are produced inside a rendered workspace (`derivations/`, `computations/`, `critiques/`, `research_log.md`, `answer.md`, …).
+The harness provides tool-use loops, sub-agent dispatch, shell, web search and slash commands; we do not rebuild those. Research content (cards, derivations, sessions) is produced inside workspaces, never here.
 
 
 ## Repo layout
 
 ```
 physics-intern/
-├── README.md                          # user-facing: install, launch, how to use
-├── DOCUMENTATION.md                   # this file: developer documentation
-├── CLAUDE.md                          # repo-level instructions (not for workspaces)
-├── init-physics-intern.sh             # workspace bootstrap script
-├── commons/                           # host-agnostic source of truth
-│   ├── render.py                      # renderer: reads commons/ + hosts/<host>/
-│   ├── workspace-doc.md               # body of CLAUDE.md / AGENTS.md (with placeholders)
-│   ├── research_log.md                # template for the workspace research log
-│   ├── gitignore                      # base .gitignore for workspaces
-│   ├── agents/                        # 7 fresh-context role prompts
-│   │   ├── surveyor.md
-│   │   ├── planner.md
-│   │   ├── deriver.md
-│   │   ├── computer.md
-│   │   ├── reviewer.md
-│   │   ├── critic.md
-│   │   └── finalizer.md
-│   └── skills/                        # 8 main-agent workflow files
-│       ├── survey.md
-│       ├── research-plan.md
-│       ├── derive.md
-│       ├── compute.md
-│       ├── review.md
-│       ├── critique.md
-│       ├── finalize.md
-│       └── autoresearch.md
-├── hosts/                             # host-specific glue
-│   ├── claude/
-│   │   ├── host.toml                  # workspace_doc, tools_map, frontmatter shape
-│   │   ├── dispatch_example.md        # Task tool syntax example
-│   │   └── extras/.claude/settings.json
-│   ├── pi/
-│   │   ├── host.toml
-│   │   ├── preamble.md                # Pi tool-discipline preamble
-│   │   ├── dispatch_example.md        # subagent JSON example
-│   │   ├── skill_stub.md.tmpl         # layout for Pi's skills/<name>/SKILL.md stubs
-│   │   ├── gitignore.extra            # node_modules/
-│   │   └── extras/
-│   │       ├── package.json
-│   │       └── .pi/settings.json
-│   ├── codex/
-│   │   ├── host.toml                  # agent_format="toml"; tools collapse onto shell_command + apply_patch
-│   │   ├── preamble.md                # Codex tool discipline
-│   │   ├── dispatch_example.md        # spawn_agent + wait_agent example
-│   │   └── extras/.codex/config.toml  # sandbox + web_search (roles auto-discover from .codex/agents/)
-│   └── opencode/
-│       ├── host.toml                  # skills_layout="flat"; mode=subagent; YAML+md agents, native tools
-│       ├── dispatch_example.md        # Task tool (subagent_type) example
-│       └── extras/opencode.json       # project config (permissions); agents/commands auto-discovered
-├── .claude/skills/
-│   └── investigate-run/               # repo-level audit skill
-├── workspaces/                        # sample workspaces (methodology test runs and real research)
-├── problems/                          # problem corpus
-├── references/                        # benchmark problem corpus + helper scripts
-└── results/                           # run outputs / artefacts from past methodology iterations
+├── README.md, DOCUMENTATION.md, CLAUDE.md
+├── VERSION                       method version, copied into every workspace
+├── init-physics-intern.sh        thin launcher: uv run scripts/init.py
+├── commons/                      host-agnostic method
+│   ├── render.py                 renderer (stdlib only)
+│   ├── workspace-doc.md          body of AGENTS.md
+│   ├── agents/                   8 sub-agent roles (surveyor, planner, deriver, computer,
+│   │                             reviewer, critic, finalizer, writer)
+│   ├── skills/                   10 skill workflows (session-run, survey, research-plan, derive,
+│   │                             compute, review, critique, finalize, write-up, autoresearch)
+│   └── templates/                problem.md, plan.md, conventions.md, seeds.md, gitignore
+├── hosts/<host>/                 harness glue: host.toml, section.md, extras/ (settings files)
+├── scripts/                      workspace scripts (uv inline dependencies)
+│   ├── cards.py                  library: load a workspace, compute status, evidence, re-check flags
+│   ├── regen.py, check.py        generated views; validation
+│   ├── session.py                start, status, next, brief, end, abort
+│   ├── promote.py, propose.py    promotion records; proposal pull requests for the lead's files
+│   ├── hub.py, hubgit.py         Hub operations; git with the Hub token
+│   ├── export_trace.py           harness records → trace.jsonl
+│   ├── literature.py             arXiv / INSPIRE / Semantic Scholar CLI and MCP server
+│   ├── init.py                   create, join, refresh, upgrade
+│   └── common.py                 git helpers, the active-session file
+├── space/                        the Space app (Gradio), deployed by init --mode create
+├── bench/reviewer/               reviewer benchmark: cases with planted errors, runner
+├── plugins/<host>/               authored files of the plugin bootstraps
+├── build-*plugin.sh              assemble the publishable plugin repos
+├── tests/                        pytest suite; hub_e2e.py (live, manual)
+├── .claude/skills/investigate-run/   the audit skill (repo-level)
+├── design/                       design documents
+└── workspaces/, problems/, references/, results/   sample runs and benchmark corpus (git-ignored)
 ```
 
 
-## Architecture: commons + hosts + render
+## Architecture
 
-The methodology is **host-agnostic**: one source tree (`commons/`) is rendered per host (`hosts/<host>/`) by `commons/render.py`. The split is simple:
+Four layers, each with one job:
 
-- **`commons/`** carries the substance. The workspace doc, the role prompts, the skill workflows, and the research-log template are all written once. They use mustache-style placeholders (`{{workspace_doc}}`, `{{agents_dir}}`, `{{agent_ext}}`, `{{dispatch_example}}`, …) for the few host-specific values they need to reference.
-- **`hosts/<host>/`** carries the glue. `host.toml` declares paths, tool-name mappings, frontmatter shape, and which extra files to load. Optional companion files: `preamble.md` (injected at the top of skills/agents), `dispatch_example.md` (the canonical dispatch syntax string), `gitignore.extra` (appended to the workspace `.gitignore`), `extras/<rel-path>` files copied verbatim into the workspace, and (Pi only) `skill_stub.md.tmpl` for the Pi two-file skill layout.
+- **`commons/`** carries the substance of the method, written once: the workspace doc (what the coordinator does), the role prompts, the skill workflows, the skeletons of a new workspace. Skill bodies contain no harness-specific values.
+- **`hosts/<host>/`** carries the glue for one harness: where its files go, the shape of its agent frontmatter, its tool names, its section of `AGENTS.md` (dispatch syntax, tool discipline), and its settings files.
+- **`commons/render.py`** writes the harness files of a workspace for one or several harnesses. It is the only code that knows both sides.
+- **`scripts/`** does the deterministic work inside a workspace, so that models are left only with judgment: `regen` and `check`, the session lifecycle, Hub operations, trace export, the literature tools.
 
-Adding a new agent or skill is one file in `commons/`. Adding a new host is one folder under `hosts/`. The renderer is the only thing that knows both sides.
+**The method copy.** `scripts/init.py` copies `commons/`, `hosts/`, `scripts/`, `space/` and `VERSION` into a committed `.physics-intern/` folder in every workspace, and records the version in `project.toml`. Harness files are rendered from that copy (`.physics-intern/commons/render.py`), the scripts run from it (`uv run .physics-intern/scripts/…`), and the Space imports `cards.py` from it. So every operator and the Space use exactly the same prompts and scripts, the prompts that produced a result sit in the git history next to it, and an upgrade is one replacement of the folder (`init.py --upgrade`, a pull request in shared mode). `check` refuses session changes that touch it.
 
 
 ## The render pipeline
 
-`commons/render.py` is invoked by `init-physics-intern.sh`:
-
 ```bash
-python3 commons/render.py --host=<host> --target=<workspace-dir>
+python3 commons/render.py --hosts=claude,opencode --target=<workspace>
 ```
 
-It performs, in order:
+For each selected host, in a fixed order (claude, codex, opencode, pi):
 
-1. **Load the host config** — `hosts/<host>/host.toml` plus any `file_backed` entries (e.g. `preamble = "preamble.md"`).
-2. **Render agents** — one file per `commons/agents/<name>.md`. The body is substituted (`{{…}}` placeholders), and the manifest fields (`name`, `description`, `capabilities`, `output_pattern`) are projected onto the host's frontmatter or TOML role file. Capabilities are mapped to host-specific tool names via `tools_map`.
-3. **Render skills** — layout depends on the host: Claude / Codex write a single-file `<skills_dir>/<name>/SKILL.md`; OpenCode writes a single **flat** `<skills_dir>/<name>.md` command (`skills_layout = "flat"`); Pi writes two files (stub under `skills/<name>/SKILL.md` + workflow under `prompts/<name>.md`) per `commons/skills/<name>.md`.
-4. **Render the workspace doc** — `commons/workspace-doc.md` → `CLAUDE.md` (Claude) or `AGENTS.md` (Pi, Codex, OpenCode). Placeholders like `{{workspace_doc}}` and `{{dispatch_example}}` are substituted from the host config.
-5. **Render `research_log.md`** — substituted from the same template.
-6. **Render `.gitignore`** — `commons/gitignore` plus optional `hosts/<host>/gitignore.extra`.
-7. **Copy host extras** — every file under `hosts/<host>/extras/` is copied to the workspace, preserving relative paths.
-There is no Codex-specific registration step: current Codex auto-discovers sub-agent roles from the `.codex/agents/*.toml` files written in step 2 (older Codex used a now-removed `[agent_roles.*]` config table).
+1. **Clean** the host's previously rendered agent and skill folders, so that removed files do not linger.
+2. **Render the agents**: one file per `commons/agents/<name>.md`, with the manifest (`name`, `description`, `capabilities`, `output_pattern`) projected onto the host's frontmatter, capabilities mapped to tool names through `tools_map`. Codex roles are TOML (`developer_instructions` is a multi-line basic string, so backslashes are escaped and the result is checked by a TOML round trip).
+3. **Render the skills**: Claude Code, Codex and OpenCode get `<skills_dir>/<name>/SKILL.md` (Claude adds `argument-hint`); Pi gets a stub in `.pi/skills/<name>/SKILL.md` and the workflow in `.pi/prompts/<name>.md` with the Pi preamble prepended.
+4. **Copy the host extras** (`hosts/<host>/extras/<path>` → `<workspace>/<path>`): `.claude/settings.json` and `.mcp.json`, `.codex/config.toml`, `opencode.json`, `.pi/settings.json`.
 
-The renderer requires Python 3.11+ (`tomllib`), no third-party deps. Frontmatter parsing is intentionally minimal (top-level scalars, flow and block lists); if we ever need nested mappings or anchors we'll swap in PyYAML.
+Then, once:
 
-### Placeholder substitution
+5. **Render `AGENTS.md`**: a stamp line with the method version (`<!-- Rendered from the PhysicsIntern method 0.2.0 … -->`), then `commons/workspace-doc.md` with `{{harness_names}}` and `{{harness_sections}}` filled from each selected host's `section.md`. When Claude Code is selected, `CLAUDE.md` is the single line `@AGENTS.md`.
 
-`substitute(text, ctx)` replaces `{{key}}` with `ctx[key]`. Unknown placeholders raise — the renderer fails fast rather than emit broken files. The available keys come from the merged host dict (everything in `host.toml` plus all `file_backed` values). Frequently used: `workspace_doc`, `agents_dir`, `agent_ext`, `dispatch_example`, `preamble`.
+The renderer is stdlib-only (Python 3.11+, `tomllib`). Placeholders are `{{key}}`; an unknown placeholder raises. Skill bodies are substituted with an empty context, so a harness-specific placeholder in a skill fails the render.
 
-### Capability → tool mapping
+**Why skill bodies are harness-neutral.** OpenCode also reads `.claude/skills/` and `.agents/skills/`, keeping the first copy of each skill name, and Pi reads `.agents/skills/`. Identical bodies make it irrelevant which copy a harness picks, and OpenCode, which lists skills as slash commands, then shows each skill once. Everything harness-specific lives in the harness's section of `AGENTS.md` and in its agent files, which no other harness reads (verified with `opencode debug skill`, `opencode debug agent` and Pi's RPC `get_commands`).
 
-Sub-agent role files in `commons/agents/<name>.md` declare a list of **capabilities** (`file_read`, `file_write`, `file_edit`, `shell`, `glob`, `grep`, `web_search`, `web_fetch`). The renderer translates these per-host:
 
-| Capability | Claude | Pi | Codex | OpenCode |
-|---|---|---|---|---|
-| `file_read` | `Read` | `read` | `shell_command` (cat / head) | `read` |
-| `file_write` | `Write` | `write` | `apply_patch` | `write` |
-| `file_edit` | `Edit` | `edit` | `apply_patch` | `edit` |
-| `shell` | `Bash` | `bash` | `shell_command` | `bash` |
-| `glob` | `Glob` | `ls, find` | `shell_command` (find / ls) | `glob` |
-| `grep` | `Grep` | `grep` | `shell_command` (grep / rg) | `grep` |
-| `web_search` | `WebSearch` | `web_search` | `web_search` | `websearch` |
-| `web_fetch` | `WebFetch` | `fetch_content` | `shell_command` (curl) | `webfetch` |
+## The workspace format
 
-Duplicate-after-mapping tools are deduped (Codex collapses several capabilities onto `apply_patch` and `shell_command`). Two hosts don't carry a per-role tools allowlist: **Codex** (permissions are sandbox-scoped at the workspace level) and **OpenCode** (per-agent gating intentionally omitted — file ownership is enforced by the `AGENTS.md` prose and the agent prompts, the same trade-off as Codex). For both, the `tools_map` is informational, kept in `host.toml` to document which capability lands on which tool; the renderer never emits a `tools` field for them because `tools` is absent from their `agent_frontmatter_order`.
+The authoritative description, as agents see it, is `commons/workspace-doc.md`. The computations are in `scripts/cards.py`. In summary:
 
-### Frontmatter shaping
+**Cards** (`claims/<id>.md`): YAML header `id`, `kind` (`claim`, `question`, `dead-end`), `statement`, `depends_on`, `produced_by` (`{kind: agent, model, operator}` or `{kind: human, user}`), `session`, `supersedes` (claims), `refutes` (dead ends), `answers` (claims and dead ends); free prose body. Never edited after creation.
 
-Each host emits frontmatter in its own order and adds its own extras:
+**Artefacts**: `derivations/D-S<n>-<k>.summary.md` + `.tex`; `computations/C-S<n>-<k>.md` + `.py` + `.out` (+ text data files). The summary header holds `id`, `kind` and `supports` (the claims it supports), and no authorship, for blind review.
 
-- **Claude**: `name`, `description`, `tools`. No `output:` (Claude has no native concept). No agent extras.
-- **Pi**: `name`, `description`, `thinking`, `tools`, `output`. `thinking: high` is appended via `agent_extra_fields`. `output:` is the per-artefact path pattern; agents without a fixed output (e.g. reviewer) omit it.
-- **Codex**: not YAML — the entire role is a TOML file with `name`, `description`, and a `developer_instructions = """…"""` multi-line string. Roles are auto-discovered from `.codex/agents/*.toml` (filename matches `name`) — no `.codex/config.toml` registration step.
-- **OpenCode**: `description`, `mode`. No `name` (OpenCode derives the agent name from the filename) and no `tools` (per-role gating omitted). `mode: subagent` is appended via `agent_extra_fields` to mark each role as Task-tool-invokable. Agents are auto-discovered from `.opencode/agents/` — no registration step.
+**Reviews**: `derivations/<target>_R-S<n>-<k>.md` (or in `computations/`), header `id`, `kind: review`, `target`, `supports`, `claim` (the statement reviewed), `verdict`, `by: {kind: agent}`, `session`, `date`. **Human verifications** are reviews in `feedback/` with `id: R-<user>-<timestamp>` and `by: {kind: human, user}`, with or without an artefact `target`.
+
+**Feedback** (`feedback/`): reactions (`kind: reaction`, `target`, `value`, `by`, `date`, the comment as body; the latest per person and target counts), human reviews, and promotion records (`kind: promotion`, `target`, `by`, `date`, `session`, the reason as body).
+
+**Paper cards** (`literature/P-<arXiv id>.md`), survey summaries (`literature/survey-S<n>.md`), critiques (`critiques/CR-S<n>-<k>.md`), and session folders (`sessions/S<n>/brief.md` with `goal`, `budget`, `merge`, `starts_from`; `log.md`; `report.md` with `stop_reason`, `dispatches` and fixed sections).
+
+**IDs** embed the session (`CL-S12-2`, `D-S12-3`, `D-S3-2_R-S12-1`); items written outside a session carry the author and a UTC timestamp (`CL-alice-20261005T141233`); paper cards use the arXiv identifier.
+
+**What is computed** (never stored):
+
+| | Rule |
+|---|---|
+| Claim status | `refuted` if a dead end refutes it; else `revised` if a claim supersedes it; else `established` if a valid promotion record names it (in shared mode, by a lead); else `working`. |
+| Question status | `answered` if a claim or dead end names it in `answers`; else `open`. |
+| Evidence of a claim | Every artefact whose summary names it in `supports`, or that a review attaches by naming it in `supports`; with the reviews of that artefact that concern the claim (they name it, or name nothing while the artefact names it). Plus human verifications without an artefact target. |
+| Needs re-check | The refuted or revised cards in the transitive closure of `depends_on`. |
+| Promotion rule (`promotion_problems`) | Shared mode: the author is a human in `leads`. Always: the card is a claim, neither refuted nor revised, with at least one confirmed piece of evidence (an artefact with a confirming review for the claim, or a confirming human verification). |
+
+**Generated views** (git-ignored): `INDEX.md` (one line per item, grouped by status) and `research_log.md` (Open Questions, Working Claims, Established Results, Dead Ends, Answered Questions, then the session reports' main sections). Both are deterministic: regenerating gives identical files.
+
+
+## The workspace scripts
+
+All run with `uv run .physics-intern/scripts/<script>` from a workspace, with PEP 723 inline dependencies (PyYAML; `huggingface_hub` for those that talk to the Hub). They print what they did and fail with one `ERROR:` line rather than guess; the skills tell the coordinator to stop and report such failures.
+
+| Script | Role |
+|---|---|
+| `cards.py` | Library, no side effects: `Workspace` (loading, `status`, `evidence`, `needs_recheck`, `current_reactions`), `promotion_problems`, front-matter helpers. Imported by every other script and by the Space. |
+| `regen.py` | Writes `INDEX.md` and `research_log.md`. |
+| `check.py` | Validates headers, ID formats, references and their kinds, cycles, artefact authorship, reviews, feedback. With a base commit (default: the active session's), also: no file in `claims/`, `feedback/`, `derivations/`, `computations/` or paper cards edited or deleted; `.physics-intern/` untouched; in shared mode the lead's files and `project.toml` untouched by a session; other sessions' folders untouched; new IDs belong to the session; new promotion records follow the rule (and are refused inside shared sessions). |
+| `session.py` | `start`, `status`, `next <prefix>` / `next review <artefact>` (next free ID, counting IDs already mentioned in the session's briefs and log), `brief`, `end [--no-merge]`, `abort`. State in `.active-session` (JSON, git-ignored). |
+| `promote.py` | Records a promotion. Local: `--by-agent` for the coordinator. Shared: run by a lead, checked against the latest `main` in a temporary worktree, committed to `main` through the API. |
+| `propose.py` | Opens a pull request that changes one lead's file (`create_commit(create_pr=True)`). |
+| `hub.py` | Create and join, the session pull request lifecycle, sources sync, promotions, proposals, upgrades. |
+| `hubgit.py` | Runs a git command with the Hub token passed in a header (for leads' own pushes). |
+| `export_trace.py` | Collects the harness's record of a session: OpenCode's SQLite store (sessions, messages, parts in the window), Claude Code's JSONL files including sub-agent transcripts; Codex rollouts and Pi sessions as raw files, best effort. Returns the models found. |
+| `literature.py` | Literature tools; see below. |
+| `init.py` | Create, join, refresh, upgrade; see below. |
+
+**`session.py start` waiting list.** Open questions; cards that need a re-check; human cards, reactions, verifications and promotions added since the last commit that added a session report; the `Proposed plan changes` of reports added since `plan.md` last changed; working claims proposed for promotion; and in shared mode, other open session pull requests (with the `starts_from` of their brief) and pull request comments since the last report. It also refuses to start when the harness files were rendered from another method version than the one on `main` (it re-renders and asks for a harness restart), when the checkout is dirty, or when a session is already active.
+
+
+## Sessions and the Hub
+
+A shared space is five private repositories in one organisation: the workspace (dataset), `-traces`, `-sources`, `-chat-debug` (datasets) and `-space` (Space). Research files are not stored in the Space repo, because every push to a Space rebuilds the app.
+
+**Session lifecycle in shared mode** (`scripts/hub.py`):
+
+1. `start`: fetch `main`; refuse if local `main` has unpushed commits; `create_pull_request` (a draft; its number is the session number); rename it `[S<n>] (brief pending) by <user>`; `git checkout -B session/S<n> origin/main`; download paper sources.
+2. `brief`: commit the brief; push to `refs/pr/<n>`; rename the pull request `[S<n>] <goal>`; replace its description with the brief.
+3. `end`: rebase on `origin/main` if it moved (stop on conflict, branch unchanged); `check` against `origin/main`; force-push to `refs/pr/<n>`; upload sources; export the trace and upload `S<n>/trace.jsonl` and `S<n>/meta.json`; mark the draft ready; merge (one retry after a fresh rebase); record the merge commit in `meta.json`; reset the checkout to the new `main`.
+
+**Hub behaviours this relies on**, verified on scratch repositories before writing `session.py end`: a pull request is the ref `refs/pr/<n>` and accepts pushes and force-pushes of a rebased branch; a draft cannot be merged until `change_discussion_status(..., "open")`; **merging squashes** the pull request into one commit titled `<title> (#<n>)`, so session commits do not keep their SHAs on `main` (they stay reachable through `refs/pr/<n>`, and `meta.json` lists them with the merge commit); `create_commit(create_pr=True)` opens a ready pull request; small binary files push fine over plain git, and new repositories come with a `.gitattributes` routing many extensions to LFS, which `create` removes so that workspaces stay plain git.
+
+**Authentication.** Git gets the token of `hf auth login` through `GIT_CONFIG_COUNT`/`http.<endpoint>/.extraHeader` for each command; it is never written to `.git/config`.
+
+**Traces.** `meta.json` holds the session, pull request, operator, harness, declared model, models found in the trace, method version, start and end, the session's commits and the ref that keeps them, the merge commit, and a note when the export was partial.
+
+
+## The init script
+
+`scripts/init.py` (launched by `init-physics-intern.sh` and by the plugins) asks, each with a default and a flag: the mode (`--mode local|create|join`), the harnesses (`--harness`, a tick list with installed ones ticked), the folder (`--dir`), and for create the organisation and name (`--org`, `--name`), for join the repository (`--repo`). `--yes` never asks; `--list-harnesses` and `--list-orgs` print choices for the plugins.
+
+- **local / create**: refuse a non-empty folder (except `problem.md`) and a workspace in the earlier format; copy the method; write `project.toml`, the skeletons, the card folders and the committed `.gitignore`; render; first commit; regen. **create** then creates the repositories, fetches the Hub's initial commit and builds on it (dropping its `.gitattributes`), pushes, and deploys the Space (`space/` from the method copy, with the variables `PHYSICS_INTERN_WORKSPACE` and `CHAT_DEBUG`, and the secret `HF_TOKEN` set to the creator's token unless `--space-token none`). A personal namespace is accepted with a warning, for trying shared mode alone.
+- **join**: clone into an empty folder, then render the selected harnesses from the clone's method copy.
+- **inside a workspace**: render the selected harnesses plus those already rendered (to add one or refresh); `--upgrade` replaces the method copy with the running script's copy (a commit in local mode, a pull request for a lead in shared mode).
 
 
 ## Authoring agents
 
-Source file: `commons/agents/<name>.md`. One YAML-frontmatter markdown file per agent role.
-
-### Manifest (frontmatter)
+Source: `commons/agents/<name>.md`, YAML frontmatter + Markdown body.
 
 ```yaml
 ---
 name: deriver
-description: Perform an analytical derivation for a target claim or open question…
+description: Perform an analytical derivation … (shown to the coordinator at dispatch time)
 capabilities: [file_read, file_write, glob]
-output_pattern: derivations/D-NNN.md
+output_pattern: derivations/D-S<n>-<k>.summary.md
 ---
 ```
 
-- `name` (required) — kebab-case, matches the file stem.
-- `description` (required) — used as the sub-agent description visible to the main agent at dispatch time.
-- `capabilities` (required for agents that need tools) — list from `{file_read, file_write, file_edit, shell, glob, grep, web_search, web_fetch}`. The renderer maps these to host-specific tool names.
-- `output_pattern` — the canonical artefact path (e.g. `derivations/D-NNN.md`). Pi emits it as `output:` in the frontmatter. Reviewer omits this because its output path is computed at runtime from the target ID.
+`capabilities` come from `{file_read, file_write, file_edit, shell, glob, grep, web_search, web_fetch, literature}` and are mapped per host. `literature` lists the literature MCP server's tools in Claude Code's allowlist (an explicit `tools:` list hides MCP tools otherwise) and maps to the shell for Pi, which has no MCP. `output_pattern` is emitted as Pi's `output:`; `false` for the reviewer, whose path is given at dispatch.
 
-### Body
+Every role body follows the same contract: what you receive and read (and what you must not read); your artefact(s), with their header and sections; behaviour; the **return block** `## Summary` / `## Result` / `## Flags` (with `- (none)` when empty), identical at the top of the artefact and in the final reply (the planner and the writer return it in the reply only); constraints (write only your files; never cards, the session folder or the lead's files). Artefact headers carry no authorship.
 
-The body is the agent role prompt. It is shown to the sub-agent verbatim (plus a host preamble for Pi/Codex, and an `# {{name_cap}}` heading for Claude). Every role body follows this contract:
-
-- **What you do** — the substantive task, in plain prose.
-- **Your sole artefact** — the file you write, with its section structure (`# Task`, `## Derivation`, `## Result`, `## Flags`, …).
-- **Behaviour** — what to read, what not to read, what to flag instead of expanding scope.
-- **Return channel** — the structured `## Summary` / `## Result` / `## Flags` block at the top of the artefact, byte-identical to the final reply message.
-- **Constraints** — what the sub-agent must not edit (`research_log.md`, `plan.md`, `notes/flags.md` — main-agent territory).
-
-The seven roles are `surveyor`, `planner`, `deriver`, `computer`, `reviewer`, `critic`, `finalizer`. They share the same return contract; the substance varies by role.
+Codex roles are TOML, so a body must not contain `"""`.
 
 
 ## Authoring skills
 
-Source file: `commons/skills/<name>.md`. One file per slash-command workflow.
-
-### Manifest
+Source: `commons/skills/<name>.md`.
 
 ```yaml
 ---
 name: derive
-description: Analytical derivation for a target claim or open question…
-agent: deriver
-arguments_hint: <target claim>
-artefact_kind: D-NNN
-brief: derivations/.briefs/D-NNN-brief.md
-output_pattern: derivations/D-NNN.md
+description: Analytical derivation …
+agent: deriver                 # omit for skills that run in the coordinator's context
+arguments_hint: <target claim or question>
+top_level_cli: false           # optional, Pi only: hide from Pi's top-level commands
 ---
 ```
 
-Fields:
-
-- `name` (required) — the slash-command name (`/derive`).
-- `description` (required) — used by the host's skill discovery.
-- `agent` — the sub-agent role this skill dispatches. Omit for main-agent-only skills (`/autoresearch`).
-- `arguments_hint` — short usage hint shown by the host (Claude: `argument-hint`; Pi: `args`).
-- `artefact_kind` — string like `D-NNN` / `C-NNN` / `CR-NNN`. Used by the Pi stub template to render "next available number" guidance.
-- `brief` — path to the dispatch brief the main agent must write before dispatching (only for `/derive`, `/compute`).
-- `output_pattern` — canonical artefact path produced by the sub-agent.
-- `top_level_cli` (Pi only, defaults true) — set false to hide from Pi's top-level slash-command list (used for `/autoresearch`, which is intended to be driven from the main-agent context only).
-
-### Body
-
-The body is the **main-agent workflow** for that slash command. It tells the main agent what to do before dispatching, how to dispatch, and how to integrate the return. Standard sections:
-
-1. **Determine the next ID** — glob the parent directory and add 1, zero-padded.
-2. **Write the brief** (for `/derive`, `/compute`) — what to put in it, what *not* to put in it (no steering, no priors).
-3. **Dispatch the sub-agent** — referencing the dispatch syntax from the workspace doc.
-4. **Run the integration loop** — read `## Summary` / `## Result` / `## Flags`, update `research_log.md`, disposition flags, commit.
-5. **Next dispatch** — the canonical follow-up (e.g. `/derive` is followed by `/review` unless explicitly deferred).
-
-The skill body is rendered into either:
-
-- **Claude / Codex** — a single `SKILL.md` under `.claude/skills/<name>/SKILL.md` or `.agents/skills/<name>/SKILL.md`. Claude uses `argument-hint:` (hyphenated, singular).
-- **OpenCode** — a single **flat** command file at `.opencode/commands/<name>.md` (`skills_layout = "flat"`), with `description:` only (the command name comes from the filename; OpenCode has no argument-hint field).
-- **Pi** — split into two files: a thin stub at `skills/<name>/SKILL.md` (generated from `hosts/pi/skill_stub.md.tmpl`) plus the full workflow at `prompts/<name>.md`, with the Pi preamble prepended.
-
-### Main-agent-only skills
-
-`/autoresearch` is different: it runs in the main-agent context (no fork). It drives the full pipeline autonomously, skipping the three HITL gates (`/research-plan` review, `/critique` strategy review, and any strategy-changing edit) and logging each skipped decision in `notes/auto-decisions.md`.
+The body is the coordinator's workflow for that skill: get the IDs (`session.py next`), write the brief or assemble the dispatch context, dispatch (pointing to the harness section of `AGENTS.md` for the syntax), integrate (cards, log, regen, commit `[S<n>] …`), next dispatch. **Bodies must stay harness-neutral**: no tool names, no harness paths, no placeholders. Keep them as short as they can be while effective.
 
 
 ## Host glue
 
-### `host.toml` fields
+`hosts/<host>/host.toml`:
 
-Required:
+- `name`, `display_name` (used in `AGENTS.md`), `agents_dir`, `agent_ext`, `skills_dir`, optionally `prompts_dir` (Pi).
+- `agent_frontmatter_order`, `[agent_extra_fields]` (Pi: `thinking = "high"`; OpenCode: `mode = "subagent"`), `agent_body_prefix` (Claude: a heading), `agent_format = "toml"` (Codex).
+- `skills_layout` (`nested` by default; `pi` for the stub + prompt layout), `skill_argument_hint` (Claude).
+- `[tools_map]` (capability → tool; informational for Codex and OpenCode, which have no per-role allowlist, but it must be complete).
+- `[file_backed]`: `section = "section.md"` (the harness's part of `AGENTS.md`: name for `--harness`, how skills are invoked, tool discipline, dispatch syntax with an example, how to pass the model ID), and for Pi `preamble` and `skill_stub_template`.
 
-- `name` — must match the directory name.
-- `workspace_doc` — filename of the rendered workspace doc (`CLAUDE.md` or `AGENTS.md`).
-- `agents_dir` — where rendered agent role files go.
-- `agent_ext` — extension (`.md` for Claude/Pi, `.toml` for Codex).
-- `skills_dir` — where rendered skill files go.
-- `agent_frontmatter_order` — list of frontmatter keys, in emit order. Codex skips this (TOML emit).
-- `[tools_map]` — capability → tool-name dict (informational for Codex).
-
-Optional:
-
-- `prompts_dir` — Pi only, where workflow prompts go.
-- `agent_format = "toml"` — Codex only, switches the emit path.
-- `agent_body_prefix` — heading prepended to the agent body, with `{{name_cap}}` interpolation.
-- `[agent_extra_fields]` — fields added to every agent frontmatter (Pi uses `thinking = "high"`).
-- `[file_backed]` — `key = "filename"` entries; the renderer loads `hosts/<host>/<filename>` into the host dict under `key`. Used for `preamble`, `dispatch_example`, `skill_stub_template`.
-
-### Companion files
-
-- **`preamble.md`** — injected at the top of skill prompts (Pi, Codex). Carries host-specific tool discipline (e.g. "use `apply_patch` for any file write; `shell_command` for everything else"). Substituted into the `{{preamble}}` placeholder in the workspace doc.
-- **`dispatch_example.md`** — the canonical dispatch syntax for the host. Substituted into the `{{dispatch_example}}` placeholder in the workspace doc and referenced from every skill workflow.
-- **`gitignore.extra`** — appended to the workspace `.gitignore`. Pi adds `node_modules/`.
-- **`skill_stub.md.tmpl`** (Pi only) — template for the thin `skills/<name>/SKILL.md` stubs. Uses placeholders `{{title}}`, `{{name}}`, `{{agents_used_line}}`, `{{output_block}}`.
-- **`extras/<rel-path>`** — copied verbatim into the workspace. Claude ships `.claude/settings.json`; Pi ships `package.json` + `.pi/settings.json`; Codex ships `.codex/config.toml`; OpenCode ships `opencode.json`.
-
-### Host-specific notes
-
-- **Claude** — single-file skill layout, YAML+markdown agents. Dispatch via the `Task` tool with `subagent_type=<agent name>`. Settings file at `.claude/settings.json`.
-- **Pi** — two-file skill layout (stub + prompt), YAML+markdown agents. Dispatch via Pi's `subagent` tool (JSON payload). Workspace launch: `pi install -l .` (registers the project as a local Pi package and installs `pi-subagents` + `pi-web-access` from `.pi/settings.json`), then `pi`.
-- **Codex CLI** — single-file skill layout (like Claude), with agents as **TOML files** auto-discovered from `.codex/agents/*.toml` (`name`/`description`/`developer_instructions`; no `config.toml` registration). Dispatch via `spawn_agent` + `wait_agent`; subagents are enabled by default in current Codex (the legacy `[agent_roles.*]` table and `multi_agents_v2` namespace are gone). Workspace launch: `codex`, then accept the project-trust prompt on first run so `config.toml` (sandbox + web search) is honoured.
-- **OpenCode** — close to Claude Code in file shapes. YAML+markdown agents under `.opencode/agents/` (`mode: subagent`, name derived from filename) and **flat single-file commands** under `.opencode/commands/<name>.md` (`skills_layout = "flat"`), both auto-discovered (no registration). Dispatch via the native `task` tool (`subagent_type="<role>"`) or an `@<role>` mention — **but custom sub-agent dispatch is version-dependent**: some builds hardcode `subagent_type` to the built-ins `explore`/`general`/`mary` and ignore custom roles ([opencode #29616](https://github.com/anomalyco/opencode/issues/29616)). `hosts/opencode/dispatch_example.md` carries the dispatch syntax plus the in-context fallback for builds that can't dispatch the roles — verify against the installed version. Native tool names match the methodology's generic references, so there is no `preamble.md`. Project config ships as `extras/opencode.json` (permission defaults, incl. `task`/`skill: allow`). Workspace launch: `opencode`. **OpenCode has no hard sandbox** — a permission model (`allow`/`ask`/`deny`), so scaffolding runs without Claude/Codex-style write-to-config friction. **Sessions are stored in a single SQLite DB** at `${XDG_DATA_HOME:-~/.local/share}/opencode/opencode.db` (not JSONL) — the `investigate-run` audit skill queries it via `session.directory` + `parent_id`. **Model choice dominates sub-agent reliability**: weak models stall after reading a brief instead of writing the artefact (the main agent re-dispatches and self-heals, but wastes work) — pin a strong model in `opencode.json` or via `opencode --model`.
+`hosts/<host>/extras/` holds settings files copied verbatim: Claude `.mcp.json` and `.claude/settings.json` (permissions, and only the `literature` MCP server approved through `enabledMcpjsonServers`, which takes effect once the folder's trust prompt is accepted); Codex `.codex/config.toml` (workspace-write sandbox with network access, web search, the `literature` MCP server with a long startup timeout); OpenCode `opencode.json` (permissions, the MCP server with a 180-second timeout); Pi `.pi/settings.json` (`pi-subagents`, `pi-web-access`).
 
 
-## The workspace doc and research log
+## The Space
 
-### `commons/workspace-doc.md`
+`space/` is a Gradio app deployed as a private Space by `init --mode create` (`hub.deploy_space`): `backend.py` (workspace access, the views, every write; no Gradio), `chat.py` (the explainer), `app.py` (the page only), `README.md` (Space metadata: Gradio SDK version, Python 3.12, OAuth with the `inference-api` scope) and `requirements.txt`. `tests/test_space_backend.py` covers the backend and the chat tools in local mode.
 
-This is the main-agent prompt that becomes `CLAUDE.md` (Claude) or `AGENTS.md` (Pi, Codex) in every workspace. It encodes the entire operational discipline: the integration loop, the workspace layout, the file ownership matrix, the `research_log.md` invariants, the dispatch model, the fresh-context rule for review and critique, the checks-and-balances rule.
-
-Edit this file when the operational discipline changes — what files the main agent edits, how it integrates returns, how it handles flags, how it commits.
-
-### `commons/research_log.md`
-
-The template for the workspace's `research_log.md`. Carries the canonical section order — Open Questions, Working Claims, Established Results, Dead Ends, Conventions, Sanity Checks — with HTML comments documenting the entry format.
-
-The invariants enforced on `research_log.md` (citation discipline, robust evidence before promotion, monotone Dead Ends, …) live in the workspace doc, not the template. The template is a starting scaffold.
+- **Data.** It downloads `main` at its current commit with the `HF_TOKEN` secret (one cache folder per commit), on page load when older than two minutes, on Refresh and after each write, and imports `cards`, `regen`, `check` and `promote` from the snapshot's `.physics-intern/scripts/` (restoring `sys.path` and `sys.modules` afterwards), so that status, evidence and the promotion rule are computed by the workspace's own method version.
+- **Identity.** Hugging Face OAuth; the signed-in user is recorded inside every file the Space writes. Leads are `[people] leads` of `project.toml`.
+- **Writes** are new files with unique names (user and timestamp), committed to `main` with the Space token, after the workspace's own `check` has accepted them on a copy: reactions, question and claim cards, human verifications, and promotions (leads only, after `promotion_problems`, committed with `parent_commit` set to the commit they were checked on). The lead's files are edited in a text editor with a rendered preview: a lead's save is a commit to `main`, anyone else's is a proposal pull request (titled `Proposal: <file> (by <user>)`), and a save is refused if the file changed on `main` since the editor loaded it. Leads can merge open proposals; session pull requests are never listed as proposals.
+- **Explainer chat.** A lightweight open model through inference providers (`[models] chat`, `openai/gpt-oss-20b` by default), called with the reader's own OAuth token so that costs are attributed, never with the Space token; four read-only tools (open a card, an artefact's summary, full material or reviews, a paper card; search the index), at most six rounds of tool calls; a note lists what it read; a button sends the last question to the question-card form. Conversations are not stored, except in debug mode (`CHAT_DEBUG=1`), where each exchange becomes a file of the `chat_debug` dataset behind a visible banner (the Space token must then also be able to write that dataset).
+- **Local development**: `PHYSICS_INTERN_LOCAL=<workspace> PHYSICS_INTERN_LOCAL_USER=<name> python space/app.py` reads and writes a local folder instead of the Hub.
 
 
-## The bootstrap script
+## Literature tools
 
-`init-physics-intern.sh` is a thin shell wrapper around `commons/render.py`. It:
-
-1. Parses `--host` and the target directory (defaults to `.`). If `--host` is omitted it prompts interactively for one (claude / pi / codex / opencode) when run from a terminal, and falls back to `claude` for non-interactive (piped) runs.
-2. Detects an existing PhysicsIntern workspace in the target (by probing for `.claude/` + `CLAUDE.md`, `.codex/` + `AGENTS.md`, or `.pi/` + `AGENTS.md` containing the marker `PhysicsIntern workspace`). If found, prompts for a reset (everything except `problem.md` is wiped).
-3. Calls `python3 commons/render.py --host=<host> --target=<abs-path>`.
-4. Scaffolds `problem.md` if missing (setup + main question headings).
-5. Creates the artefact directories with `.gitkeep` (`derivations/`, `computations/`, `critiques/`, `notes/`, `references/`, `data/`, plus `.briefs/` under `derivations/` and `computations/`).
-6. Seeds `notes/flags.md` with the flag-disposition format docstring.
-7. Runs `git init` if needed, stages everything, and makes the bootstrap commit.
-8. Prints a host-specific launch hint.
-
-Reset path: triggered by the existing-workspace prompt. Removes `.git/`, all rendered host files, all artefact directories, and any other top-level entries — `problem.md` is preserved. The bootstrap commit message becomes "Re-initialize PhysicsIntern workspace (reset, problem.md preserved, host: …)".
+`scripts/literature.py` is both a CLI and an MCP server (`literature.py mcp`, stdio, tool names with underscores), so that it works in every harness: `search-inspire`, `search-arxiv`, `references`, `citations` (INSPIRE when the paper is a core INSPIRE record, Semantic Scholar otherwise), `download` (arXiv LaTeX source preferred, PDF otherwise, extracted into `literature/sources/<id>/` with links, absolute and `..` paths skipped), `card` (a paper-card skeleton with the header filled; only the card goes to stdout, so it can be redirected into `literature/P-<id>.md`), and `search-cards` (keyword search over paper cards, survey summaries and card statements). Papers are named by arXiv identifier (with or without version, old or new style, or a paper-card ID) or `insp:<INSPIRE record>`. Every command takes `--json`; errors are one `ERROR:` line. arXiv requests are spaced by 3 seconds, also across runs; `SEMANTIC_SCHOLAR_API_KEY` raises the Semantic Scholar rate limit. Claude Code, Codex and OpenCode get the server through their extras; Pi has no MCP support, and the surveyor role says how to call the CLI instead. `init` installs the script's dependencies once (skipped when `PHYSICS_INTERN_NO_WARMUP` is set), so that the harnesses' first start of the server fits in their startup timeout. In shared mode, sources are synced with the `-sources` dataset at session start and end.
 
 
-## Distribution as a Claude Code plugin
+## The reviewer benchmark
 
-`init-physics-intern.sh` is the canonical bootstrap (run before launching the agent). For Claude Code there is also a **plugin** that exposes the bootstrap as a single in-session command `/physics-intern:init-physics-intern` (shown in the UI as `/init-physics-intern (physics-intern)`), for discoverable install + auto-updates. It does **not** carry the methodology as plugin-global skills (that would pollute every project); it only scaffolds a workspace into the current folder, exactly like the bash script. The skills and sub-agents are folder-local, so after running it the user must **restart Claude Code in the folder** for them to register (the command's own output tells them so).
+`bench/reviewer/` measures each reviewer configuration (harness and model, with the method's reviewer prompt) on planted-error cases: the catch rate (planted errors refuted) and the false-alarm rate (correct work refuted). Each case is an artefact in the exact format a reviewer receives, with a `case.toml` giving the label, the claim, and for planted cases the error, its location and expected severity. `verify_cases.py` checks every correct case by an independent route (SymPy, numerical integration, exact diagonalisation) and shows that each planted result fails the same check. `run.py` creates a fresh workspace per case and configuration, runs the harness non-interactively as the reviewer (Claude Code with an explicit tool allowlist, Codex in its workspace sandbox with network, OpenCode with `--auto`), and scores the review files; `--dry-run` uses a fake reviewer to test the pipeline. Results go to `bench/reviewer/results/` (git-ignored). See `bench/reviewer/README.md`. Real runs call models and cost money.
 
-### Layout
 
-Authored sources live under `plugins/claude/` (committed here):
+## Distribution: plugins
 
-```
-plugins/claude/
-├── .claude-plugin/marketplace.json     marketplace manifest (lists the plugin)
-└── plugin/
-    ├── .claude-plugin/plugin.json      plugin manifest (name "physics-intern", semver version)
-    ├── skills/init-physics-intern/SKILL.md   the /physics-intern:init-physics-intern command
-    └── scripts/plugin-init.sh          non-interactive renderer+scaffolder (refuses if a workspace exists)
+The plugins bootstrap a workspace from inside a harness. They carry the whole method (vendored by the build scripts: every host, the scripts, the Space app, `VERSION`), because a workspace created with one harness may be opened with any other, and joiners render from the workspace's copy. They do not install the method's skills globally.
+
+| Harness | Authored files | Build | Command |
+|---|---|---|---|
+| Claude Code | `plugins/claude/` (marketplace, `plugin.json`, `skills/init-physics-intern/SKILL.md`, `scripts/plugin-init.sh`) | `build-plugin.sh` → `physics-intern-claude-plugin` | `/physics-intern:init-physics-intern` |
+| Codex CLI | `plugins/codex/` (marketplace under `.agents/plugins/`, `plugin.json`, the skill with `agents/openai.yaml` making it user-only, `scripts/plugin-init.sh`) | `build-codex-plugin.sh` → `physics-intern-codex-plugin` | `$physics-intern:init-physics-intern` |
+| OpenCode | `plugins/opencode/` (`install.sh`, the global command, `scripts/plugin-init.sh`) | `build-opencode-plugin.sh` → `physics-intern-opencode-plugin` | `/init-physics-intern` |
+
+The command asks the init questions in the chat (the harness is known) and runs `plugin-init.sh` once with the answers as flags; `plugin-init.sh` is a uv launcher for the vendored `scripts/init.py`. In Claude Code, `${CLAUDE_PLUGIN_ROOT}` is only available in an expansion-time `` !`…` `` block, so the command prints the initializer's path that way; Codex exposes `${PLUGIN_ROOT}` to model-issued shell commands; OpenCode's kit sits at a fixed path under `${XDG_CONFIG_HOME:-~/.config}/opencode/physics-intern/`. After the bootstrap, the user restarts the harness in the workspace so that its skills load.
+
+Publishing: bump `version` in the plugin manifests (Claude, Codex), rebuild, commit and push the built tree to the plugin repo (the OpenCode repo must be public). Never hand-edit a built plugin. Local test: `bash build-plugin.sh /tmp/out` then `claude --plugin-dir /tmp/out/plugin` in a folder outside this repo; for Codex, `codex plugin marketplace add /tmp/out`; for OpenCode, `XDG_CONFIG_HOME=/tmp/cfg bash /tmp/out/install.sh`.
+
+
+## Tests
+
+```bash
+uv run --no-project --with pytest --with pyyaml --with huggingface_hub --with gradio --with "mcp>=1.12,<2" pytest -q tests/
 ```
 
-How the command works: `SKILL.md` carries `disable-model-invocation: true` (user-typed only) and a `` !`…` `` block that runs `plugin-init.sh` at expansion time, where `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PROJECT_DIR}` are shell-expanded. The script renders `host=claude` from the bundled `commons/` + `hosts/claude/`, scaffolds the workspace, commits, and prints exactly one `RESULT: initialized` / `RESULT: already-initialized` line; the rest of `SKILL.md` instructs the agent to relay the edit-`problem.md` + restart message.
+Without `gradio`, the test that builds the Space's page is skipped.
 
-### Build and publish
-
-`build-plugin.sh` assembles a complete, self-contained plugin into a separate published repo (the build is a pure artifact — never hand-edit it):
-
-```
-bash build-plugin.sh [output-dir]    # default: ../physics-intern-claude-plugin
-```
-
-It copies the authored files from `plugins/claude/` and **vendors** `commons/` (incl. `render.py`) and `hosts/claude/` into `plugin/` (rsync, excluding `__pycache__`/`.DS_Store`) so the plugin is self-contained — installed plugins cannot reference files outside their own root. Source of truth stays `commons/` + `hosts/claude/`; the plugin's per-harness repo is `physics-intern-claude-plugin` (other hosts get their own, e.g. `physics-intern-codex-plugin`).
-
-Publish: push the built tree to the plugin repo. Users run `/plugin marketplace add <owner>/physics-intern-claude-plugin` then `/plugin install physics-intern@physics-intern-claude`. Updates: bump `version` in `plugins/claude/plugin/.claude-plugin/plugin.json` (semver, must bump every release or `/plugin update` is a no-op), rebuild, push.
-
-Local test before publishing: `bash build-plugin.sh /tmp/out` then `claude --plugin-dir /tmp/out/plugin` in a scratch folder **outside this repo** (so the dev repo's sandbox rules don't apply), and run `/physics-intern:init-physics-intern`.
-
-
-## Distribution as a Codex CLI plugin
-
-Codex (since ~v0.136) has a first-class plugin + marketplace system that mirrors Claude Code's, so the Codex plugin follows the same **Design A**: it does not carry the methodology as global skills (that would pollute every project) — it only scaffolds a workspace into the current folder, exactly like the bash script. The user invokes it explicitly as `$physics-intern:init-physics-intern`; after it runs they **restart Codex in the folder** and accept the project-trust prompt so the workspace's `AGENTS.md`, `.agents/skills/`, `.codex/agents/`, and `.codex/config.toml` load.
-
-### Layout
-
-Authored sources live under `plugins/codex/` (committed here):
-
-```
-plugins/codex/
-├── .agents/plugins/marketplace.json        marketplace manifest (lists the plugin)
-├── README.md                               published-repo landing page
-└── plugin/
-    ├── .codex-plugin/plugin.json           plugin manifest (name "physics-intern", semver, "skills":"./skills/")
-    ├── skills/init-physics-intern/
-    │   ├── SKILL.md                        the $physics-intern:init-physics-intern skill
-    │   └── agents/openai.yaml              policy.allow_implicit_invocation:false → user-only, never auto-fired
-    └── scripts/plugin-init.sh              non-interactive renderer+scaffolder (refuses if a workspace exists)
-```
-
-How the skill works: `SKILL.md` (frontmatter `name` + `description`) tells the model to run `bash "${PLUGIN_ROOT}/scripts/plugin-init.sh"` via the shell tool. Unlike Claude (where `${CLAUDE_PLUGIN_ROOT}` is only available in an expansion-time `` !`…` `` block, **not** in model-issued shell), Codex **does** expose `${PLUGIN_ROOT}` in the model-issued shell command (verified on v0.136), so no `!`-block trick is needed. The script also self-locates its plugin root from `${BASH_SOURCE[0]}`, so it works regardless. It renders `host=codex` from the bundled `commons/` + `hosts/codex/`, scaffolds the workspace, commits, and prints exactly one `RESULT: initialized` / `RESULT: already-initialized` line; the rest of `SKILL.md` instructs the agent to relay the edit-`problem.md` + restart message. The one approval is for writing `.codex/` and running `git init`, which Codex's workspace-write sandbox keeps read-only by default.
-
-### Build and publish
-
-`build-codex-plugin.sh` assembles a complete, self-contained plugin into a separate published repo (a pure artifact — never hand-edit it):
-
-```
-bash build-codex-plugin.sh [output-dir]    # default: ../physics-intern-codex-plugin
-```
-
-It copies the authored files from `plugins/codex/` and **vendors** `commons/` (incl. `render.py`) and `hosts/codex/` into `plugin/` (rsync, excluding `__pycache__`/`.DS_Store`). Source of truth stays `commons/` + `hosts/codex/`; the plugin's per-harness repo is `physics-intern-codex-plugin`.
-
-Publish: push the built tree to the plugin repo. Users run `codex plugin marketplace add <owner>/physics-intern-codex-plugin` then `codex plugin add physics-intern@physics-intern-codex` (`<marketplace>` is the `name` in `marketplace.json`). Updates: bump `version` in `plugins/codex/plugin/.codex-plugin/plugin.json`, rebuild, push, and `codex plugin marketplace upgrade`.
-
-Local test before publishing: `bash build-codex-plugin.sh /tmp/out` then `codex plugin marketplace add /tmp/out` + `codex plugin add physics-intern@physics-intern-codex`, restart Codex in a scratch folder **outside this repo**, and run `$physics-intern:init-physics-intern`.
-
-
-## Distribution as an OpenCode plugin
-
-OpenCode is the odd one out: it has **no plugin marketplace**, and its JS/TS plugin API can register only tools and lifecycle hooks — **not slash commands or skills**. So the Claude/Codex "marketplace add → install → run a command" path can't be reproduced. Instead the bootstrap ships as a **global command file + a vendored scaffolder kit**, installed by a small `install.sh`. Same **Design A** intent (scaffold a workspace into the current folder; don't pollute other projects), delivered differently. After running `/init-physics-intern` the user **restarts OpenCode in the folder** so the workspace's `AGENTS.md`, `.opencode/commands/`, `.opencode/agents/`, and `opencode.json` load.
-
-### Layout
-
-Authored sources live under `plugins/opencode/` (committed here):
-
-```
-plugins/opencode/
-├── README.md                              published-repo landing page
-├── install.sh                             copies the command + kit into ~/.config/opencode/
-└── physics-intern/                        the "kit" (everything the command needs at runtime)
-    ├── commands/init-physics-intern.md    the global /init-physics-intern command
-    └── scripts/plugin-init.sh             non-interactive renderer+scaffolder (refuses if a workspace exists)
-```
-
-How it works: `install.sh` rsyncs the kit to `${XDG_CONFIG_HOME:-~/.config}/opencode/physics-intern/` and copies the command to `${XDG_CONFIG_HOME:-~/.config}/opencode/commands/init-physics-intern.md`, making `/init-physics-intern` available in every project. The command's body runs the scaffolder via an expansion-time `` !`…` `` shell block (OpenCode injects the shell output into the prompt), referencing the script at its fixed install path (`${XDG_CONFIG_HOME:-$HOME/.config}/opencode/physics-intern/scripts/plugin-init.sh`) — there is no plugin-root variable because it is a plain command file, not a plugin. `plugin-init.sh` self-locates its kit root from `${BASH_SOURCE[0]}`, renders `host=opencode` from the bundled `commons/` + `hosts/opencode/`, scaffolds the workspace, commits, and prints exactly one `RESULT: initialized` / `RESULT: already-initialized` line; the rest of the command instructs the agent to relay the edit-`problem.md` + restart message. OpenCode has no hard sandbox, so at most the user approves the single `bash` shell block (depending on their `permission.bash` setting) — milder than Claude/Codex's config-write approval.
-
-### Build and publish
-
-`build-opencode-plugin.sh` assembles a complete, self-contained tree into a separate published repo (a pure artifact — never hand-edit it):
-
-```
-bash build-opencode-plugin.sh [output-dir]    # default: ../physics-intern-opencode-plugin
-```
-
-It copies the authored files from `plugins/opencode/` and **vendors** `commons/` (incl. `render.py`) and `hosts/opencode/` into the kit (`physics-intern/`, rsync excluding `__pycache__`/`.DS_Store`). Source of truth stays `commons/` + `hosts/opencode/`; the published repo is `physics-intern-opencode-plugin`.
-
-Publish: push the built tree to the repo (must be **public** — `git clone` over HTTPS must work). There is no version field to bump and no marketplace to upgrade — users re-run `git pull && ./install.sh` to update.
-
-Local test before publishing: `bash build-opencode-plugin.sh /tmp/out` then `XDG_CONFIG_HOME=/tmp/fakecfg bash /tmp/out/install.sh`, and run `/tmp/fakecfg/opencode/physics-intern/scripts/plugin-init.sh` in a scratch folder to confirm it renders + commits and is idempotent on re-run.
-
-
-## Workspace runtime: how the methodology executes
-
-This is the high-level shape of what happens **inside** a rendered workspace. The authoritative rules live in `commons/workspace-doc.md` (which becomes the workspace's `CLAUDE.md` / `AGENTS.md`); the summary below is for orientation.
-
-A workspace is a git repository. The user fills in `problem.md`, then talks to the main agent (Claude Code, Pi, or Codex CLI, started in the workspace directory). The main agent is a **coordinator only** — it never performs substantive surveys, derivations, computations, reviews, or critiques itself. Every workflow skill dispatches a fresh-context sub-agent that does the heavy lifting and writes its own artefact.
-
-### The arc
-
-`/survey` → `/research-plan` → loop of (`/derive` or `/compute`) → `/review` → integrate, with `/critique` every few state changes and before any major direction change → `/finalize`.
-
-### The integration loop
-
-After each sub-agent return, the main agent runs the integration loop:
-
-1. Read the sub-agent's `## Summary` / `## Result` / `## Flags`.
-2. Integrate into `research_log.md` — Working Claims / Established Results, source lists, dependencies.
-3. Disposition every flag in `notes/flags.md` (one line per flag, with a one-line reason).
-4. Update `plan.md` if a step is now done, obsolete, or revised.
-5. Commit everything as one logical step.
-6. Decide the next dispatch (or hand to the user).
-
-Sub-agents do not commit. The integration loop is the load-bearing operational discipline; most of the methodology either feeds into it or is checked against it.
-
-### File ownership
-
-- **Main agent edits**: `research_log.md`, `notes/`, `notes/flags.md`, `derivations/.briefs/`, `computations/.briefs/`, `critiques/CR-NNN.md` (`## Resolution` and `status:` only), `plan.md` (targeted edits).
-- **Sub-agent territory** (main agent does not edit): `derivations/D-NNN.md` and `D-NNN_R*.md`, `computations/C-NNN.{md,py,out}` and `C-NNN_R*.md`, `survey.md`, `answer.md`, `references/<id>.md` summaries, `critiques/CR-NNN.md` body.
-
-### HITL gates
-
-Three places the main agent normally pauses for the user:
-
-- After `/research-plan` produces a draft, before continuing into derivations.
-- After `/critique` returns findings that would change strategy.
-- Before any strategy-level edit to `plan.md` (targeted edits don't require approval).
-
-`/autoresearch` skips these gates (logging each skipped decision in `notes/auto-decisions.md`). Intended for methodology validation and for problems where course correction is unlikely.
+- `tests/test_cards.py`: status precedence, evidence (artefacts, attached artefacts, human verifications), propagation of needs re-check, deterministic regeneration, the promotion rule, and the check rules (headers, references, cycles, immutability against a base, lead's files and foreign IDs in shared sessions, promotions in sessions).
+- `tests/test_local_flow.py`: a local workspace end to end through the real scripts: init, adding a harness, two sessions, reserved IDs, a review, a promotion, and a refused edit of an existing card.
+- `tests/test_export_trace.py`: the trace exporter on a fake OpenCode store and fake Claude Code transcripts.
+- `tests/test_space_backend.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the Space's backend in local mode, the literature tools without network, the benchmark in dry-run mode (and the shape of every case).
+- `tests/ACCEPTANCE.md` maps each acceptance test of the design's build plan to how it is checked, and gives the steps of those that need real agents.
+- `tests/hub_e2e.py` (manual, live, not collected by pytest): creates scratch repositories under your account and runs the shared-mode flow with two operators: parallel sessions adding evidence to the same claim, a rebase, merges, a promotion refused for a non-lead and accepted for the lead, a proposal, an abort. It deletes the repositories at the end. `uv run tests/hub_e2e.py [--keep]`.
 
 
 ## Design choices worth remembering
 
-- **The host is a deployment decision, not an architectural one.** The methodology source lives in `commons/`; per-host glue (tool names, frontmatter shapes, dispatch syntax) lives in `hosts/<host>/`. Adding Codex, OpenCode, or Gemini CLI meant (or means) writing a `hosts/<host>/host.toml` plus a small `dispatch_example.md`.
-- **Files are durable state; context is ephemeral.** The user may clear the session at any time. After a clear, the main agent must resume from `research_log.md` and `plan.md` alone. This is what allows the integration loop to be the only handoff mechanism.
-- **Explicit dispatch, no auto-fork.** Both hosts use the same dispatch model: main agent reads the skill workflow, writes the brief, calls the dispatch tool (`Task` for Claude, `subagent` for Pi, `spawn_agent` for Codex), integrates the return. Claude Code's `context: fork` auto-fork shortcut is not used — the symmetry is more valuable than the keystroke saved.
-- **Fresh context for `/review` and `/critique` is non-negotiable.** Reviewers don't see prior reviews on the same target. Critics get only one-line summaries of prior critiques. Sub-agents don't see the main agent's reasoning.
-- **No single sub-agent verdict moves research forward.** Before acting on a refutation or a strategy-changing critique finding, the main agent seeks a second opinion. A verdict is a *proposal*, not an order.
-- **Robust evidence before promotion.** A Working Claim becomes Established only with evidence robust against typical failure modes — usually ≥2 independent dispatch contexts. A single artefact's internal symbolic + numerical cross-check counts as one source for conceptual-bug protection.
-- **Prose-encoded discipline, not a state machine.** Promotion = the main agent editing a heading. Refutation = the main agent moving an entry to Dead Ends with a reason. No JSON state, no enum verdicts, no auto-promotion cascades. The bet: modern models follow prose-encoded rules well enough that the harness complexity isn't worth it. The audit skill catches drift.
-- **Do not over-engineer the skills.** Skill prompts should be as simple as possible while still being effective. Avoid complex, verbose, or ad-hoc instructions that aren't essential to the core methodology.
+- **Research files and harness files are separated.** Harness files are rendered locally from the method copy and git-ignored; only research content and the method copy are shared.
+- **The method is copied into each workspace**, so that every participant runs the same prompts and the prompts sit in history next to the results.
+- **One file per item, never edited.** Status and evidence are computed by `regen`, so parallel sessions add files and never edit the same file; their pull requests do not conflict.
+- **Deterministic work is done by scripts, not prompts.** IDs (`session.py next`), views, validation, the pull request lifecycle, uploads. Models keep the judgment.
+- **Sessions with briefs, not a fixed pipeline.** A brief can name a plan item, an open question, a doubt, a re-check, papers to read. The pipeline survives only in `/autoresearch` for benchmarks.
+- **Sessions merge without a lead; promotion needs one.** A merge makes nothing established. Requiring a lead on every merge would make the lead the bottleneck.
+- **Draft pull requests as claims.** Unique numbers without a shared counter, and the open sessions are visible.
+- **A branch in the checkout, not a worktree.** Harness files are git-ignored and the harness runs in the checkout; one checkout holds at most one session.
+- **Blind review.** Reviewers get the artefact and the claim's statement, never who produced it nor earlier verdicts; tests with a clear outcome come before opinions, and "no issue found" is a respected outcome.
+- **Fresh context and second opinions.** No single verdict changes direction; a refutation becomes a dead-end card only after a second, independent review agrees.
+- **Do not over-engineer the skills.** Prompts as short as they can be while effective; the audit skill catches drift.
 
 
-## Adding a new host
+## Adding a host, an agent or a skill
 
-Adding a host (Gemini CLI, Goose, …) is a folder under `hosts/`:
+**A host** is a folder `hosts/<host>/` with `host.toml`, `section.md` and optional `extras/`. Then add it to `HOST_ORDER` in `commons/render.py`, to `HARNESSES` and `RENDER_MARKS` in `scripts/init.py` and `scripts/common.py`, to `detect_harness()` and to an exporter in `scripts/export_trace.py` if its record format is known. Render a workspace for it together with another harness and check that neither picks up the other's files.
 
-1. **`host.toml`** — declare `name`, `workspace_doc`, `agents_dir`, `agent_ext`, `skills_dir`, `agent_frontmatter_order`, and `[tools_map]`. Add `[agent_extra_fields]` if the host needs extras. Add `[file_backed]` entries for any companion files you ship.
-2. **`dispatch_example.md`** — the exact syntax the main agent uses to dispatch a sub-agent for `/derive D-007`. This string is substituted into the workspace doc, so be precise.
-3. **`preamble.md`** (optional) — host-specific tool discipline. Injected at the top of skill prompts and into the workspace doc via `{{preamble}}`.
-4. **`gitignore.extra`** (optional) — appended to the workspace `.gitignore`.
-5. **`extras/<rel-path>`** (optional) — settings files, package manifests, etc., copied verbatim into every rendered workspace.
-6. **Update `init-physics-intern.sh`** — add the new host to the `case "$HOST" in claude|pi|codex|opencode)` check, the existing-workspace detection block, and the launch-hint switch at the bottom.
-7. **Update `commons/render.py`** — add the new host to the `--host` choices argument and any host-specific branches in `render_skill` / agent emit paths if the host needs a layout the current paths don't cover.
-
-For hosts that use a non-YAML-frontmatter role format (like Codex's TOML roles), set `agent_format = "toml"` (or add a new value and a new emit path in `render.py`).
-
-Render and inspect a fresh workspace under `/tmp/` before committing the new host.
-
-
-## Adding a new agent or skill
-
-**A new agent** is one file: `commons/agents/<name>.md`. Pick a kebab-case name, write the manifest (`name`, `description`, `capabilities`, `output_pattern`), write the role body following the contract in [Authoring agents](#authoring-agents). Render against every supported host (`claude`, `pi`, `codex`, `opencode`) and confirm the rendered frontmatter is well-formed.
-
-**A new skill** is one file: `commons/skills/<name>.md`. Pick a kebab-case name, write the manifest, write the main-agent workflow body following the structure in [Authoring skills](#authoring-skills). If the skill dispatches a sub-agent, that agent must already exist in `commons/agents/`. Add the skill to the table in [README.md](README.md) and the listing in `commons/workspace-doc.md` §4.
-
-Render before committing:
+**An agent** is one file in `commons/agents/`; **a skill** is one file in `commons/skills/` (its agent must exist). Add the skill to the list in `commons/workspace-doc.md` §6 and to the table in `README.md`. Render for every host before committing:
 
 ```bash
-bash init-physics-intern.sh --host=claude   /tmp/test-claude
-bash init-physics-intern.sh --host=pi       /tmp/test-pi
-bash init-physics-intern.sh --host=codex    /tmp/test-codex
-bash init-physics-intern.sh --host=opencode /tmp/test-opencode
+python3 commons/render.py --hosts=claude,codex,opencode,pi --target=/tmp/render-all
 ```
 
 
-## Auditing a run: `investigate-run`
+## Auditing a run: investigate-run
 
-`.claude/skills/investigate-run/SKILL.md` is a **repo-level** audit skill — not part of any workspace template; used while iterating on the methodology in this repo. Given a workspace path and its session record — a JSONL for Claude/Pi/Codex, or the SQLite store (`opencode.db`, queried by `session.directory` + `parent_id`) for OpenCode — it produces a post-mortem report covering:
-
-- **Trajectory reconstruction** — skills dispatched, returns, integration actions.
-- **Methodology adherence** — against the rules baked into the workspace's `CLAUDE.md` / `AGENTS.md` and agent prompts.
-- **Commit discipline** — one commit per integration step bundling artefact + main-agent edits.
-- **Flag-disposition trace** — every `## Flags` entry must have a line in `notes/flags.md`.
-- **Prompt-vs-behaviour deltas** — did sub-agents stay inside their declared tool list and scope?
-- **Substantive quality** — does `answer.md` answer `problem.md`?
-
-Run after a workspace session to see where the methodology slipped and which prompts to fix. Output lands in `/tmp/audit-<workspace>.md`.
-
-When the methodology contract changes (workspace doc, integration loop rules, return-channel format), update `investigate-run/SKILL.md` so its audit rules follow.
+`.claude/skills/investigate-run/SKILL.md` is a repo-level skill that audits a workspace and its session record (harness JSONL, OpenCode's SQLite store, or the trace in the traces dataset for shared sessions) and writes a post-mortem to `/tmp/audit-<workspace>.md`. It detects the workspace format: for card-based workspaces it audits ten promises (coordinator only, valid immutable cards, robust evidence behind promotions, blind test-based review, review after every artefact, the integration loop, edit scope, return schema, session discipline, scripts not bypassed); legacy workspaces keep their rules. Update it when the method's contract changes.
 
 
 ## Validation workflow
 
-Iteration loop when changing prompts:
+1. Edit the source (`commons/`, `hosts/`, `scripts/`, `space/`).
+2. Run the tests, and render a workspace for every host and read the result.
+3. Run a benchmark problem in a fresh local workspace (often `/autoresearch`), or a shared session on a scratch space.
+4. Audit it with `investigate-run`, and compare with earlier audits in `results/`.
+5. Commit the source change together with any audit-rule change.
 
-1. **Edit source** — `commons/workspace-doc.md`, `commons/agents/<role>.md`, `commons/skills/<name>.md`, or `hosts/<host>/…`.
-2. **Render and inspect** — `bash init-physics-intern.sh --host=<host> /tmp/scratch` (or call `commons/render.py` directly). Read the rendered files; check frontmatter, placeholders, and any host-specific shaping.
-3. **Run a benchmark problem** — bootstrap a fresh workspace from a problem in `problems/` or `references/`, run it through (often via `/autoresearch` for speed, then manually for HITL).
-4. **Audit** — run `investigate-run` against the resulting workspace + session JSONL.
-5. **Compare** — diff findings against prior runs in `results/`. Look for recurring failure modes; those are signal that a prompt needs editing.
-6. **Commit** — source change + (if relevant) `investigate-run` rule change, in one commit.
-
-Changes propagate to **new** workspaces on the next `init-physics-intern.sh` run. Existing workspaces carry the methodology baked into their `.claude/`, `.pi/`, `.codex/`, or `.opencode/` at the time they were created — there is no upgrade skill, so older workspaces are patched by hand if needed.
+Changes reach a workspace only through its method copy: new workspaces get the current version; existing ones get it with `init.py --upgrade`.

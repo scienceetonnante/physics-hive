@@ -2,7 +2,7 @@
 
 The build plan of `design/DESIGN-shared-spaces.md` (section 13) ends each phase with an acceptance test. This file says, for each one, how it is checked: by the automated suite, by the live Hub test, or by a run that needs real agents and accounts, with the steps for that run.
 
-Automated suite: `uv run --no-project --with pytest --with pyyaml --with huggingface_hub pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories under your account).
+Automated suite: `uv run --no-project --with pytest --with pyyaml --with huggingface_hub --with gradio --with "mcp>=1.12,<2" pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories under your account).
 
 ## Phase 1 — workspace format and session driver (local)
 
@@ -42,7 +42,7 @@ Automated suite: `uv run --no-project --with pytest --with pyyaml --with hugging
 
 | Test | How it is checked |
 |---|---|
-| A browser-only reviewer reads a result, reacts, writes a question card and a claim card; a member verifies a claim and a lead promotes it; the reaction, the question and the new card appear in the next session's brief; the promoted claim shows as established | The backend (every write, the promotion rule, card views, chat tools) is tested in local mode by `tests/test_space_backend.py`. **On your side:** create a shared space (the Space is deployed by `init --mode create`), sign in as a reviewer and as a lead, do each action, then run `session.py start` and check the waiting list. |
+| A browser-only reviewer reads a result, reacts, writes a question card and a claim card; a member verifies a claim and a lead promotes it; the reaction, the question and the new card appear in the next session's brief; the promoted claim shows as established | The backend (every write, the promotion rule, card views, chat tools) is tested in local mode by `tests/test_space_backend.py`. Deployment was checked live: `init --mode create` deploys the Space, which builds and reaches the RUNNING stage on the Hub and serves its page. Sign-in, the writes from a browser and the chat were not exercised. **On your side:** create a shared space (the Space is deployed by `init --mode create`), sign in as a reviewer and as a lead, do each action, then run `session.py start` and check the waiting list. |
 
 ## Phase 5 — literature
 

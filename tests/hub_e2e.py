@@ -9,8 +9,8 @@ parallel that both add evidence to that claim, merge both (the second needs a
 rebase), check that a promotion is refused for a non-lead and accepted for the
 lead, open a plan proposal, and abort a session.
 
-It creates private scratch repositories under your own account (named
-pi-e2e-<timestamp>) and deletes them at the end, unless you pass --keep. It
+It creates private scratch repositories and a private Space under your own
+account (named pi-e2e-<timestamp>) and deletes them at the end, unless you pass --keep. It
 needs `hf auth login` and uv.
 
 Usage: uv run tests/hub_e2e.py [scratch folder] [--keep]
@@ -57,10 +57,17 @@ def hubgit(cwd, *args):
 
 
 repos = [f"{ME}/{NAME}", f"{ME}/{NAME}-traces", f"{ME}/{NAME}-sources", f"{ME}/{NAME}-chat-debug"]
+space = f"{ME}/{NAME}-space"
 try:
     # 1. The lead creates the space.
     run(S, REPO / "scripts/init.py", "--mode", "create", "--org", ME, "--name", NAME, "--harness", "claude",
         "--dir", A, "--yes", "--space-token", "none")
+    files = set(api.list_repo_files(space, repo_type="space"))
+    assert {"app.py", "backend.py", "chat.py", "README.md", "requirements.txt"} <= files, files
+    variables = api.get_space_variables(space)
+    assert variables["PHYSICS_INTERN_WORKSPACE"].value == f"{ME}/{NAME}", variables
+    print("Space deployed with", sorted(files))
+
     # 2. The lead writes the problem and a hand-written claim, and pushes to main.
     (A / "problem.md").write_text("# Problem\n\nFind the leading correction to X.\n")
     hid = f"CL-{ME}-20261005T120000"
@@ -145,4 +152,5 @@ finally:
     if "--keep" not in sys.argv:
         for repo in repos:
             api.delete_repo(repo, repo_type="dataset", missing_ok=True)
+        api.delete_repo(space, repo_type="space", missing_ok=True)
         print("deleted scratch repos")
