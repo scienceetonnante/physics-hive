@@ -1,0 +1,22 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "correct"
+artefact = "C-S1-1"
+field = "quantum mechanics"
+pair = "anharmonic"
+claim = 'For $H = p^2/2m + m\omega^2 x^2/2 + \lambda x^4$, the ground-state energy to second order in $\lambda$ is $E_0 = \hbar\omega/2 + \tfrac34\,\lambda\hbar^2/(m^2\omega^2) - \tfrac{21}{8}\,\lambda^2\hbar^3/(m^4\omega^5) + O(\lambda^3)$.'
+problem = '''
+# Problem
+
+Quartic anharmonic oscillator: $H = p^2/2m + m\omega^2 x^2/2 + \lambda x^4$ with small $\lambda > 0$.
+Compute the ground-state energy to second order in $\lambda$.
+
+Definition of done: the first- and second-order coefficients in closed form, with physical units
+restored, checked by an independent numerical path.
+'''
+conventions = '''
+# Conventions
+
+$\hbar$, $m$ and $\omega$ are kept explicit in final results; computations may use units
+$\hbar = m = \omega = 1$. Ladder operators: $x = \sqrt{\hbar/2m\omega}\,(a + a^\dagger)$.
+Rayleigh–Schrödinger perturbation theory, non-degenerate.
+'''

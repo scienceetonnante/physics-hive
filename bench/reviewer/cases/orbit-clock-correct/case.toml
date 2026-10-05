@@ -1,0 +1,23 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "correct"
+artefact = "D-S1-1"
+field = "general relativity"
+pair = "orbit-clock"
+claim = 'A clock on a circular geodesic orbit at Schwarzschild radial coordinate $r$ around a mass $M$ runs, relative to the coordinate time $t$ (the proper time of static observers at infinity), at the rate $d\tau/dt = \sqrt{1 - 3GM/(rc^2)}$.'
+problem = '''
+# Problem
+
+A clock moves freely on a circular orbit around a non-rotating spherical mass $M$, described by
+the Schwarzschild metric. Find the rate $d\tau/dt$ of the clock relative to the coordinate time $t$,
+as a function of the orbital radius $r$.
+
+Definition of done: a closed-form expression valid at any radius where circular geodesic orbits
+exist, not only in the weak-field limit.
+'''
+conventions = '''
+# Conventions
+
+Signature $(-,+,+,+)$. Schwarzschild coordinates $(t, r, \theta, \phi)$,
+$ds^2 = -(1 - r_s/r)\,c^2 dt^2 + (1 - r_s/r)^{-1} dr^2 + r^2 d\Omega^2$ with $r_s = 2GM/c^2$.
+$G$ and $c$ are kept explicit. $\tau$ is the proper time of the orbiting clock.
+'''

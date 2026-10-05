@@ -1,0 +1,34 @@
+# Reviewer configurations for the benchmark, one [[config]] table each.
+#
+#   label    short unique name, used by --config and in the results
+#   harness  claude, codex, opencode or pi
+#   model    passed to the harness's --model flag, in that harness's own format
+#   args     optional extra command-line arguments for the harness (for example a cost cap)
+#
+# These are examples to edit. The model identifiers were checked on 2026-10-05 against the
+# model lists of the CLIs installed on one machine: `claude --help` (aliases opus, sonnet),
+# Codex's model catalogue (`codex debug models`), OpenCode's model list (`opencode models
+# huggingface`) and `pi --list-models`. Which models you can use depends on your accounts.
+# The reviewer prompt is always the reviewer role of the current method, rendered by init.py.
+
+[[config]]
+label = "claude-opus"
+harness = "claude"
+model = "opus"
+args = ["--max-budget-usd", "5"]   # stop a single review that would cost more than 5 USD
+
+[[config]]
+label = "codex-gpt"
+harness = "codex"
+model = "gpt-6.1-sol"
+
+[[config]]
+label = "opencode-glm"
+harness = "opencode"
+model = "huggingface/zai-org/GLM-5.1"   # an open model through Hugging Face inference providers
+
+[[config]]
+label = "pi-kimi"
+harness = "pi"
+model = "moonshotai/Kimi-K2.6"   # an open model through Hugging Face inference providers
+args = ["--provider", "huggingface", "--thinking", "high"]   # high thinking, as the rendered Pi reviewer asks

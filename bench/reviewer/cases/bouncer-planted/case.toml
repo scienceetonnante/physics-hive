@@ -1,0 +1,25 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "planted"
+artefact = "D-S1-1"
+field = "quantum mechanics"
+pair = "bouncer"
+claim = 'For a particle of mass $m$ above an impenetrable floor in uniform gravity ($V = mgz$ for $z > 0$, $V = +\infty$ for $z \le 0$), the WKB energy levels are $E_n = (\hbar^2 m g^2/2)^{1/3}\,[\tfrac{3\pi}{2}(n + \tfrac12)]^{2/3}$, $n = 0, 1, 2, \dots$'
+problem = '''
+# Problem
+
+A particle of mass $m$ bounces on a perfectly rigid horizontal floor in uniform gravity $g$
+(the "quantum bouncer"). Find its energy levels in the WKB approximation.
+
+Definition of done: a closed-form expression for the WKB levels, with the range of the quantum
+number and the quantisation condition used.
+'''
+conventions = '''
+# Conventions
+
+$z$ is the height above the floor. $V(z) = mgz$ for $z > 0$ and $V = +\infty$ for $z \le 0$.
+$\hbar$ is kept explicit. Levels are labelled by an integer $n$, and the derivation states its range.
+'''
+error_kind = "wrong limiting case"
+error = "Eq. (5) treats the hard floor as a smooth turning point and uses the connection formula with phase pi/4, which holds only where the potential varies slowly on the scale of the wavelength. The floor is the opposite limit (an infinitely steep wall): the wave function must vanish there, which gives the phase pi/2 and the condition (n - 1/4) pi instead of (n + 1/2) pi. The claimed ground state, 1.771 in units of (hbar^2 m g^2/2)^(1/3), is 24% below the exact value 2.338 (first zero of the Airy function), while the correct WKB value 2.320 is within 1%; the error does not vanish for the low levels."
+location = "Eq. (5)"
+severity = "breaks the result"

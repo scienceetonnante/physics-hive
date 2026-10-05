@@ -1,0 +1,25 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "planted"
+artefact = "D-S1-1"
+field = "electromagnetism"
+pair = "sphere"
+claim = 'A point charge $q$ at distance $d > R$ from the centre of an isolated, uncharged conducting sphere of radius $R$ is attracted towards the sphere by a force of magnitude $|F| = \dfrac{q^2 R (2d^2 - R^2)}{4\pi\varepsilon_0\, d^3 (d^2 - R^2)^2}$.'
+problem = '''
+# Problem
+
+A point charge $q$ is placed at distance $d$ from the centre of a conducting sphere of radius
+$R < d$. The sphere is isolated and carries no net charge. Find the electrostatic force on the
+point charge as a function of $d$.
+
+Definition of done: a closed-form expression for the force, with its sign (attractive or repulsive).
+'''
+conventions = '''
+# Conventions
+
+SI units. The sphere is centred at the origin and the charge lies on the positive $z$ axis.
+A force component along the line of centres is counted positive when it points away from the sphere.
+'''
+error_kind = "dimensional inconsistency"
+error = "When the two fractions are combined in Eq. (9), the factor R^2 of the numerator R^4 - 2 d^2 R^2 = -R^2 (2 d^2 - R^2) is lost. Eq. (9) is then dimensionally inconsistent (L^-3 on the left, L^-5 on the right), and the force (10) has dimensions of charge^2/(eps0 L^4) instead of a force. The correct result has R^3 in place of R; the far-field limit 2 q^2 R^3/(4 pi eps0 d^5) of the induced dipole and the near-field limit q^2/(16 pi eps0 x^2) of a plane both fail for the claim."
+location = "Eq. (9)"
+severity = "breaks the result"

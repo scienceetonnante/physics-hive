@@ -1,0 +1,22 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "correct"
+artefact = "C-S1-1"
+field = "statistical mechanics"
+pair = "square-well"
+claim = 'For a gas of molecules interacting through the square-well potential (hard core of diameter $\sigma$, attractive well of depth $\epsilon$ extending to $\lambda\sigma$), the second virial coefficient is $B_2(T) = \frac{2\pi\sigma^3}{3}\left[1 - (\lambda^3 - 1)\left(e^{\epsilon/kT} - 1\right)\right]$.'
+problem = '''
+# Problem
+
+A dilute classical gas of molecules interacting through a square-well pair potential: a hard core of
+diameter $\sigma$ and an attractive well of depth $\epsilon$ out to $\lambda\sigma$ ($\lambda > 1$).
+Compute the second virial coefficient $B_2(T)$ in closed form.
+
+Definition of done: a closed form for $B_2(T)$, checked against an independent numerical evaluation.
+'''
+conventions = '''
+# Conventions
+
+Pair potential: $u(r) = +\infty$ for $r < \sigma$, $u(r) = -\epsilon$ for $\sigma < r < \lambda\sigma$,
+$u(r) = 0$ for $r > \lambda\sigma$, with $\epsilon > 0$. Equation of state $P/(nkT) = 1 + B_2(T)\,n + \dots$,
+so $B_2 = -2\pi\int_0^\infty (e^{-u/kT} - 1)\,r^2\,dr$ is a volume per molecule. $k$ is Boltzmann's constant.
+'''

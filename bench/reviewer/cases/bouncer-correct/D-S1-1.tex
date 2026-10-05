@@ -1,0 +1,76 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{WKB energy levels of a particle bouncing on a hard floor in uniform gravity}
+\date{}
+\begin{document}
+\maketitle
+
+\section{Setup}
+A particle of mass $m$ moves along the vertical axis $z$ above an impenetrable floor, in uniform gravity $g$:
+\begin{equation}
+  V(z) = \begin{cases} mgz, & z > 0, \\ +\infty, & z \le 0 . \end{cases}
+  \label{eq:potential}
+\end{equation}
+For an energy $E > 0$ the classically allowed region is $0 < z < z_E$, with the turning point
+\begin{equation}
+  z_E = \frac{E}{mg} ,
+  \label{eq:turning}
+\end{equation}
+and the local momentum there is
+\begin{equation}
+  p(z) = \sqrt{2m\,(E - mgz)} .
+  \label{eq:momentum}
+\end{equation}
+We define the WKB phase measured from the floor,
+\begin{equation}
+  \Phi(z) = \frac{1}{\hbar}\int_0^z p(z')\,dz', \qquad \Phi_E \equiv \Phi(z_E) .
+  \label{eq:phase}
+\end{equation}
+
+\section{The two ends of the allowed region}
+\paragraph{Floor.} The wave function must vanish at the impenetrable floor, $\psi(0) = 0$. In the allowed region the WKB solution that satisfies this condition is
+\begin{equation}
+  \psi(z) \simeq \frac{C}{\sqrt{p(z)}}\,\sin\Phi(z) .
+  \label{eq:floor}
+\end{equation}
+
+\paragraph{Turning point.} Near $z_E$ the potential is linear and varies slowly on the scale of the local wavelength, so the standard connection formula applies. The solution that decays for $z > z_E$ continues into the allowed region as
+\begin{equation}
+  \psi(z) \simeq \frac{C'}{\sqrt{p(z)}}\,\cos\!\left(\frac{1}{\hbar}\int_z^{z_E} p(z')\,dz' - \frac{\pi}{4}\right) = \frac{C'}{\sqrt{p(z)}}\,\cos\!\left(\Phi_E - \Phi(z) - \frac{\pi}{4}\right) .
+  \label{eq:connection}
+\end{equation}
+
+\section{Quantisation condition}
+The two forms \eqref{eq:floor} and \eqref{eq:connection} must describe the same function for all $z$ in the allowed region. Writing $\cos(\Phi_E - \Phi - \pi/4) = \sin(\Phi + 3\pi/4 - \Phi_E)$, this holds, up to a sign absorbed in $C'$, if and only if $3\pi/4 - \Phi_E$ is a multiple of $\pi$, that is
+\begin{equation}
+  \Phi_E = \left(n - \frac14\right)\pi, \qquad n = 1, 2, 3, \dots
+  \label{eq:quantisation}
+\end{equation}
+($n \ge 1$ because $\Phi_E > 0$).
+
+\section{Energy levels}
+The action integral is elementary:
+\begin{equation}
+  \int_0^{z_E} \sqrt{2m\,(E - mgz)}\,dz = \frac{2}{3}\,\frac{\sqrt{2m}\,E^{3/2}}{mg} .
+  \label{eq:action}
+\end{equation}
+Inserting \eqref{eq:action} in \eqref{eq:quantisation},
+\begin{equation}
+  E_n^{3/2} = \frac{3\pi}{2}\left(n - \frac14\right)\frac{\hbar\, mg}{\sqrt{2m}} ,
+  \label{eq:E32}
+\end{equation}
+hence
+\begin{equation}
+  E_n = \left(\frac{\hbar^2 m g^2}{2}\right)^{1/3}\left[\frac{3\pi}{2}\left(n - \frac14\right)\right]^{2/3}, \qquad n = 1, 2, 3, \dots
+  \label{eq:levels}
+\end{equation}
+The natural length and energy scales are $\ell_g = (\hbar^2/2m^2g)^{1/3}$ and $mg\ell_g = (\hbar^2 m g^2/2)^{1/3}$, and the classical turning points of the levels are
+\begin{equation}
+  z_n = \frac{E_n}{mg} = \ell_g\left[\frac{3\pi}{2}\left(n - \frac14\right)\right]^{2/3} .
+  \label{eq:heights}
+\end{equation}
+
+\section{Validity}
+The WKB approximation requires the wavelength to vary slowly, which holds for all $z$ well inside the allowed region when $n$ is large, and fails within a distance of order $\ell_g$ from $z_E$, where the connection formula takes over. The levels \eqref{eq:levels} are therefore asymptotically exact for large $n$; for small $n$ they are an approximation.
+
+\end{document}

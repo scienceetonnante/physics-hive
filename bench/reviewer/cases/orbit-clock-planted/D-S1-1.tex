@@ -1,0 +1,79 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{Rate of a clock on a circular geodesic orbit in the Schwarzschild metric}
+\date{}
+\begin{document}
+\maketitle
+
+\section{Setup}
+Outside a spherical mass $M$ the metric is, in Schwarzschild coordinates,
+\begin{equation}
+  ds^2 = -\left(1 - \frac{r_s}{r}\right)c^2\,dt^2 + \left(1 - \frac{r_s}{r}\right)^{-1}dr^2 + r^2\left(d\theta^2 + \sin^2\theta\,d\phi^2\right), \qquad r_s = \frac{2GM}{c^2} .
+  \label{eq:metric}
+\end{equation}
+The coordinate time $t$ is the proper time of static observers at infinity. We consider a clock moving freely on a circular orbit of radius $r$ in the equatorial plane $\theta = \pi/2$, and compute the ratio $d\tau/dt$ of its proper time to coordinate time. Dots denote derivatives with respect to the clock's proper time $\tau$.
+
+\section{Angular velocity of a circular geodesic}
+The radial component of the geodesic equation is
+\begin{equation}
+  \ddot r + \Gamma^r_{tt}\,\dot t^2 + \Gamma^r_{rr}\,\dot r^2 + \Gamma^r_{\phi\phi}\,\dot\phi^2 = 0 ,
+  \label{eq:geodesic}
+\end{equation}
+where, from \eqref{eq:metric} at $\theta = \pi/2$,
+\begin{equation}
+  \Gamma^r_{tt} = \frac{c^2 r_s}{2r^2}\left(1 - \frac{r_s}{r}\right), \qquad \Gamma^r_{\phi\phi} = -r\left(1 - \frac{r_s}{r}\right) .
+  \label{eq:christoffel}
+\end{equation}
+On a circular orbit $\dot r = \ddot r = 0$, so \eqref{eq:geodesic} reduces to $\Gamma^r_{tt}\,\dot t^2 = -\Gamma^r_{\phi\phi}\,\dot\phi^2$, that is
+\begin{equation}
+  \frac{c^2 r_s}{2r^2}\,\dot t^2 = r\,\dot\phi^2 .
+  \label{eq:balance}
+\end{equation}
+The angular velocity with respect to coordinate time, $\Omega = d\phi/dt = \dot\phi/\dot t$, therefore obeys
+\begin{equation}
+  \Omega^2 = \frac{c^2 r_s}{2r^3} = \frac{GM}{r^3} ,
+  \label{eq:kepler}
+\end{equation}
+Kepler's third law, which holds exactly in Schwarzschild coordinate time.
+
+\section{Comparison with a static observer}
+Consider a static observer at the same radius $r$, who sees the clock pass by. The observer's proper time is related to coordinate time by
+\begin{equation}
+  d\tau_s = \sqrt{1 - \frac{r_s}{r}}\;dt ,
+  \label{eq:static}
+\end{equation}
+and the proper length the observer measures along the orbit is
+\begin{equation}
+  d\ell = r\,d\phi .
+  \label{eq:length}
+\end{equation}
+The speed of the clock relative to this observer is therefore
+\begin{equation}
+  v = \frac{d\ell}{dt} = r\,\Omega ,
+  \label{eq:speed}
+\end{equation}
+and with \eqref{eq:kepler},
+\begin{equation}
+  \frac{v^2}{c^2} = \frac{r^2\Omega^2}{c^2} = \frac{r_s}{2r} .
+  \label{eq:speed2}
+\end{equation}
+In the observer's local inertial frame, the clock moves with speed $v$, so special-relativistic time dilation gives
+\begin{equation}
+  d\tau = \sqrt{1 - \frac{v^2}{c^2}}\;d\tau_s .
+  \label{eq:dilation}
+\end{equation}
+
+\section{Result}
+Combining \eqref{eq:static}, \eqref{eq:speed2} and \eqref{eq:dilation},
+\begin{equation}
+  \frac{d\tau}{dt} = \sqrt{1 - \frac{r_s}{r}}\,\sqrt{1 - \frac{v^2}{c^2}} = \sqrt{\left(1 - \frac{r_s}{r}\right)\left(1 - \frac{r_s}{2r}\right)} = \sqrt{\left(1 - \frac{2GM}{rc^2}\right)\left(1 - \frac{GM}{rc^2}\right)} .
+  \label{eq:result}
+\end{equation}
+For $r \gg r_s$ this becomes
+\begin{equation}
+  \frac{d\tau}{dt} \simeq 1 - \frac{GM}{rc^2} - \frac{1}{2}\,\frac{GM}{rc^2} ,
+  \label{eq:weak}
+\end{equation}
+the sum of the gravitational shift $-GM/(rc^2)$ and the kinematic shift $-v^2/(2c^2)$ with the Newtonian orbital speed $v^2 = GM/r$.
+
+\end{document}

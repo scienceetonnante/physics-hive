@@ -1,0 +1,70 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{Force between a point charge and an isolated, uncharged conducting sphere}
+\date{}
+\begin{document}
+\maketitle
+
+\section{Setup}
+A conducting sphere of radius $R$, centred at the origin, is isolated and carries no net charge. A point charge $q$ sits on the $z$ axis at distance $d > R$ from the centre. We look for the electrostatic force on $q$. By the uniqueness theorem for conductors of given total charge, it suffices to find a set of image charges inside the sphere that makes its surface an equipotential and gives it zero total charge.
+
+\section{Grounded sphere}
+For a grounded sphere, the classical image is a charge $q'$ at distance $b$ from the centre, on the segment between the centre and $q$, with
+\begin{equation}
+  q' = -\frac{qR}{d}, \qquad b = \frac{R^2}{d} .
+  \label{eq:image}
+\end{equation}
+For a point $\mathbf r$ on the sphere ($|\mathbf r| = R$) at angle $\gamma$ from the $z$ axis,
+\begin{equation}
+  |\mathbf r - b\hat{\mathbf z}|^2 = R^2 - 2Rb\cos\gamma + b^2 = \frac{R^2}{d^2}\left(d^2 - 2Rd\cos\gamma + R^2\right) = \frac{R^2}{d^2}\,|\mathbf r - d\hat{\mathbf z}|^2 ,
+  \label{eq:distances}
+\end{equation}
+so that on the sphere
+\begin{equation}
+  \frac{q}{|\mathbf r - d\hat{\mathbf z}|} + \frac{q'}{|\mathbf r - b\hat{\mathbf z}|} = \frac{q}{|\mathbf r - d\hat{\mathbf z}|}\left(1 + \frac{q'}{q}\,\frac{d}{R}\right) = 0 .
+  \label{eq:zero}
+\end{equation}
+
+\section{Isolated, uncharged sphere}
+The induced charge of the grounded sphere is $q'$. To make the total charge zero while keeping the surface an equipotential, we add a second image
+\begin{equation}
+  q'' = -q' = \frac{qR}{d}
+  \label{eq:second}
+\end{equation}
+at the centre. It adds a constant to the potential on the surface, which then takes the value
+\begin{equation}
+  V_s = \frac{1}{4\pi\varepsilon_0}\,\frac{q''}{R} = \frac{q}{4\pi\varepsilon_0\, d} .
+  \label{eq:Vs}
+\end{equation}
+
+\section{Force}
+The force on $q$ is the Coulomb force of the two images. Both lie on the $z$ axis between the centre and $q$, so the force is along $\hat{\mathbf z}$; we write $F$ for its component, positive when it pushes $q$ away from the sphere:
+\begin{equation}
+  F = \frac{q}{4\pi\varepsilon_0}\left[\frac{q'}{(d-b)^2} + \frac{q''}{d^2}\right] .
+  \label{eq:force}
+\end{equation}
+With $d - b = (d^2 - R^2)/d$,
+\begin{equation}
+  \frac{q'}{(d-b)^2} = -\frac{qRd}{(d^2-R^2)^2}, \qquad \frac{q''}{d^2} = \frac{qR}{d^3},
+  \label{eq:terms}
+\end{equation}
+so that
+\begin{equation}
+  F = \frac{q^2 R}{4\pi\varepsilon_0}\left[\frac{1}{d^3} - \frac{d}{(d^2-R^2)^2}\right] .
+  \label{eq:force2}
+\end{equation}
+Over a common denominator, the numerator is $(d^2 - R^2)^2 - d^4 = R^4 - 2d^2R^2$, hence
+\begin{equation}
+  \frac{1}{d^3} - \frac{d}{(d^2-R^2)^2} = -\frac{2d^2 - R^2}{d^3(d^2-R^2)^2}
+  \label{eq:combine}
+\end{equation}
+and
+\begin{equation}
+  F = -\frac{q^2 R\,(2d^2 - R^2)}{4\pi\varepsilon_0\, d^3\,(d^2 - R^2)^2} .
+  \label{eq:result}
+\end{equation}
+
+\section{Behaviour}
+Since $2d^2 - R^2 > 0$ for $d > R$, the force \eqref{eq:result} is attractive at every distance and for either sign of $q$. It diverges as $d \to R^+$, where $q$ approaches its image $q'$. For $d \gg R$ it decreases as $d^{-5}$, the power law of a charge interacting with the dipole it induces on a neutral body.
+
+\end{document}

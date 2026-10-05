@@ -1,0 +1,16 @@
+B2 = 2*pi*sigma**3*(lambda**3*(1 - exp(epsilon/kT)) + exp(epsilon/kT))/3
+B2 - closed form = 0
+closed form, LaTeX: \frac{2 \pi \sigma^{3} \left(- \left(\lambda^{3} - 1\right) \left(e^{\frac{\epsilon}{kT}} - 1\right) + 1\right)}{3}
+
+sigma = 1.0, epsilon = 1.0, lambda = 1.5; b0 = 2 pi sigma^3/3 = 2.094395102393
+  kT/eps   B2 symbolic        B2 numerical       relative diff   B2/b0
+     0.5   -29.685973428582   -29.685973428582   4.8e-16         -14.174008
+     1.0    -6.452662381989    -6.452662381989   6.9e-16         -3.080919
+     2.0    -1.132466696517    -1.132466696517   3.3e-15         -0.540713
+     5.0     0.993096078069     0.993096078069   2.3e-15         0.474168
+    20.0     1.839363011176     1.839363011176   1.3e-15         0.878231
+   100.0     2.044403678185     2.044403678185   6.5e-16         0.976131
+largest relative difference: 3.3e-15
+
+check: B2 -> b0 as T -> infinity: True
+check: B2 = b0 at every T when lambda = 1 (no well): True

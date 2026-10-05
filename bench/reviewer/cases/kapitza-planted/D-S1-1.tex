@@ -1,0 +1,99 @@
+\documentclass{article}
+\usepackage{amsmath}
+\title{Stability of the inverted pendulum with a vertically oscillating pivot}
+\date{}
+\begin{document}
+\maketitle
+
+\section{Setup}
+A bob of mass $m$ hangs from a rigid massless rod of length $l$. The pivot moves vertically, its height being
+\begin{equation}
+  y_p(t) = a\cos\omega t .
+  \label{eq:pivot}
+\end{equation}
+The angle $\theta$ is measured from the downward vertical, so that $\theta=\pi$ is the inverted position. We work in the regime of small, fast driving,
+\begin{equation}
+  a \ll l, \qquad \omega \gg \omega_0 \equiv \sqrt{g/l} .
+  \label{eq:regime}
+\end{equation}
+
+\section{Equation of motion}
+The bob is at $x = l\sin\theta$, $y = y_p(t) - l\cos\theta$. The Lagrangian is
+\begin{equation}
+  L = \frac{m}{2}\left(l^2\dot\theta^2 - 2a\omega l\,\sin\omega t\,\sin\theta\,\dot\theta + a^2\omega^2\sin^2\omega t\right) + mgl\cos\theta - mga\cos\omega t .
+  \label{eq:lagrangian}
+\end{equation}
+The terms that depend on $t$ only do not contribute to the equation of motion. The Euler--Lagrange equation for $\theta$ gives
+\begin{equation}
+  \ddot\theta = -\frac{g}{l}\sin\theta + \frac{a\omega^2}{l}\cos\omega t\,\sin\theta ,
+  \label{eq:eom}
+\end{equation}
+that is, the bob feels an effective gravity $g + \ddot y_p = g - a\omega^2\cos\omega t$.
+
+\section{Separation of the slow and fast motions}
+Following Kapitza, we write
+\begin{equation}
+  \theta(t) = \varphi(t) + \xi(t),
+  \label{eq:split}
+\end{equation}
+where $\varphi$ varies on the slow time scale $1/\omega_0$ and $\xi$ is a small oscillation at frequency $\omega$ whose average over one period $2\pi/\omega$ vanishes. The driving term in \eqref{eq:eom} is larger than the gravity term by a factor of order $a\omega^2/g$, so to leading order the fast part obeys
+\begin{equation}
+  \ddot\xi = \frac{a\omega^2}{l}\cos\omega t\,\sin\varphi .
+  \label{eq:fast-eq}
+\end{equation}
+Treating $\varphi$ as constant over one period and keeping the purely oscillating solution,
+\begin{equation}
+  \xi = -\frac{a}{l}\cos\omega t\,\sin\varphi ,
+  \label{eq:xi}
+\end{equation}
+which is small because $a\ll l$.
+
+We substitute \eqref{eq:split} in \eqref{eq:eom}, expand to first order in $\xi$, and average over one period of the fast motion. The terms linear in $\xi$ alone or in $\cos\omega t$ alone average to zero, and what remains is
+\begin{equation}
+  \ddot\varphi = -\frac{g}{l}\sin\varphi + \frac{a\omega^2}{l}\cos\varphi\,\langle\xi\cos\omega t\rangle .
+  \label{eq:slow-avg}
+\end{equation}
+With \eqref{eq:xi},
+\begin{equation}
+  \langle\xi\cos\omega t\rangle = -\frac{a}{l}\sin\varphi ,
+  \label{eq:corr}
+\end{equation}
+so that
+\begin{equation}
+  \ddot\varphi = -\frac{g}{l}\sin\varphi - \frac{a^2\omega^2}{l^2}\sin\varphi\cos\varphi .
+  \label{eq:slow}
+\end{equation}
+
+\section{Effective potential}
+Equation \eqref{eq:slow} has the form $\ddot\varphi = -dU_{\rm eff}/d\varphi$, with the effective potential (per unit $ml^2$)
+\begin{equation}
+  U_{\rm eff}(\varphi) = -\frac{g}{l}\cos\varphi + \frac{a^2\omega^2}{2l^2}\sin^2\varphi .
+  \label{eq:ueff}
+\end{equation}
+Its second derivative is
+\begin{equation}
+  U_{\rm eff}''(\varphi) = \frac{g}{l}\cos\varphi + \frac{a^2\omega^2}{l^2}\cos 2\varphi .
+  \label{eq:ueff2}
+\end{equation}
+
+\section{The inverted position}
+At $\varphi = \pi$, \eqref{eq:ueff2} gives
+\begin{equation}
+  \Omega^2 \equiv U_{\rm eff}''(\pi) = \frac{a^2\omega^2}{l^2} - \frac{g}{l} .
+  \label{eq:Omega2}
+\end{equation}
+The inverted position is a minimum of $U_{\rm eff}$, hence stable, if and only if $\Omega^2>0$, that is
+\begin{equation}
+  a^2\omega^2 > gl .
+  \label{eq:condition}
+\end{equation}
+Writing $\varphi = \pi + \psi$ with $\psi$ small, \eqref{eq:slow} becomes $\ddot\psi = -\Omega^2\psi$, so the slow oscillations about the inverted position have angular frequency
+\begin{equation}
+  \Omega = \sqrt{\frac{a^2\omega^2}{l^2} - \frac{g}{l}} .
+  \label{eq:freq}
+\end{equation}
+
+\section{Consistency of the approximation}
+The separation of time scales requires $\Omega \ll \omega$. Since $\Omega^2 < a^2\omega^2/l^2$, this holds when $a \ll l$. The amplitude of $\xi$ in \eqref{eq:xi} is at most $a/l$, which justifies the expansion to first order in $\xi$. Finally, \eqref{eq:condition} can be written $\omega/\omega_0 > l/a$; since $l/a \gg 1$, the driving frequencies that stabilise the inverted position are indeed in the fast-driving regime \eqref{eq:regime}.
+
+\end{document}

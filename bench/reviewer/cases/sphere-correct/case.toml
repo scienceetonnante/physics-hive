@@ -1,0 +1,21 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "correct"
+artefact = "D-S1-1"
+field = "electromagnetism"
+pair = "sphere"
+claim = 'A point charge $q$ at distance $d > R$ from the centre of an isolated, uncharged conducting sphere of radius $R$ is attracted towards the sphere by a force of magnitude $|F| = \dfrac{q^2 R^3 (2d^2 - R^2)}{4\pi\varepsilon_0\, d^3 (d^2 - R^2)^2}$.'
+problem = '''
+# Problem
+
+A point charge $q$ is placed at distance $d$ from the centre of a conducting sphere of radius
+$R < d$. The sphere is isolated and carries no net charge. Find the electrostatic force on the
+point charge as a function of $d$.
+
+Definition of done: a closed-form expression for the force, with its sign (attractive or repulsive).
+'''
+conventions = '''
+# Conventions
+
+SI units. The sphere is centred at the origin and the charge lies on the positive $z$ axis.
+A force component along the line of centres is counted positive when it points away from the sphere.
+'''

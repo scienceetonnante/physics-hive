@@ -1,0 +1,23 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "correct"
+artefact = "D-S1-1"
+field = "classical mechanics"
+pair = "kapitza"
+claim = 'For a pendulum of length $l$ whose pivot oscillates vertically as $a\cos\omega t$, with $a \ll l$ and $\omega \gg \sqrt{g/l}$, the inverted position is stable if and only if $a^2\omega^2 > 2gl$, and small oscillations about it have angular frequency $\Omega = \sqrt{a^2\omega^2/(2l^2) - g/l}$.'
+problem = '''
+# Problem
+
+A pendulum (point mass $m$ on a rigid massless rod of length $l$) has its pivot driven vertically,
+$y_p(t) = a\cos\omega t$. In the regime of small, fast driving ($a \ll l$, $\omega \gg \sqrt{g/l}$),
+find the condition under which the inverted position is stable, and the angular frequency of small
+oscillations about it.
+
+Definition of done: a closed-form stability condition and frequency, with the approximations stated.
+'''
+conventions = '''
+# Conventions
+
+SI units. Uniform gravity $g$ pointing down. $\theta$ is the angle of the rod from the downward
+vertical, so $\theta = \pi$ is the inverted position. The pivot height is $y_p(t) = a\cos\omega t$
+with $a > 0$, $\omega > 0$.
+'''

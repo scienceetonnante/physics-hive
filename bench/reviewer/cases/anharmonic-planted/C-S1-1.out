@@ -1,0 +1,20 @@
+Matrix elements <k|x^4|0>, in units of (hbar/(m omega))^2
+ k  symbolic          value               numerical
+ 0  3/4               0.750000000000000   0.750000000000000
+ 1  0                 0.000000000000000   0.000000000000000
+ 2  3*sqrt(2)/2       2.121320343559642   2.121320343559642
+ 3  0                 0.000000000000000   -0.000000000000000
+ 4  sqrt(6)/2         1.224744871391589   1.224744871391588
+max |symbolic - numerical| over the matrix elements = 4.44e-16
+
+c1 symbolic  = 3/4 = 0.750000000000000
+c1 numerical = 0.750000000000000
+c2 symbolic  = -9/4 = -2.250000000000000
+c2 numerical = -2.249999999999999
+
+E0 = -9*hbar**3*lambda**2/(4*m**4*omega**5) + 3*hbar**2*lambda/(4*m**2*omega**2) + hbar*omega/2 + O(lambda^3)
+LaTeX: - \frac{9 \hbar^{3} \lambda^{2}}{4 m^{4} \omega^{5}} + \frac{3 \hbar^{2} \lambda}{4 m^{2} \omega^{2}} + \frac{\hbar \omega}{2}
+
+check: c1 = 3 <0|x^2|0>^2 = 3/4 (Wick): True
+check: odd matrix elements vanish (parity): True
+check: c2 < 0 (second order lowers the ground state): True

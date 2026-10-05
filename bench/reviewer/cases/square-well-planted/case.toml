@@ -1,0 +1,26 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "planted"
+artefact = "C-S1-1"
+field = "statistical mechanics"
+pair = "square-well"
+claim = 'For a gas of molecules interacting through the square-well potential (hard core of diameter $\sigma$, attractive well of depth $\epsilon$ extending to $\lambda\sigma$), the second virial coefficient is $B_2(T) = \frac{2\pi\sigma^3}{3}\left[1 - (\lambda^3 - 1)\left(e^{-\epsilon/kT} - 1\right)\right]$.'
+problem = '''
+# Problem
+
+A dilute classical gas of molecules interacting through a square-well pair potential: a hard core of
+diameter $\sigma$ and an attractive well of depth $\epsilon$ out to $\lambda\sigma$ ($\lambda > 1$).
+Compute the second virial coefficient $B_2(T)$ in closed form.
+
+Definition of done: a closed form for $B_2(T)$, checked against an independent numerical evaluation.
+'''
+conventions = '''
+# Conventions
+
+Pair potential: $u(r) = +\infty$ for $r < \sigma$, $u(r) = -\epsilon$ for $\sigma < r < \lambda\sigma$,
+$u(r) = 0$ for $r > \lambda\sigma$, with $\epsilon > 0$. Equation of state $P/(nkT) = 1 + B_2(T)\,n + \dots$,
+so $B_2 = -2\pi\int_0^\infty (e^{-u/kT} - 1)\,r^2\,dr$ is a volume per molecule. $k$ is Boltzmann's constant.
+'''
+error_kind = "sign error"
+error = "C-S1-1.py line 21 sets the potential inside the well to +epsilon instead of -epsilon, against conventions.md, and both paths use it. The well becomes repulsive: the claimed B2 exceeds the hard-sphere value at every temperature and stays finite as T -> 0, whereas for an attractive well B2 = b0 [1 - (lambda^3 - 1)(e^(epsilon/kT) - 1)] becomes negative below the Boyle temperature (kT_B = 2.846 epsilon for lambda = 1.5) and tends to minus infinity as T -> 0."
+location = "C-S1-1.py, line 21"
+severity = "breaks the result"

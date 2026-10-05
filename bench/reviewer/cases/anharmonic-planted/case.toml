@@ -1,0 +1,26 @@
+# Reviewer benchmark case. Never copied into the reviewer's workspace.
+label = "planted"
+artefact = "C-S1-1"
+field = "quantum mechanics"
+pair = "anharmonic"
+claim = 'For $H = p^2/2m + m\omega^2 x^2/2 + \lambda x^4$, the ground-state energy to second order in $\lambda$ is $E_0 = \hbar\omega/2 + \tfrac34\,\lambda\hbar^2/(m^2\omega^2) - \tfrac{9}{4}\,\lambda^2\hbar^3/(m^4\omega^5) + O(\lambda^3)$.'
+problem = '''
+# Problem
+
+Quartic anharmonic oscillator: $H = p^2/2m + m\omega^2 x^2/2 + \lambda x^4$ with small $\lambda > 0$.
+Compute the ground-state energy to second order in $\lambda$.
+
+Definition of done: the first- and second-order coefficients in closed form, with physical units
+restored, checked by an independent numerical path.
+'''
+conventions = '''
+# Conventions
+
+$\hbar$, $m$ and $\omega$ are kept explicit in final results; computations may use units
+$\hbar = m = \omega = 1$. Ladder operators: $x = \sqrt{\hbar/2m\omega}\,(a + a^\dagger)$.
+Rayleigh–Schrödinger perturbation theory, non-degenerate.
+'''
+error_kind = "dropped term"
+error = "Off-by-one in the loop of perturbation_coefficients (C-S1-1.py line 27): range(1, KMAX) stops at k = 3, so the k = 4 intermediate state is dropped from the second-order sum, in both paths since they share the function. Its contribution is -|sqrt(6)/2|^2/4 = -3/8, so c2 = -9/4 instead of -21/8. The matrix element <4|x^4|0> = sqrt(6)/2 is printed in the output, and a direct diagonalisation of H at small lambda gives -21/8."
+location = "C-S1-1.py, line 27"
+severity = "breaks the result"
