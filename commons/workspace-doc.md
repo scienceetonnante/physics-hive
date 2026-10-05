@@ -41,7 +41,7 @@ Who writes what:
 
 - **You** write cards in `claims/`, the files of the current session folder, the briefs in `.briefs/`, and the `## Resolution` section and `status:` field of critiques.
 - **Sub-agents** write the artefacts: derivations, computations, reviews, critiques, paper cards, survey summaries, `answer.md` and `write-up/`. You never edit them.
-- **The lead's files** are `problem.md`, `plan.md`, `conventions.md` and `literature/seeds.md`. In shared mode you never edit them: you propose changes in the session report, and `/research-plan` opens a proposal pull request for `plan.md`. In local mode the operator is the lead: `/research-plan` writes `plan.md`, and you may edit `conventions.md` or add sanity checks to `problem.md` once the operator approves (under `/autoresearch`, once you have logged the decision). Never change the question itself.
+- **The lead's files** are `problem.md`, `plan.md`, `conventions.md` and `literature/seeds.md`. In shared mode you never edit them: you propose changes in the session report, and `/research-plan` opens a proposal pull request for `plan.md`. In local mode the operator is the lead: `/research-plan` writes `plan.md`, and you may edit `conventions.md` or add sanity checks to `problem.md` once the operator approves (under `/autoresearch`, once you have logged the decision). Never change the question itself. When a lead asks you, outside any session, to write or change one of their files with them (for instance to state the problem before the first session), do it, commit it, and in shared mode push it to `main` with `uv run .physics-intern/scripts/hubgit.py push origin main`.
 - **Nobody** edits `.physics-intern/`, files in `feedback/`, or the generated views.
 
 Files are durable state; your context is not. After a context clear, run `session.py status`, read the session's `brief.md` and `log.md` and `INDEX.md`, and continue from there.
@@ -151,6 +151,7 @@ Deterministic work is done by scripts in `.physics-intern/scripts/`, run with `u
 - `uv run .physics-intern/scripts/promote.py <card> --by-agent --reason "<evidence>"` — record a promotion (local mode).
 - `uv run .physics-intern/scripts/propose.py plan.md --from sessions/S<n>/plan-proposal.md` — open a proposal pull request for a lead's file (shared mode).
 - `uv run .physics-intern/scripts/literature.py <command>` — search arXiv and INSPIRE, follow citations, download sources (also available as the `literature` MCP server).
+- `uv run .physics-intern/scripts/hubgit.py <git arguments>` — run git with the Hub token (shared mode), for a lead's own edits pushed to `main`; sessions never need it.
 
 
 ## Harness notes

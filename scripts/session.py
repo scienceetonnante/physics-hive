@@ -200,6 +200,12 @@ def cmd_start(root: Path, args) -> None:
     if dirty:
         listing = ", ".join(dirty[:8]) + (", …" if len(dirty) > 8 else "")
         raise ScriptError(f"the checkout has uncommitted changes ({listing}); commit or discard them first")
+    if problem_is_empty(root):
+        raise ScriptError(
+            "problem.md is still the empty template. State the question and its definition of done first: "
+            "edit problem.md, or ask the coordinator to write it with you, then commit it (in shared mode a "
+            "lead pushes it to main with `uv run .physics-intern/scripts/hubgit.py push origin main`)."
+        )
     ws = Workspace(root)
     if ws.mode == "local":
         refuse_if_stale(root, (root / ".physics-intern" / "VERSION").read_text().strip())

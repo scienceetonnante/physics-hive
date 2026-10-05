@@ -14,11 +14,9 @@ Run:
 uv run .physics-intern/scripts/session.py start --harness <your harness> --model <your model id>
 ```
 
-It refuses to start when the checkout has uncommitted changes or a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
+It refuses to start when `problem.md` does not state a question yet, when the checkout has uncommitted changes, or when a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
 
 It prints the session ID (for example `S12`), the operator name to put in cards, and what is waiting for the agents: open question cards, needs re-check flags, reactions, human verifications, promotions and human-written cards since the last session, pull request comments (shared mode), plan-change proposals that the plan has not taken in yet, and the briefs of other open sessions.
-
-If `problem.md` does not yet state a question, ask the operator to write it, run `session.py abort`, and stop.
 
 ## 2. Brief
 

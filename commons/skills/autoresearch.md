@@ -16,7 +16,7 @@ Arguments:
 
 ## Start
 
-Run `session.py start --harness <your harness> --model <your model id>`. If `problem.md` does not state a question, run `session.py abort`, tell the operator to write it, and stop. Write `sessions/S<n>/brief.md` yourself (goal: answer `problem.md`; budget: `max-iterations`; `merge` does not apply) and run `session.py brief`. Do not ask for confirmation.
+Run `session.py start --harness <your harness> --model <your model id>`. If it refuses because `problem.md` does not state a question yet, tell the operator and stop. Write `sessions/S<n>/brief.md` yourself (goal: answer `problem.md`; budget: `max-iterations`; `merge` does not apply) and run `session.py brief`. Do not ask for confirmation.
 
 ## Decisions taken without the operator
 

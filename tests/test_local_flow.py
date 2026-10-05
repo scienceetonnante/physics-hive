@@ -63,9 +63,8 @@ def test_local_workspace_lifecycle(tmp_path):
 
     scripts = ws / ".physics-intern/scripts"
     r = run(scripts / "session.py", "start", "--harness", "claude", "--model", "m1", cwd=ws)
-    assert r.returncode == 0 and "problem.md is still the empty template" in r.stdout
-    run(scripts / "session.py", "abort", cwd=ws)
-    assert not (ws / "sessions/S1").exists()
+    assert r.returncode != 0 and "problem.md is still the empty template" in r.stderr
+    assert not (ws / "sessions/S1").exists() and not (ws / ".active-session").exists()
 
     (ws / "problem.md").write_text("# Problem\n\nFind the leading correction to X.\n")
     commit(ws, "Write the problem")
