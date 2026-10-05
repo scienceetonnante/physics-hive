@@ -2,7 +2,7 @@
 #
 # build-codex-plugin.sh — assemble the publishable Codex CLI plugin from this repo.
 #
-# Source of truth lives here: commons/ + hosts/codex/ (methodology) and
+# Source of truth lives here: commons/, hosts/, scripts/, space/ and VERSION (the method) and
 # plugins/codex/ (the plugin-specific authored files: marketplace.json under
 # .agents/plugins/, plugin.json, the init-physics-intern skill, and
 # plugin-init.sh).
@@ -27,7 +27,7 @@ if [[ ! -d "$SRC" ]]; then
 fi
 
 # rsync excludes build cruft (__pycache__, .DS_Store) so it never ships.
-EXCLUDES=(--exclude='__pycache__' --exclude='.DS_Store')
+EXCLUDES=(--exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' --exclude='.pytest_cache')
 
 # 1. Marketplace manifest (.agents/plugins/marketplace.json) + repo landing page
 #    at the published repo root.
@@ -40,10 +40,16 @@ rm -rf "$OUT/plugin"
 mkdir -p "$OUT/plugin"
 rsync -a "${EXCLUDES[@]}" "$SRC/plugin/" "$OUT/plugin/"
 
-# 3. Vendor the methodology templates from the single source of truth.
-rsync -a "${EXCLUDES[@]}" "$REPO/commons/" "$OUT/plugin/commons/"   # includes render.py
-mkdir -p "$OUT/plugin/hosts/codex"
-rsync -a "${EXCLUDES[@]}" "$REPO/hosts/codex/" "$OUT/plugin/hosts/codex/"
+# Vendor the method from the single source of truth: every host (a workspace
+# created here may be opened with any harness, and people who join render from
+# its copy), the workspace scripts (next to plugin-init.sh), the Space app and
+# VERSION. scripts/init.py copies all of it into each workspace's .physics-intern/.
+for part in commons hosts scripts space; do
+  if [[ -d "$REPO/$part" ]]; then
+    rsync -a "${EXCLUDES[@]}" "$REPO/$part/" "$OUT/plugin/$part/"
+  fi
+done
+cp "$REPO/VERSION" "$OUT/plugin/VERSION"
 
 echo "Built Codex plugin → $OUT"
 echo

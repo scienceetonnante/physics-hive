@@ -1,8 +1,8 @@
 # PhysicsIntern — Codex CLI plugin
 
-Bootstrap a **PhysicsIntern** research workspace in one command, from inside Codex.
+Set up a **PhysicsIntern** research workspace from inside Codex: a local workspace on your machine, a new shared space on the Hugging Face Hub for a team, or a shared space you join.
 
-PhysicsIntern is a methodology for using an AI coding agent to conduct theoretical physics and mathematics research. You write a question into `problem.md`; the agent then surveys the literature, drafts a plan, dispatches analytical derivations and numerical computations to fresh-context sub-agents, reviews each result, and synthesises an answer — committing after every step.
+PhysicsIntern is a method for using AI coding agents to do theoretical physics and mathematics research. The lead scientist writes the question and its definition of done in `problem.md`. Agents then work in bounded sessions: they read the literature, derive and compute in fresh-context sub-agents, review each result blindly, and record results as cards whose status and evidence are computed by scripts. In a shared space, every session ends in a pull request, and reviewers follow the work in a browser through the project's private Space.
 
 ## Install
 
@@ -11,39 +11,33 @@ codex plugin marketplace add huggingface/physics-intern-codex-plugin
 codex plugin add physics-intern@physics-intern-codex
 ```
 
-Restart Codex afterwards so the skill registers.
+Restart Codex afterwards so that the skill registers. The scripts run through [uv](https://docs.astral.sh/uv/); install it once (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`). For shared spaces, log in to the Hub once with `hf auth login`.
 
 ## Use
 
-In a fresh, empty folder for your research problem:
+In an empty folder:
 
 ```
 codex
-> $physics-intern:init-physics-intern    # scaffolds the workspace (asks for one approval)
+> $physics-intern:init-physics-intern
 ```
+
+The agent asks what to do (local, create or join), which other harnesses the folder should also work with, where, and for a shared space the organisation and project name or the repository to join. It then runs the bundled initializer once; Codex asks for one approval, because the script writes `.codex/`, runs git and uses the network.
 
 Then:
 
-1. **Edit `problem.md`** — fill in the problem setup and the main question.
-2. **Exit and restart Codex in the folder** and accept the project-trust prompt on first launch — so the workspace's `AGENTS.md`, skills, sub-agent roles, and `.codex/config.toml` (sandbox + web search) load.
-3. Run **`$survey`** to begin (or just tell Codex to start the autoresearch).
+1. In a new workspace, write the question in `problem.md` (and seed papers in `literature/seeds.md`).
+2. **Exit and restart Codex in the workspace folder**, and accept the project-trust prompt on first launch, so that `AGENTS.md`, the skills, the sub-agent roles and `.codex/config.toml` load.
+3. Run **`$session-run`**. For a benchmark run in a local workspace, `$autoresearch`.
 
-Files are durable state and the session is ephemeral: you can clear the context at any time and the agent resumes from `research_log.md` and `plan.md`.
+## What it sets up
 
-## What `$init-physics-intern` scaffolds
-
-A self-contained workspace in the current folder:
-
-- `AGENTS.md` — the main-agent methodology (loaded each session once the project is trusted).
-- `.agents/skills/` — `$survey`, `$research-plan`, `$derive`, `$compute`, `$review`, `$critique`, `$finalize`, `$autoresearch`.
-- `.codex/agents/` — the sub-agent role definitions (auto-discovered; dispatched via `spawn_agent`/`wait_agent`).
-- `.codex/config.toml` — workspace sandbox + web-search settings.
-- `problem.md`, `research_log.md`, and artefact directories (`derivations/`, `computations/`, `critiques/`, `notes/`, `references/`, `data/`).
-- An initial git commit.
-
-The one approval is expected: the script writes `.codex/` and runs `git init`, which Codex's workspace-write sandbox keeps read-only by default.
+- `.physics-intern/` — a committed copy of the method (prompts, renderer, scripts, Space app), so that everyone on a project runs the same version.
+- `project.toml`, `problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`, and the folders for cards, artefacts, sessions and feedback.
+- The harness files rendered from the method copy (`AGENTS.md`, `.agents/skills/`, `.codex/`, and those of any other harness you chose), which are git-ignored and personal to each checkout. `.codex/config.toml` allows network access, which the session scripts need.
+- For a shared space: the private workspace, traces, sources and chat-debug datasets and the Space, in your organisation.
 
 ## Notes
 
-- The plugin only adds the user-invoked `$physics-intern:init-physics-intern` skill. The methodology skills and sub-agent roles are scaffolded **into each workspace**, not added to your other projects.
-- This repository is a generated build artifact. The methodology source of truth lives upstream and is assembled here by `build-codex-plugin.sh` — edit upstream, not here.
+- The plugin only adds the user-invoked `$physics-intern:init-physics-intern` skill. The method's skills and sub-agent roles live in each workspace, not in your other projects.
+- This repository is a build artefact. The source of truth is upstream, assembled here by `build-codex-plugin.sh`; edit upstream, not here.

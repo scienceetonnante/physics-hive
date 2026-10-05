@@ -6,4 +6,4 @@ policy:
 
 interface:
   display_name: Initialize PhysicsIntern workspace
-  short_description: Scaffold a PhysicsIntern research workspace in the current folder.
+  short_description: Set up a PhysicsIntern research workspace in the current folder, local or shared on the Hub.

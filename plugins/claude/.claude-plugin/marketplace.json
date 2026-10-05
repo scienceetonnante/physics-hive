@@ -5,7 +5,7 @@
     {
       "name": "physics-intern",
       "source": "./plugin",
-      "description": "Scaffold a PhysicsIntern research workspace in the current folder (Claude Code)."
+      "description": "Set up a PhysicsIntern research workspace in the current folder: local, or shared on the Hugging Face Hub (Claude Code)."
     }
   ]
 }

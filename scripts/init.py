@@ -17,7 +17,7 @@ harness or refresh them) from the workspace's own copy of the method. With
 Usage:
   uv run scripts/init.py [--mode local|create|join] [--harness claude,codex,opencode,pi]
                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
-                         [--chat-model ID] [--yes] [--list-orgs] [--upgrade]
+                         [--chat-model ID] [--yes] [--list-orgs] [--list-harnesses] [--upgrade]
 """
 
 from __future__ import annotations
@@ -315,9 +315,14 @@ def main() -> int:
                         help="create: give the Space your token (mine) or set it yourself later (none)")
     parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
     parser.add_argument("--list-orgs", action="store_true", help="print the organisations you belong to and exit")
+    parser.add_argument("--list-harnesses", action="store_true", help="print the harnesses and whether each is installed")
     parser.add_argument("--upgrade", action="store_true", help="replace the workspace's method copy with this one")
     args = parser.parse_args()
 
+    if args.list_harnesses:
+        for name, (label, cmd) in HARNESSES.items():
+            say(f"{name}: {label} ({'installed' if shutil.which(cmd) else 'not found on this machine'})")
+        return 0
     if args.list_orgs:
         from hub import list_orgs
 

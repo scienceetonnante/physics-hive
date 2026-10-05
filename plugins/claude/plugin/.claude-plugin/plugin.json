@@ -1,7 +1,7 @@
 {
   "name": "physics-intern",
-  "version": "0.1.0",
-  "description": "Scaffold a PhysicsIntern research workspace in the current folder (Claude Code).",
+  "version": "0.2.0",
+  "description": "Set up a PhysicsIntern research workspace in the current folder: local, or shared on the Hugging Face Hub (Claude Code).",
   "author": { "name": "David Louapre" },
   "homepage": "https://github.com/huggingface/physics-intern-claude-plugin",
   "repository": "https://github.com/huggingface/physics-intern-claude-plugin",

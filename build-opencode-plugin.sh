@@ -2,7 +2,7 @@
 #
 # build-opencode-plugin.sh — assemble the publishable OpenCode plugin from this repo.
 #
-# Source of truth lives here: commons/ + hosts/opencode/ (methodology) and
+# Source of truth lives here: commons/, hosts/, scripts/, space/ and VERSION (the method) and
 # plugins/opencode/ (the authored files: README.md, install.sh, the global
 # /init-physics-intern command, and plugin-init.sh).
 #
@@ -29,7 +29,7 @@ if [[ ! -d "$SRC" ]]; then
 fi
 
 # rsync excludes build cruft (__pycache__, .DS_Store) so it never ships.
-EXCLUDES=(--exclude='__pycache__' --exclude='.DS_Store')
+EXCLUDES=(--exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' --exclude='.pytest_cache')
 
 # 1. Authored files: README.md, install.sh, and the kit (commands/ + scripts/).
 mkdir -p "$OUT"
@@ -38,11 +38,16 @@ cp "$SRC/install.sh" "$OUT/install.sh"
 rm -rf "$OUT/physics-intern"
 rsync -a "${EXCLUDES[@]}" "$SRC/physics-intern/" "$OUT/physics-intern/"
 
-# 2. Vendor the methodology templates from the single source of truth, into the
-#    kit so plugin-init.sh finds them at $KIT_ROOT/commons and $KIT_ROOT/hosts/opencode.
-rsync -a "${EXCLUDES[@]}" "$REPO/commons/" "$OUT/physics-intern/commons/"   # includes render.py
-mkdir -p "$OUT/physics-intern/hosts/opencode"
-rsync -a "${EXCLUDES[@]}" "$REPO/hosts/opencode/" "$OUT/physics-intern/hosts/opencode/"
+# Vendor the method from the single source of truth: every host (a workspace
+# created here may be opened with any harness, and people who join render from
+# its copy), the workspace scripts (next to plugin-init.sh), the Space app and
+# VERSION. scripts/init.py copies all of it into each workspace's .physics-intern/.
+for part in commons hosts scripts space; do
+  if [[ -d "$REPO/$part" ]]; then
+    rsync -a "${EXCLUDES[@]}" "$REPO/$part/" "$OUT/physics-intern/$part/"
+  fi
+done
+cp "$REPO/VERSION" "$OUT/physics-intern/VERSION"
 
 echo "Built OpenCode plugin → $OUT"
 echo
