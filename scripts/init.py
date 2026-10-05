@@ -42,7 +42,7 @@ HARNESSES = {
     "opencode": ("OpenCode", "opencode"),
     "pi": ("Pi", "pi"),
 }
-DEFAULT_CHAT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
 WORKSPACE_DIRS = ("claims", "derivations/.briefs", "computations/.briefs", "critiques", "literature", "sessions", "feedback")
 ALLOWED_IN_NEW_DIR = {"problem.md", ".DS_Store"}
 

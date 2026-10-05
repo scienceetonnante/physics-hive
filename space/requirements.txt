@@ -1,0 +1,6 @@
+# Installed by the Space on top of Gradio, whose version is sdk_version in README.md.
+huggingface_hub>=1.16
+pyyaml>=6
+# Sign-in with Hugging Face (what the gradio[oauth] extra adds).
+authlib
+itsdangerous

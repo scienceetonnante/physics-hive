@@ -156,11 +156,13 @@ def deploy_space(target: Path, repos: dict, space_token: str) -> None:
     if space_token == "mine":
         hf.add_space_secret(repos["space"], "HF_TOKEN", get_token(),
                             description="Token the Space uses to read the workspace and commit feedback")
-        say("The Space commits feedback with your token (Space secret HF_TOKEN). You can replace it with a")
-        say("fine-grained token that can only write to this project's repositories, in the Space settings.")
+        say("The Space commits feedback with your token (Space secret HF_TOKEN). You can replace it, in the")
+        say(f"Space settings, with a fine-grained token that can write only to {repos['workspace']} and")
+        say(f"{repos['chat_debug']}.")
     else:
-        say("Add a Space secret HF_TOKEN (a token that can write to the workspace repository) in the Space")
-        say("settings; until then the Space cannot read the workspace.")
+        say("Add a Space secret HF_TOKEN in the Space settings: a token that can write to the workspace")
+        say(f"repository (and to {repos['chat_debug']}, if you turn on the chat's debug mode). Until then the")
+        say("Space cannot read the workspace.")
 
 
 def join(target: Path, repo: str, harnesses: list[str], render, regen, check_new_dir) -> None:
