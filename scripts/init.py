@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ScriptError, git, git_out, is_git_repo, say  # noqa: E402
+from common import ScriptError, git, git_out, is_git_repo, rendered_harnesses, rerender, say  # noqa: E402
 
 METHOD_ROOT = Path(__file__).resolve().parents[1]  # holds commons/, hosts/, scripts/, VERSION
 METHOD_PARTS = ("commons", "hosts", "scripts", "space", "VERSION")
@@ -182,14 +182,7 @@ def write_skeleton(target: Path) -> None:
 
 def render(target: Path, harnesses: list[str]) -> None:
     """Render harness files from the workspace's own method copy."""
-    renderer = target / ".physics-intern" / "commons" / "render.py"
-    proc = subprocess.run(
-        [sys.executable, str(renderer), f"--hosts={','.join(harnesses)}", f"--target={target}"],
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        raise ScriptError(f"rendering the harness files failed:\n{proc.stderr.strip()}")
+    rerender(target, harnesses)
 
 
 def regen(target: Path) -> None:
@@ -197,11 +190,6 @@ def regen(target: Path) -> None:
         [sys.executable, str(target / ".physics-intern" / "scripts" / "regen.py"), "--root", str(target), "--quiet"],
         check=False,
     )
-
-
-def rendered_harnesses(target: Path) -> list[str]:
-    marks = {"claude": ".claude/agents", "codex": ".codex/agents", "opencode": ".opencode/agents", "pi": ".pi/agents"}
-    return [name for name, folder in marks.items() if (target / folder).is_dir()]
 
 
 def check_new_dir(target: Path) -> None:

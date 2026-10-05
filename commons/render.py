@@ -296,11 +296,18 @@ def render_skills(host: dict, target: Path) -> int:
 
 # ----- workspace doc, extras -----
 
+def method_version() -> str:
+    version_file = COMMONS.parent / "VERSION"
+    return version_file.read_text().strip() if version_file.is_file() else "unknown"
+
+
 def render_workspace_doc(hosts: list[dict], target: Path) -> None:
     sections = "\n\n".join(h["section"].strip() for h in hosts)
     names = ", ".join(h["display_name"] for h in hosts)
     text = substitute((COMMONS / "workspace-doc.md").read_text(), {"harness_sections": sections, "harness_names": names})
-    (target / "AGENTS.md").write_text(text)
+    # The stamp lets session.py notice harness files rendered from an older method copy.
+    stamp = f"<!-- Rendered from the PhysicsIntern method {method_version()} in .physics-intern/. -->\n"
+    (target / "AGENTS.md").write_text(stamp + text)
     if any(h["name"] == "claude" for h in hosts):
         (target / "CLAUDE.md").write_text("@AGENTS.md\n")
 

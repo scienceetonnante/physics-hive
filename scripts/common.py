@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -111,6 +112,35 @@ def operator_name(root: Path) -> str:
         if name:
             return name
     return os.environ.get("USER", "unknown")
+
+
+RENDER_MARKS = {"claude": ".claude/agents", "codex": ".codex/agents", "opencode": ".opencode/agents", "pi": ".pi/agents"}
+
+
+def rendered_harnesses(root: Path) -> list[str]:
+    """Harnesses whose files are rendered in this checkout."""
+    return [name for name, folder in RENDER_MARKS.items() if (root / folder).is_dir()]
+
+
+def rendered_version(root: Path) -> str | None:
+    """Method version the harness files were rendered from (stamp at the top of AGENTS.md)."""
+    doc = root / "AGENTS.md"
+    if not doc.is_file():
+        return None
+    match = re.search(r"Rendered from the PhysicsIntern method (\S+) in", doc.read_text(encoding="utf-8")[:300])
+    return match.group(1) if match else None
+
+
+def rerender(root: Path, harnesses: list[str] | None = None) -> None:
+    """Render the harness files again from the workspace's method copy."""
+    harnesses = harnesses or rendered_harnesses(root)
+    if not harnesses:
+        return
+    renderer = root / ".physics-intern" / "commons" / "render.py"
+    proc = subprocess.run([sys.executable, str(renderer), f"--hosts={','.join(harnesses)}", f"--target={root}"],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise ScriptError(f"rendering the harness files failed:\n{proc.stderr.strip()}")
 
 
 def say(message: str = "") -> None:

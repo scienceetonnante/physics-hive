@@ -44,6 +44,8 @@ from common import (  # noqa: E402
     load_active,
     now_iso,
     operator_name,
+    rendered_version,
+    rerender,
     save_active,
     say,
 )
@@ -199,6 +201,8 @@ def cmd_start(root: Path, args) -> None:
         listing = ", ".join(dirty[:8]) + (", …" if len(dirty) > 8 else "")
         raise ScriptError(f"the checkout has uncommitted changes ({listing}); commit or discard them first")
     ws = Workspace(root)
+    if ws.mode == "local":
+        refuse_if_stale(root, (root / ".physics-intern" / "VERSION").read_text().strip())
     harness = args.harness or detect_harness()
     model = args.model or "unknown"
     info = {"mode": ws.mode, "harness": harness, "model": model, "started": now_iso()}
@@ -234,6 +238,18 @@ def cmd_start(root: Path, args) -> None:
         f"sessions/{info['id']}/brief.md and run `session.py brief`.")
     say("")
     print_waiting(ws, root, info)
+
+
+def refuse_if_stale(root: Path, method: str) -> None:
+    """Stop when the harness files were rendered from another method version than `method`."""
+    rendered = rendered_version(root)
+    if rendered and rendered != method:
+        rerender(root)
+        raise ScriptError(
+            f"the method copy is now version {method}, but this harness was loaded with prompts from {rendered}. "
+            "The harness files have just been re-rendered: restart your harness in this folder so that it "
+            "loads the new prompts, then start the session again."
+        )
 
 
 def cmd_status(root: Path, args) -> None:
@@ -345,16 +361,16 @@ def check_or_fail(root: Path, base: str, session: str) -> None:
 
 def cmd_abort(root: Path, args) -> None:
     active = require_active(root)
-    if active["mode"] == "shared":
-        import hub
-
-        hub.abort_session(root, active)
     folder = root / "sessions" / active["id"]
     tracked = git(root, "ls-files", "--", str(folder.relative_to(root)), check=False).stdout.strip()
     if folder.is_dir() and not tracked:
         for path in sorted(folder.rglob("*"), reverse=True):
             path.unlink() if path.is_file() else path.rmdir()
         folder.rmdir()
+    if active["mode"] == "shared":
+        import hub
+
+        hub.abort_session(root, active)
     clear_active(root)
     regenerate(root)
     say(f"Session {active['id']} abandoned." + ("" if not tracked else f" Its committed files stay in sessions/{active['id']}/."))
