@@ -77,7 +77,7 @@ Wrote literature/survey-S<n>.md and N paper cards (M sources downloaded; K paper
 <3 to 5 bullets: main approaches, main pitfalls, the most important papers. If the known approaches disagree in a load-bearing way, say so in one bullet: a framing decision will be needed.>
 
 ## Flags
-- <conventions that differ between papers, missing sources, questions the coordinator may want to record as question cards>
+- <conventions that differ between papers, missing sources, open questions the plan may need to cover>
 ```
 
 When there are no flags, keep the `## Flags` heading and write `- (none)` under it.

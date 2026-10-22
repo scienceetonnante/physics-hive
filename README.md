@@ -6,7 +6,7 @@ A workspace is either **local** (one person, one machine, a git repository) or a
 
 - **Leads** own the question (`problem.md`), the strategy (`plan.md`) and the conventions, and are the only ones who mark a claim as *established*.
 - **Operators** run agent sessions from their terminal, each with the harness and model of their choice. Each session ends in a pull request that merges on its own.
-- **Reviewers** use only a browser: in the project's private Space they read results, react, write question and claim cards, verify claims, and ask an explainer chat.
+- **Reviewers** use only a browser: in the project's private Space they read the results and the session reports, write questions and remarks to the agents, and answer open questions. Leads also take the decisions the session reports ask for.
 
 > **Working on the method itself?** See [DOCUMENTATION.md](DOCUMENTATION.md): render pipeline, workspace format, scripts, Hub operations, authoring contracts and the audit workflow.
 
@@ -65,7 +65,7 @@ This clones the workspace and renders the harness files you selected from the wo
 
 **What needs a lead.** A merge adds cards, artefacts, reviews and a report; it makes nothing established by itself. Promotion to *established* is a separate, recorded decision by a lead, made from the Space or with `uv run .physics-intern/scripts/promote.py <card>`. The lead's files (`problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`) change only by a lead's own edit or by a pull request a lead merges; `/research-plan` drafts plan proposals as such pull requests. To push their own edits from a terminal, leads can use `uv run .physics-intern/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
 
-**The Space** is where reviewers work: an overview of the question, the strategy and the active sessions; the results with their computed status and evidence and equations rendered; the literature with triage; the session reports with their proposals; the queue of open questions; reactions, question and claim cards, human verifications and, for leads, promotions; an editor for the lead's files; and an explainer chat that answers from the project's files, cites them, and can turn an unanswered question into a question card for the agents.
+**The Space** is where leads and reviewers work, in a browser. It has two pages. *Status* shows the question, the plan, the latest session report, and what needs a person: proposals to merge or close, the decisions the latest report asks for, and the promotions sessions propose. *Results* lists the claims, the open questions and the dead ends with their computed status, and the paper cards. Every card, paper, session, proposal and file has its own page and address, and every card ID in a text links to its card. Anyone signed in can *write to the agents* (a question card, which the next session reads and which stays open until a session answers it) and *answer* an open question (a claim card). Leads also edit their files, merge or close proposals, and promote claims.
 
 
 ## Plugins
@@ -109,7 +109,7 @@ INDEX.md              generated: one line per item with its status and evidence 
 research_log.md       generated: claims grouped by status, then the session reports (git-ignored)
 ```
 
-**Cards.** A claim, question or dead end is one file in `claims/` with a small YAML header and a free prose body. A card never changes after it is created; everything that happens to it later is a new file that names it (an artefact that supports it, a review, a human verification, a promotion record, a dead end that refutes it, a claim that supersedes it). The scripts compute each claim's status (`working`, `established`, `refuted`, `revised`) and evidence, and flag as *needs re-check* every card that depends on a refuted or revised one. IDs embed the session number (`CL-S12-2`), so parallel sessions never collide and their pull requests never conflict.
+**Cards.** A claim, question or dead end is one file in `claims/` with a small YAML header and a free prose body. A claim is one assertion about the physics, in one sentence, that a derivation or a computation can check; agents write claims for the results they obtain, not for what the literature says. Questions are written by people, to hand work to the agents; agents put open work in their session report instead. A card can be corrected during the session that wrote it and never changes afterwards; everything that happens to it later is a new file that names it (an artefact that supports it, a review, a human verification, a promotion record, a dead end that refutes it, a claim that supersedes it). The scripts compute each claim's status (`working`, `established`, `refuted`, `revised`) and evidence, and flag as *needs re-check* every card that depends on a refuted or revised one. IDs embed the session number (`CL-S12-2`), so parallel sessions never collide and their pull requests never conflict.
 
 
 ## Skills

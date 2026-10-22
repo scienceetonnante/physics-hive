@@ -21,7 +21,8 @@ Run literature work. The `surveyor` sub-agent reads papers and writes paper card
 
 3. **Integrate** (AGENTS.md §5):
    - Read the return block.
-   - Turn flags that deserve work into question cards (for example, two papers using opposite sign conventions), and disposition every flag in the session log.
+   - Disposition every flag in the session log. A flag that calls for work becomes a dispatch in this session or a proposed plan change in the report; one that needs a person's decision (two papers using opposite sign conventions, two readings of the question) goes under *Needs a human decision*.
+   - Write no cards from the survey: its findings stay in the survey summary and the paper cards (AGENTS.md §3). A published result the work will rely on becomes a plan item to check, and a claim once a derivation or computation has checked it.
    - Log the dispatch.
    - Run regen and commit: `[S<n>] survey: <N paper cards, one-line summary>`. Sources under `literature/sources/` are git-ignored; in shared mode `session.py end` uploads them to the sources dataset.
    - If the summary reports a load-bearing disagreement between approaches, the plan needs a framing decision: note it for the report (shared mode) or dispatch `/research-plan` (local mode).

@@ -18,5 +18,5 @@ Run a strategic critique. The `critic` sub-agent reads the generated views, the 
 4. **Integrate** (AGENTS.md §5):
    - Read the return block.
    - Disposition each finding in the critique's `## Resolution` (resolve, dismiss or defer, with a reason) and update its `status:` field (`resolved`, `partially resolved` or `deferred`). Do not act on a finding that would change direction before a second opinion (AGENTS.md §5).
-   - Findings that call for work become dispatches, question cards, or plan-change proposals in the report.
+   - Findings that call for work become dispatches in this session, or plan-change proposals in the report. A finding about a card written in this session is fixed by correcting that card (AGENTS.md §3).
    - Disposition general flags in the session log, log the dispatch, run regen and commit: `[S<n>] critique(<id>): <one-line summary>`.

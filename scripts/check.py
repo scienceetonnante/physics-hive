@@ -9,7 +9,9 @@ review, feedback record and paper card has a well-formed header; that every
 reference points to an existing item of the right kind; that the dependency
 graph has no cycle; and, compared with a base commit, that no file was edited
 after its creation, that the method copy and (in shared mode) the lead's files
-were not touched, and that new promotion records follow the promotion rule.
+were not touched, that a session wrote no question card of its own (people
+write them), and that new promotion records follow the promotion rule. A file
+added since the base may be edited until the session ends.
 
 When a session is active in this checkout, the base and the session default to
 those recorded in `.active-session`.
@@ -48,6 +50,7 @@ from cards import (  # noqa: E402
 from common import changes_since, is_git_repo, load_active  # noqa: E402
 
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+MAX_STATEMENT = 300  # characters; a longer statement is usually several sentences
 IMMUTABLE_DIRS = ("claims/", "feedback/", "derivations/", "computations/")
 SESSION_FOLDER_RE = re.compile(r"^sessions/(S\d+)/")
 
@@ -85,6 +88,9 @@ def check_cards(ws: Workspace, r: Report) -> None:
             r.error(path, "statement is empty")
         elif CONTROL_CHARS.search(card.statement):
             r.warning(path, "statement contains control characters; LaTeX backslashes need single quotes in YAML")
+        if len(card.statement) > MAX_STATEMENT:
+            r.warning(path, f"statement is {len(card.statement)} characters long; a statement is one sentence, "
+                            "with context and caveats in the body")
         produced = card.produced_by
         if produced.get("kind") == "agent":
             for key in ("model", "operator"):
@@ -266,6 +272,10 @@ def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> N
             owner = session_of(stem.split(".")[0])
             if owner and owner != session:
                 r.error(path, f"new in this session but its ID belongs to {owner}")
+    for card in ws.sorted_cards("question"):
+        if card.path in added and card.produced_by.get("kind") != "human":
+            r.error(card.path, "question cards are written by people; put open work under Proposed plan changes, "
+                               "or under Needs a human decision, in the session report")
     new_promotions = [p for p in ws.promotions if p.path in added]
     for promotion in new_promotions:
         if ws.mode == "shared":

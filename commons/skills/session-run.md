@@ -16,7 +16,7 @@ uv run .physics-intern/scripts/session.py start --harness <your harness> --model
 
 It refuses to start when `problem.md` does not state a question yet, when the checkout has uncommitted changes, or when a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
 
-It prints the session ID (for example `S12`), the operator name to put in cards, and what is waiting for the agents: open question cards, needs re-check flags, reactions, human verifications, promotions and human-written cards since the last session, pull request comments (shared mode), plan-change proposals that the plan has not taken in yet, and the briefs of other open sessions.
+It prints the session ID (for example `S12`), the operator name to put in cards, and what is waiting for the agents: open question cards (people write them), needs re-check flags, reactions, human verifications, promotions and human-written cards since the last session, pull request comments (shared mode), plan-change proposals that the plan has not taken in yet, and the briefs of other open sessions.
 
 ## 2. Brief
 
@@ -24,7 +24,7 @@ Propose a brief to the operator, starting from what is waiting and from the oper
 
 - **Goal and why**: what the session will try, in one or two sentences, and why it matters now. A goal may come from a plan item, an open question card, a doubtful reaction, a needs re-check flag, a set of papers to read, or the operator's idea.
 - **Budget**: a number of dispatches, 20 by default.
-- **Stop conditions**: the goal is reached; the budget is spent; no progress, meaning 4 consecutive dispatches without a new claim card, a new dead-end card, a refutation or a promotion proposal; or the work shows that `problem.md` should change.
+- **Stop conditions**: the goal is reached; the budget is spent; no progress, meaning 4 consecutive dispatches that added nothing towards the goal (no new claim or dead end, no review that confirms or refutes, no new paper cards, no plan proposal); or the work shows that `problem.md` should change.
 - **Starting cards**: the cards the session starts from.
 - **Merge**: `auto` (the session merges on its own at the end; the default) or `ask` (you show the report and wait for the operator's yes). Local mode has no merge.
 
@@ -84,7 +84,7 @@ dispatches: 14
 ## Needs a human decision
 ```
 
-Write `(none)` under an empty section. Run regen, then commit the report.
+Write `(none)` under an empty section. The report is what people read, so keep it short and name cards by ID rather than restating them. Work you leave open goes under *Left open* or, when the plan should take it up, *Proposed plan changes*; you write no question cards. *Needs a human decision* lists only what a person must decide, one or two lines each. Run regen, then commit the report.
 
 ## 6. End
 

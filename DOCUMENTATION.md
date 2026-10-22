@@ -59,7 +59,7 @@ physics-intern/
 │   ├── literature.py             arXiv / INSPIRE / Semantic Scholar CLI and MCP server
 │   ├── init.py                   create, join, refresh, upgrade
 │   └── common.py                 git helpers, the active-session file
-├── space/                        the Space app (Gradio), deployed by init --mode create
+├── space/                        the Space app (FastAPI pages), deployed by init --mode create
 ├── bench/reviewer/               reviewer benchmark: cases with planted errors, runner
 ├── plugins/<host>/               authored files of the plugin bootstraps
 ├── build-*plugin.sh              assemble the publishable plugin repos
@@ -97,7 +97,7 @@ For each selected host, in a fixed order (claude, codex, opencode, pi):
 
 Then, once:
 
-5. **Render `AGENTS.md`**: a stamp line with the method version (`<!-- Rendered from the PhysicsIntern method 0.2.0 … -->`), then `commons/workspace-doc.md` with `{{harness_names}}` and `{{harness_sections}}` filled from each selected host's `section.md`. When Claude Code is selected, `CLAUDE.md` is the single line `@AGENTS.md`.
+5. **Render `AGENTS.md`**: a stamp line with the method version (`<!-- Rendered from the PhysicsIntern method 0.3.0 … -->`), then `commons/workspace-doc.md` with `{{harness_names}}` and `{{harness_sections}}` filled from each selected host's `section.md`. When Claude Code is selected, `CLAUDE.md` is the single line `@AGENTS.md`.
 
 The renderer is stdlib-only (Python 3.11+, `tomllib`). Placeholders are `{{key}}`; an unknown placeholder raises. Skill bodies are substituted with an empty context, so a harness-specific placeholder in a skill fails the render.
 
@@ -108,7 +108,7 @@ The renderer is stdlib-only (Python 3.11+, `tomllib`). Placeholders are `{{key}}
 
 The authoritative description, as agents see it, is `commons/workspace-doc.md`. The computations are in `scripts/cards.py`. In summary:
 
-**Cards** (`claims/<id>.md`): YAML header `id`, `kind` (`claim`, `question`, `dead-end`), `statement`, `depends_on`, `produced_by` (`{kind: agent, model, operator}` or `{kind: human, user}`), `session`, `supersedes` (claims), `refutes` (dead ends), `answers` (claims and dead ends); free prose body. Never edited after creation.
+**Cards** (`claims/<id>.md`): YAML header `id`, `kind` (`claim`, `question`, `dead-end`), `statement`, `depends_on`, `produced_by` (`{kind: agent, model, operator}` or `{kind: human, user}`), `session`, `supersedes` (claims), `refutes` (dead ends), `answers` (claims and dead ends); free prose body. A card is edited only during the session that wrote it (`check` compares with the session's base, so a file added since the base may change) and never afterwards. Agents write claims for results obtained by a derivation or a computation, or to answer a question, and dead ends; question cards are written by people (`produced_by.kind: human`), and `check` refuses one added by an agent in a session. A statement is one sentence; `check` warns above 300 characters.
 
 **Artefacts**: `derivations/D-S<n>-<k>.summary.md` + `.tex`; `computations/C-S<n>-<k>.md` + `.py` + `.out` (+ text data files). The summary header holds `id`, `kind` and `supports` (the claims it supports), and no authorship, for blind review.
 
@@ -232,13 +232,13 @@ The body is the coordinator's workflow for that skill: get the IDs (`session.py 
 
 ## The Space
 
-`space/` is a Gradio app deployed as a private Space by `init --mode create` (`hub.deploy_space`): `backend.py` (workspace access, the views, every write; no Gradio), `chat.py` (the explainer), `app.py` (the page only), `README.md` (Space metadata: Gradio SDK version, Python 3.12, OAuth with the `inference-api` scope) and `requirements.txt`. `tests/test_space_backend.py` covers the backend and the chat tools in local mode.
+`space/` is a small FastAPI app that serves plain HTML pages, deployed as a private Docker Space by `init --mode create` (`hub.deploy_space`): `backend.py` (workspace access, the data of every page, every write; no web code), `app.py` (the routes, Markdown rendering and the forms), `templates/` (Jinja pages; `base.html` holds the style), `Dockerfile`, `README.md` (Space metadata: Docker SDK, port 7860, OAuth) and `requirements.txt`. `chat.py` (the explainer) is kept and tested but no page offers it in this version. `tests/test_space_backend.py` covers the backend and the pages in local mode.
 
-- **Data.** It downloads `main` at its current commit with the `HF_TOKEN` secret (one cache folder per commit), on page load when older than two minutes, on Refresh and after each write, and imports `cards`, `regen`, `check` and `promote` from the snapshot's `.physics-intern/scripts/` (restoring `sys.path` and `sys.modules` afterwards), so that status, evidence and the promotion rule are computed by the workspace's own method version.
-- **Identity.** Hugging Face OAuth; the signed-in user is recorded inside every file the Space writes. Leads are `[people] leads` of `project.toml`.
-- **Writes** are new files with unique names (user and timestamp), committed to `main` with the Space token, after the workspace's own `check` has accepted them on a copy: reactions, question and claim cards, human verifications, and promotions (leads only, after `promotion_problems`, committed with `parent_commit` set to the commit they were checked on). The lead's files are edited in a text editor with a rendered preview: a lead's save is a commit to `main`, anyone else's is a proposal pull request (titled `Proposal: <file> (by <user>)`), and a save is refused if the file changed on `main` since the editor loaded it. Leads can merge open proposals; session pull requests are never listed as proposals.
-- **Explainer chat.** A lightweight open model through inference providers (`[models] chat`, `openai/gpt-oss-20b` by default), called with the reader's own OAuth token so that costs are attributed, never with the Space token; four read-only tools (open a card, an artefact's summary, full material or reviews, a paper card; search the index), at most six rounds of tool calls; a note lists what it read; a button sends the last question to the question-card form. Conversations are not stored, except in debug mode (`CHAT_DEBUG=1`), where each exchange becomes a file of the `chat_debug` dataset behind a visible banner (the Space token must then also be able to write that dataset).
-- **Local development**: `PHYSICS_INTERN_LOCAL=<workspace> PHYSICS_INTERN_LOCAL_USER=<name> python space/app.py` reads and writes a local folder instead of the Hub.
+- **Pages.** `/` (Status: the question, the plan, the conventions, the latest report, *Needs your attention*, counts, running sessions, recent changes), `/results` (claims, open questions, dead ends, papers, seed papers), and one page per object: `/card/<id>`, `/paper/<id>`, `/session/<id>`, `/proposal/<number>` (the files the pull request changes, as they are in it, found by comparing its file tree with the commit of `main` it starts from, because the Hub does not always return a diff), `/file/<path>` and `/edit/<lead file>`. Markdown is rendered on the server with `markdown-it-py` (raw HTML shown as text), equations with KaTeX in the browser. Every existing card, paper, artefact, critique and session ID, every `#<n>` that is an open proposal, and every workspace path in the text becomes a link.
+- **Data.** It downloads `main` at its current commit with the `HF_TOKEN` secret (one cache folder per commit), on a page view when older than two minutes, on *Load the latest version* and after each write, and imports `cards`, `regen`, `check` and `promote` from the snapshot's `.physics-intern/scripts/` (restoring `sys.path` and `sys.modules` afterwards), so that status, evidence and the promotion rule are computed by the workspace's own method version.
+- **Identity.** Hugging Face sign-in (`attach_huggingface_oauth`, `parse_huggingface_oauth`); the sign-in link opens the app outside the huggingface.co frame, because browsers block its cookie inside a frame. The signed-in user is recorded inside every file the Space writes. Leads are `[people] leads` of `project.toml`. Forms carry a token tied to the session, so that another site cannot post them.
+- **Writes** are new files with unique names (user and timestamp), committed to `main` with the Space token, after the workspace's own `check` has accepted them on a copy: *Write to the agents* (a question card, with the card at hand in `depends_on`; a paper is named in the body) and *Answer* (a claim card with `answers`), each from one text box whose first paragraph is the statement; and, for leads, promotions (after `promotion_problems`, committed with `parent_commit` set to the commit they were checked on), edits of the lead's files (a commit to `main`, refused if the file changed since the editor loaded it), and merging or closing proposals. Session pull requests (titled `[S<n>]` with their own number) are never proposals. The backend can still write reactions, human verifications and non-lead proposals, which no page offers in this version.
+- **Local development**: `PHYSICS_INTERN_LOCAL=<workspace> PHYSICS_INTERN_LOCAL_USER=<name> uvicorn app:app --reload` in `space/` reads and writes a local folder instead of the Hub, without sign-in.
 
 
 ## Literature tools
@@ -269,15 +269,15 @@ Publishing: bump `version` in the plugin manifests (Claude, Codex), rebuild, com
 ## Tests
 
 ```bash
-uv run --no-project --with pytest --with pyyaml --with huggingface_hub --with gradio --with "mcp>=1.12,<2" pytest -q tests/
+uv run --no-project --with pytest --with httpx --with-requirements space/requirements.txt --with "mcp>=1.12,<2" pytest -q tests/
 ```
 
-Without `gradio`, the test that builds the Space's page is skipped.
+Without `fastapi` and `httpx`, the test of the Space's pages is skipped.
 
-- `tests/test_cards.py`: status precedence, evidence (artefacts, attached artefacts, human verifications), propagation of needs re-check, deterministic regeneration, the promotion rule, and the check rules (headers, references, cycles, immutability against a base, lead's files and foreign IDs in shared sessions, promotions in sessions).
+- `tests/test_cards.py`: status precedence, evidence (artefacts, attached artefacts, human verifications), propagation of needs re-check, deterministic regeneration, the promotion rule, and the check rules (headers, references, cycles, immutability against a base and corrections within a session, question cards refused from agents, long statements, lead's files and foreign IDs in shared sessions, promotions in sessions).
 - `tests/test_local_flow.py`: a local workspace end to end through the real scripts: init, adding a harness, two sessions, reserved IDs, a review, a promotion, and a refused edit of an existing card.
 - `tests/test_export_trace.py`: the trace exporter on a fake OpenCode store and fake Claude Code transcripts.
-- `tests/test_space_backend.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the Space's backend in local mode, the literature tools without network, the benchmark in dry-run mode (and the shape of every case).
+- `tests/test_space_backend.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the Space's backend and its pages (through a test client) in local mode, with a fake Hub for pull requests, the literature tools without network, the benchmark in dry-run mode (and the shape of every case).
 - `tests/ACCEPTANCE.md` maps each acceptance test of the design's build plan to how it is checked, and gives the steps of those that need real agents.
 - `tests/hub_e2e.py` (manual, live, not collected by pytest): creates scratch repositories under your account and runs the shared-mode flow with two operators: parallel sessions adding evidence to the same claim, a rebase, merges, a promotion refused for a non-lead and accepted for the lead, a proposal, an abort. It deletes the repositories at the end. `uv run tests/hub_e2e.py [--keep]`.
 
@@ -286,7 +286,8 @@ Without `gradio`, the test that builds the Space's page is skipped.
 
 - **Research files and harness files are separated.** Harness files are rendered locally from the method copy and git-ignored; only research content and the method copy are shared.
 - **The method is copied into each workspace**, so that every participant runs the same prompts and the prompts sit in history next to the results.
-- **One file per item, never edited.** Status and evidence are computed by `regen`, so parallel sessions add files and never edit the same file; their pull requests do not conflict.
+- **One file per item, never edited once its session ends.** Status and evidence are computed by `regen`, so parallel sessions add files and never edit the same file; their pull requests do not conflict. Within its own session, a card is corrected in place rather than superseded, so that wording fixes do not show as revisions.
+- **Cards are results, questions come from people.** Claims are what the project obtained, not summaries of the literature; agents leave open work in the report and the plan, so that the cards people read stay few.
 - **Deterministic work is done by scripts, not prompts.** IDs (`session.py next`), views, validation, the pull request lifecycle, uploads. Models keep the judgment.
 - **Sessions with briefs, not a fixed pipeline.** A brief can name a plan item, an open question, a doubt, a re-check, papers to read. The pipeline survives only in `/autoresearch` for benchmarks.
 - **Sessions merge without a lead; promotion needs one.** A merge makes nothing established. Requiring a lead on every merge would make the lead the bottleneck.

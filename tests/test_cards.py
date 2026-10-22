@@ -155,6 +155,24 @@ def test_check_refuses_edits_after_creation(toy):
     assert not any("CL-S2-1" in m for m in messages)
 
 
+def test_a_session_corrects_its_own_cards_and_writes_no_questions(toy):
+    toy.git_init()
+    base = toy.commit("base")
+    toy.card("CL-S2-1")
+    toy.commit("first wording")
+    toy.card("CL-S2-1", statement="corrected wording, in the same session")
+    toy.card("Q-S2-1", kind="question")
+    toy.card("Q-alice-20261005T140000", kind="question", produced_by={"kind": "human", "user": "alice"}, session=None)
+    report = run_checks(Workspace(toy.root), base=base, session="S2")
+    assert [(e.path, "written by people" in e.message) for e in report.errors] == [("claims/Q-S2-1.md", True)]
+
+
+def test_check_warns_about_long_statements(toy):
+    toy.card("CL-S1-1", statement="One sentence. " * 30)
+    [warning] = [p for p in run_checks(Workspace(toy.root)).problems if "characters long" in p.message]
+    assert warning.severity == "warning" and warning.path == "claims/CL-S1-1.md"
+
+
 def test_check_refuses_lead_files_and_foreign_ids_in_shared_session(shared_toy):
     toy = shared_toy
     toy.git_init()
