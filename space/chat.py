@@ -11,6 +11,9 @@ The chat explains; it does not verify. Its answers carry no evidential weight,
 and the page says so. In normal mode nothing is stored. In debug mode
 (`CHAT_DEBUG=1`) each exchange is logged to the chat_debug dataset named in
 project.toml, never to the workspace, and the page shows a banner.
+
+The pages of the Space do not offer the chat in this version: it was left out of
+the first, smaller Space, and this module is kept for when it returns.
 """
 
 from __future__ import annotations

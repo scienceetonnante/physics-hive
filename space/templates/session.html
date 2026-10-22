@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ session.id }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/">Status</a> › session</p>
+<div class="grid">
+<main>
+  <section class="panel">
+    <h1>{{ session.id }} · {{ (session.goal or "(no brief yet)") | md_inline }}</h1>
+    {% if session.report %}
+    <p class="meta">Stopped: {{ session.report.stop_reason or "?" }}{% if session.report.dispatches %}, after {{ session.report.dispatches }} dispatches{% endif %}.</p>
+    <div class="prose">
+      {% for heading, text in sections.items() %}<h3>{{ heading }}</h3>{{ text | md }}{% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No report yet: the session is still running, or it was abandoned.</p>
+    {% endif %}
+  </section>
+  {% if brief %}
+  <section class="panel">
+    <details>
+      <summary>The brief</summary>
+      <div class="prose">{{ brief | md }}</div>
+    </details>
+  </section>
+  {% endif %}
+</main>
+<aside>
+  <section class="panel">
+    <h2 class="label">About this session</h2>
+    <dl class="facts">
+      {% if session.brief and session.brief.budget %}<dt>Budget</dt><dd>{{ session.brief.budget }} dispatches</dd>{% endif %}
+      {% if session.brief and session.brief.starts_from %}<dt>Starts from</dt><dd>{{ session.brief.starts_from | join(", ") | md_inline }}</dd>{% endif %}
+      {% if session.report and session.report.dispatches %}<dt>Used</dt><dd>{{ session.report.dispatches }} dispatches</dd>{% endif %}
+    </dl>
+    <ul class="small" style="padding-left:18px;margin:10px 0 0">
+      {% if log %}<li><a href="/file/{{ log }}">The coordinator's log</a></li>{% endif %}
+      {% if pr %}<li><a href="{{ pr }}">Its pull request on the Hub</a></li>{% endif %}
+      {% if trace %}<li><a href="{{ trace }}">Its full trace on the Hub</a></li>{% endif %}
+    </ul>
+  </section>
+</aside>
+</div>
+{% endblock %}

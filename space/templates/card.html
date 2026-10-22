@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "macros.html" import badge, card_row, ask_form, sign_in_first %}
+{% block title %}{{ card.id }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/results">Results</a> › {{ card.kind }}</p>
+<div class="grid">
+<main>
+  <section class="panel">
+    <div class="row-head" style="margin-bottom:8px">
+      <h1 style="margin:0" class="id">{{ card.id }}</h1>
+      {{ badge(row.status) }}
+      {% if row.status_text != row.status %}<span class="muted small">{{ row.status_text | md_inline }}</span>{% endif %}
+    </div>
+    <div class="claim-box">{{ card.statement | md_inline }}</div>
+    {% if row.recheck %}
+    <div class="warn-box"><b>Needs re-check.</b> This card depends, directly or not, on
+      {% for cid, st in row.recheck %}{{ cid | md_inline }} ({{ st }}){{ ", " if not loop.last }}{% endfor %}.</div>
+    {% endif %}
+    {% if card.body.strip() %}<div class="prose">{{ card.body | md }}</div>{% endif %}
+  </section>
+
+  {% if card.kind == "claim" %}
+  <section class="panel">
+    <h2 class="label">Evidence</h2>
+    {% for item in evidence %}
+    <div class="evidence">
+      <h3 style="margin:0 0 6px;font-size:1rem">{{ item.title | md_inline }}</h3>
+      <div class="prose">{{ (item.summary or "(empty summary)") | md }}</div>
+      {% for f in item.files %}
+      <details><summary>Full material: {{ f.path }}</summary><pre>{{ f.text }}</pre></details>
+      {% endfor %}
+      {% for review in item.reviews %}
+      <details><summary>{{ review.title }}</summary><div class="prose">{{ review.body | md }}</div></details>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted" style="margin:0">No evidence yet: no derivation, computation or verification supports this card.</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% for label, rows in related %}
+  <section class="panel">
+    <h2 class="label">{{ label }}</h2>
+    <ul class="rows">{% for r in rows %}{{ card_row(r) }}{% endfor %}</ul>
+  </section>
+  {% endfor %}
+
+  {% if promotions %}
+  <section class="panel">
+    <h2 class="label">Promotion history</h2>
+    <ul class="rows small">
+      {% for p in promotions %}<li>Promoted by {{ p.by }} on {{ p.date }}{% if not p.counted %} <span class="badge b-refuted">not counted: the author is not a lead</span>{% endif %}
+        {% if p.reason %}<div class="meta">{{ p.reason | md_inline }}</div>{% endif %}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</main>
+
+<aside>
+  <section class="panel">
+    <h2 class="label">Origin</h2>
+    <p style="margin:0">{{ origin | md_inline }}</p>
+    {% if trace %}<p class="small" style="margin:6px 0 0"><a href="{{ trace }}">Full trace of session {{ card.session }} on the Hub</a></p>{% endif %}
+  </section>
+
+  {% if card.kind == "question" and row.status == "open" %}
+  <section class="panel">
+    <h2 class="label">Answer this question</h2>
+    <p class="small muted" style="margin-top:0">Your answer becomes a claim card under your name, and the question is marked answered.
+      For a decision (a framing, a scope), say what you decided and why.</p>
+    {% if user %}
+    <form method="post" action="/card/{{ card.id }}/answer">
+      {% if error and draft_for == "answer" %}<div class="error">{{ error | md_inline }}</div>{% endif %}
+      <textarea name="text" placeholder="The first paragraph is the answer's statement; anything after a blank line is its body." required>{{ draft if draft_for == "answer" else "" }}</textarea>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="actions"><button>Answer</button></div>
+    </form>
+    {% else %}{{ sign_in_first(user, local, sign_in, "answer") }}{% endif %}
+  </section>
+  {% endif %}
+
+  {% if card.kind == "claim" and row.status == "working" and lead %}
+  <section class="panel">
+    <h2 class="label">Promote to established</h2>
+    <p class="small muted" style="margin-top:0">{% if proposed %}Proposed in {{ proposed | join(", ") | md_inline }}. {% endif %}
+      Promotion is your judgment that the evidence is robust, usually two independent routes with confirming reviews.</p>
+    <form method="post" action="/card/{{ card.id }}/promote">
+      {% if error and draft_for == "promote" %}<div class="error">{{ error | md_inline }}</div>{% endif %}
+      <textarea name="reason" placeholder="The evidence that justifies it" style="min-height:4rem">{{ draft if draft_for == "promote" else "" }}</textarea>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="actions"><button>Promote</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  {{ ask_form(card.id, user, local, sign_in, csrf, error, draft, draft_for) }}
+</aside>
+</div>
+{% endblock %}

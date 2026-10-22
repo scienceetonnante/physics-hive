@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "macros.html" import ask_form %}
+{% block title %}{{ paper.id }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/results">Results</a> › literature › <span class="id">{{ paper.id }}</span></p>
+<div class="grid">
+<main>
+  <section class="panel">
+    <h1>{{ (paper.title or paper.id) | md_inline }}</h1>
+    <p class="meta" style="margin-top:-6px">
+      {{ authors }}{% if paper.year %} · {{ paper.year }}{% endif %}
+      {% if arxiv %} · <a href="https://arxiv.org/abs/{{ arxiv }}">arXiv:{{ arxiv }}</a>{% endif %}
+      {% if doi %} · doi:{{ doi }}{% endif %}
+    </p>
+    <div class="prose">{{ body | md }}</div>
+  </section>
+</main>
+<aside>
+  {{ ask_form(paper.id, user, local, sign_in, csrf, error, draft, draft_for) }}
+</aside>
+</div>
+{% endblock %}

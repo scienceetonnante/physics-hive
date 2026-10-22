@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Proposal #{{ pr.num }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/">Status</a> › proposal</p>
+<div class="grid">
+<main>
+  <section class="panel">
+    <h1>#{{ pr.num }} · {{ pr.title | md_inline }}</h1>
+    <p class="meta">Opened by {{ pr.author }}{% if pr.date %} on {{ pr.date }}{% endif %} · {{ pr.status }} · <a href="{{ pr.url }}">on the Hub</a></p>
+    {% if pr.description %}<div class="prose">{{ pr.description | md }}</div>{% endif %}
+  </section>
+  {% for f in pr.files %}
+  <section class="panel">
+    <h2 class="label">{{ f.path }}, as the proposal would make it</h2>
+    {% if f.text is none %}<p class="muted">Deleted by the proposal, or not a text file.</p>
+    {% elif f.path.endswith(".md") %}<div class="prose">{{ f.text | md }}</div>
+    {% else %}<pre>{{ f.text }}</pre>{% endif %}
+  </section>
+  {% endfor %}
+</main>
+<aside>
+  <section class="panel attention">
+    <h2 class="label">Decision</h2>
+    {% if error %}<div class="error">{{ error | md_inline }}</div>{% endif %}
+    {% if pr.status not in ("open", "draft") %}
+    <p style="margin:0">This proposal is {{ pr.status }}.</p>
+    {% elif lead %}
+    <p class="small" style="margin-top:0">Merging puts these files on main as shown. To keep only part of it, merge it, then
+      edit the file; or close it and edit the file yourself.</p>
+    <form method="post" action="/proposal/{{ pr.num }}/merge">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button>Merge into main</button>
+    </form>
+    <form method="post" action="/proposal/{{ pr.num }}/close">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Close without merging</button>
+    </form>
+    {% else %}
+    <p class="small" style="margin:0">A lead merges or closes this proposal. To comment on it, write to the agents from the
+      Status page, or comment on the pull request on the Hub.</p>
+    {% endif %}
+  </section>
+</aside>
+</div>
+{% endblock %}

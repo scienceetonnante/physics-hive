@@ -147,7 +147,7 @@ def deploy_space(target: Path, repos: dict, space_token: str) -> None:
     if not (app / "app.py").is_file():
         warn("The method copy has no Space app (.physics-intern/space/); skipping the Space.")
         return
-    hf.create_repo(repos["space"], repo_type="space", space_sdk="gradio", private=True)
+    hf.create_repo(repos["space"], repo_type="space", space_sdk="docker", private=True)
     hf.upload_folder(repo_id=repos["space"], repo_type="space", folder_path=app,
                      commit_message="Deploy the PhysicsIntern Space", ignore_patterns=["__pycache__/*", "*.pyc"])
     hf.add_space_variable(repos["space"], "PHYSICS_INTERN_WORKSPACE", repos["workspace"])
@@ -411,7 +411,8 @@ def shared_waiting(ws, root: Path, active: dict) -> list[tuple[str, list[str]]]:
             continue
         details = hf.get_discussion_details(repos["workspace"], disc.num, repo_type=DATASET)
         events = [e for e in details.events if e.type == "comment"]
-        if disc.is_pull_request and disc.status in ("draft", "open") and disc.title.startswith("[S"):
+        # A session's pull request carries its own number; a proposal drafted in S1 is "[S1] Plan proposal: …".
+        if disc.is_pull_request and disc.status in ("draft", "open") and disc.title.startswith(f"[S{disc.num}]"):
             starts = ""
             if events:
                 try:

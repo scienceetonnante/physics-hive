@@ -2,7 +2,7 @@
 
 The build plan of `design/DESIGN-shared-spaces.md` (section 13) ends each phase with an acceptance test. This file says, for each one, how it is checked: by the automated suite, by the live Hub test, or by a run that needs real agents and accounts, with the steps for that run.
 
-Automated suite: `uv run --no-project --with pytest --with pyyaml --with huggingface_hub --with gradio --with "mcp>=1.12,<2" pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories under your account).
+Automated suite: `uv run --no-project --with pytest --with httpx --with-requirements space/requirements.txt --with "mcp>=1.12,<2" pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories under your account).
 
 ## Phase 1 — workspace format and session driver (local)
 

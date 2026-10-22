@@ -1,4 +1,4 @@
-"""Tests of the Space's backend and of the explainer's tools, on toy workspaces.
+"""Tests of the Space's backend, its pages, and the explainer's tools, on toy workspaces.
 
 Most tests read and write a toy folder in local mode. Where a test needs the
 Hub (pull requests, commits naming the user), a fake HfApi stands in for it;
@@ -10,8 +10,10 @@ from __future__ import annotations
 import datetime as dt
 import itertools
 import json
+import re
 import shutil
 import sys
+import tempfile
 from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
@@ -58,10 +60,12 @@ def paper(toy, paper_id: str = "P-2301.01234", title: str = "Weak-field correcti
 class FakeHub:
     """Stands in for HfApi: a commit to main writes into the toy folder; pull requests are recorded."""
 
-    def __init__(self, root: Path, prs=()):
+    def __init__(self, root: Path, prs=(), pr_files=None):
         self.root, self.prs = root, list(prs)
+        self.pr_files = pr_files or {}  # number -> {path: text}, the files a pull request changes
         self.commits: list[dict] = []
         self.merged: list[tuple] = []
+        self.closed: list[tuple] = []
 
     def repo_info(self, repo_id, repo_type=None):
         return SimpleNamespace(sha=f"sha{len(self.commits)}")
@@ -93,15 +97,36 @@ class FakeHub:
     def get_repo_discussions(self, repo_id, repo_type=None, discussion_type=None):
         return iter(self.prs)
 
-    def list_repo_commits(self, repo_id, repo_type=None):
-        return [SimpleNamespace(title=c["message"], authors=["space"], created_at=None) for c in reversed(self.commits)]
+    def list_repo_commits(self, repo_id, repo_type=None, revision=None):
+        if revision:  # a pull request: one commit on top of the first commit of main
+            return [SimpleNamespace(commit_id=revision), SimpleNamespace(commit_id="first")]
+        return [SimpleNamespace(commit_id=f"c{i}", title=c["message"], authors=["space"], created_at=None)
+                for i, c in reversed(list(enumerate(self.commits)))] + [
+                    SimpleNamespace(commit_id="first", title="Initialize", authors=["lead"], created_at=None)]
+
+    def list_repo_tree(self, repo_id, repo_type=None, revision=None, recursive=False):
+        changed = self.pr_files.get(int(revision.rsplit("/", 1)[1]), {}) if revision.startswith("refs/pr/") else {}
+        return [SimpleNamespace(path="problem.md", blob_id="same"), SimpleNamespace(path="claims", tree_id="t")] + [
+            SimpleNamespace(path=rel, blob_id=f"new {rel}") for rel in changed]
 
     def merge_pull_request(self, repo_id, num, repo_type=None, comment=None):
         self.merged.append((num, comment))
 
+    def change_discussion_status(self, repo_id, num, status, comment=None, repo_type=None):
+        self.closed.append((num, comment))
 
-def hub_backend(toy, monkeypatch, prs=()) -> tuple[sb.Backend, FakeHub]:
-    fake = FakeHub(toy.root, prs)
+    def get_discussion_details(self, repo_id, num, repo_type=None):
+        return SimpleNamespace(events=[SimpleNamespace(type="comment", content=f"Description of #{num}.")], diff="")
+
+    def hf_hub_download(self, repo_id, filename, repo_type=None, revision=None):
+        path = Path(tempfile.mkdtemp()) / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.pr_files[int(revision.rsplit("/", 1)[1])][filename])
+        return str(path)
+
+
+def hub_backend(toy, monkeypatch, prs=(), pr_files=None) -> tuple[sb.Backend, FakeHub]:
+    fake = FakeHub(toy.root, prs, pr_files)
     monkeypatch.setattr(sb, "snapshot_download", lambda repo_id, **kwargs: str(toy.root))
     return sb.Backend(sb.HubStore("org/toy", "space-token", api=fake)), fake
 
@@ -150,8 +175,7 @@ def test_reactions_keep_one_current_per_person(toy, times):
     assert ws.evidence("CL-S1-1") == []  # reactions carry no evidential weight
 
     b.react("carol", "P-2301.01234", "key")
-    assert "key ×1" in b.papers_markdown()
-    assert "**key** — carol" in b.paper_markdown("P-2301.01234")
+    assert [(r.user, r.value) for r in Workspace(toy.root).current_reactions("P-2301.01234")] == [("carol", "key")]
     with pytest.raises(sb.SpaceError, match="one of: key, useful, irrelevant"):
         b.react("alice", "P-2301.01234", "convinced")
     with pytest.raises(sb.SpaceError, match="Sign in"):
@@ -172,7 +196,7 @@ def test_cards_are_written_from_a_form(toy, times):
                     "depends_on": ["CL-S1-1"], "produced_by": {"kind": "human", "user": "alice"}, "session": None,
                     "supersedes": [], "refutes": [], "answers": []}
     assert body == "Asked after reading D-S1-1.\n"
-    assert "**Q-alice-20261005T140000** · open" in b.questions_markdown()
+    assert [row["id"] for row in b.results()["questions"]] == ["Q-alice-20261005T140000"]
 
     b.write_card("lead", "claim", "X reduces to the textbook value.", "By hand: expand to first order.",
                  depends_on=["CL-S1-1"], answers=["Q-alice-20261005T140000"], supersedes=["CL-S1-1"])
@@ -240,7 +264,8 @@ def test_promotion_follows_the_workspace_rule(shared_toy, times):
     assert meta["by"] == {"kind": "human", "user": "lead"} and meta["session"] is None
     assert body == "one derivation, one confirming review\n"
     assert Workspace(t.root).status("CL-S1-1") == "established"
-    assert "promoted by lead on" in b.card_markdown("CL-S1-1")
+    [shown] = b.card("CL-S1-1")["promotions"]
+    assert (shown["by"], shown["counted"], shown["reason"]) == ("lead", True, "one derivation, one confirming review")
 
     t.card("DE-S2-1", kind="dead-end", refutes=["CL-S1-1"])
     with pytest.raises(sb.SpaceError, match="CL-S1-1 is refuted"):
@@ -288,10 +313,8 @@ def test_lead_files_and_proposals_on_the_hub(shared_toy, monkeypatch):
     assert (shared_toy.root / "plan.md").read_text() == "# Plan\n"  # main is unchanged until a lead merges
 
     assert [p["num"] for p in b.open_sessions()] == [3]
-    assert [p["num"] for p in b.proposal_prs()] == [12]
-    assert "#12 Proposal: plan.md (by alice) — open" in b.proposals_markdown()
-    assert "#3 [S3] Derive X — draft" in b.overview_markdown()
-    assert "Edit conventions.md (lead, from the Space)" in b.overview_markdown()  # recent changes
+    assert [p["num"] for p in b.attention()["proposals"]] == [12]
+    assert "Edit conventions.md (lead, from the Space)" in [c["title"] for c in b.commits]  # recent changes
 
     with pytest.raises(sb.SpaceError, match="Only a lead"):
         b.merge_proposal("alice", 12)
@@ -325,7 +348,7 @@ def test_an_unreachable_workspace_is_a_message():
     assert "could not read the workspace org/x" in b.error
     assert "could not read" in b.status_markdown()
     with pytest.raises(sb.SpaceError, match="could not read the workspace"):
-        b.overview_markdown()
+        b.attention()
     assert "HF_TOKEN is not set" in sb.Backend.from_env({"PHYSICS_INTERN_WORKSPACE": "org/x"}).error
     assert "PHYSICS_INTERN_WORKSPACE" in sb.Backend.from_env({}).error
     with pytest.raises(sb.SpaceError, match="PHYSICS_INTERN_WORKSPACE"):
@@ -356,59 +379,110 @@ def test_card_view(toy, times):
     toy.promotion("CL-S1-2")
     toy.card("DE-S2-1", kind="dead-end", refutes=["CL-S1-1"])
     b = local(toy)
-    b.react("alice", "CL-S1-2", "doubtful", "eq. 2?")
 
-    text = b.card_markdown("CL-S1-2")
-    assert "**claim** · **established**" in text
-    assert "**Needs re-check:** this card depends, directly or not, on CL-S1-1 (refuted)." in text
-    assert "**Depends on**\n- CL-S1-1 · refuted — $E = mc^2$ in the rest frame" in text
-    assert "**Cards that depend on it**\n- CL-S2-1 · working" in text
-    assert "**Evidence:** D-S1-2 [R-S1-1 confirmed]" in text
-    assert "- promoted by lead on 2026-10-06" in text
-    assert '- **doubtful** — alice: "eq. 2?" (2026-10-05)' in text
-    assert "refuted by DE-S2-1" in b.card_markdown("CL-S1-1")
-    assert b.card_markdown("CL-S9-9").startswith("*There is no card")
-
-    [item] = b.evidence_items("CL-S1-2")
+    view = b.card("CL-S1-2")
+    assert view["row"] == {"id": "CL-S1-2", "kind": "claim", "status": "established", "status_text": "established",
+                           "recheck": [("CL-S1-1", "refuted")], "statement": "statement of CL-S1-2",
+                           "evidence": ["D-S1-2 [R-S1-1 confirmed]"], "author": None}
+    assert [(label, [row["id"] for row in rows]) for label, rows in view["related"]] == [
+        ("Depends on", ["CL-S1-1"]), ("Cards that depend on it", ["CL-S2-1"])]
+    assert view["origin"] == "agent (m), operator op, session S1"
+    assert view["promotions"] == [{"by": "lead", "date": "2026-10-06", "counted": True, "reason": ""}]
+    assert view["proposed"] == [] and view["trace"] is None  # established; local mode
+    [item] = view["evidence"]
     assert item == {"title": "D-S1-2 (derivation)", "summary": "Summary.",
                     "files": [{"path": "derivations/D-S1-2.tex", "text": "\\documentclass{article}\n", "language": "latex"}],
                     "reviews": [{"title": "Review R-S1-1: confirmed", "body": "Review."}]}
-    assert b.artefact_choices("CL-S1-2") == ["D-S1-2"]
+    refuted = b.row("CL-S1-1")
+    assert refuted["status_text"] == "refuted by DE-S2-1" and refuted["recheck"] == []  # nothing to re-check on it
     assert dict(b.related("CL-S1-1"))["Refuted by"] == ["DE-S2-1"]
+    assert b.row("CL-S9-9")["status"] == "missing"
+    with pytest.raises(sb.SpaceError, match="There is no card CL-S9-9"):
+        b.card("CL-S9-9")
 
-    assert [c.id for c in b.matching_cards("Needing a re-check")] == ["CL-S1-2", "CL-S2-1"]
-    assert [c.id for c in b.matching_cards("Refuted claims")] == ["CL-S1-1"]
-    assert [c.id for c in b.matching_cards("Dead ends")] == ["DE-S2-1"]
-    assert [c.id for c in b.matching_cards("All cards", "rest FRAME")] == ["CL-S1-1"]
-    assert "**CL-S1-2** · established · needs re-check (CL-S1-1 refuted)" in b.index_markdown("Established claims")
-    assert b.card_choices("Refuted claims") == [("CL-S1-1 — $E = mc^2$ in the rest frame", "CL-S1-1")]
+    results = b.results()
+    assert [row["id"] for row in results["claims"]] == ["CL-S1-2", "CL-S2-1"]  # established first, then working
+    assert [row["id"] for row in results["past_claims"]] == ["CL-S1-1"]
+    assert [row["id"] for row in results["dead_ends"]] == ["DE-S2-1"]
+    assert b.counts() == {"established claims": 1, "working claims": 1, "open questions": 0, "cards to re-check": 2,
+                          "dead ends": 1, "papers": 0}
 
 
-def test_sessions_questions_and_overview(toy):
+def test_sessions_and_what_needs_attention(toy):
     toy.card("CL-S1-1")
     toy.card("Q-S1-1", kind="question")
     toy.write("sessions/S1/brief.md", {"session": "S1", "goal": "Derive X", "budget": 20, "starts_from": ["Q-S1-1"]},
-              "## Goal\n")
+              "## Goal\n\nDerive X.\n")
     toy.write("sessions/S1/report.md", {"session": "S1", "stop_reason": "goal reached", "dispatches": 7},
-              "## Found\n- CL-S1-1\n\n## Proposed plan changes\n- Add a computation.\n\n"
-              "## Proposed promotions\n- CL-S1-1: D-S1-1 with a confirming review\n")
+              "## Found\n- CL-S1-1\n\n## Refuted\n(none)\n\n## Proposed plan changes\n- Add a computation.\n\n"
+              "## Proposed promotions\n- CL-S1-1: D-S1-1 with a confirming review\n\n"
+              "## Needs a human decision\n- Q-S1-1: which sign convention?\n")
     toy.write("sessions/S2/brief.md", {"session": "S2", "goal": "Check the limit"}, "")
     b = local(toy)
 
-    s2, s1 = b.session_views()
-    assert s2["title"] == "S2 — Check the limit (no report yet)" and s2["proposals"] == []
-    assert s1["proposals"] == [{"card": "CL-S1-1", "reason": "CL-S1-1: D-S1-1 with a confirming review",
-                                "status": "working", "statement": "statement of CL-S1-1"}]
-    assert "Brief: budget of 20 dispatches; starts from Q-S1-1." in s1["markdown"]
-    assert "**Stopped:** goal reached, after 7 dispatches." in s1["markdown"]
-    assert "#### Proposed plan changes\n\n- Add a computation." in s1["markdown"]
-    assert "#### Proposed promotions" in s1["markdown"]
+    assert [s.id for s in b.sessions()] == ["S2", "S1"]
+    s1 = b.session("S1")
+    assert s1["brief"] == "## Goal\n\nDerive X."
+    assert list(s1["sections"]) == ["Found", "Proposed plan changes", "Proposed promotions", "Needs a human decision"]
+    assert s1["pr"] is None and s1["trace"] is None and s1["log"] is None  # local mode, no log written
+    with pytest.raises(sb.SpaceError, match="no session S9"):
+        b.session("S9")
 
-    assert "**Q-S1-1** · open" in b.questions_markdown()
-    overview = b.overview_markdown()
-    assert "### Problem\n\nToy question." in overview  # problem.md, with its headings under the page's own
-    assert "*plan.md is still empty.*" in overview
-    assert "1 claims (1 working), 1 open questions" in overview
+    attention = b.attention()
+    assert attention["decisions"] == ("S1", "- Q-S1-1: which sign convention?")  # from the latest report
+    assert [(row["id"], sessions) for row, sessions in attention["promotions"]] == [("CL-S1-1", ["S1"])]
+    assert attention["proposals"] == []
+    assert b.lead_text("problem.md") == "### Problem\n\nToy question."  # under the page's own headings
+    assert b.lead_text("plan.md") is None  # only the template's heading
+    assert b.file("sessions/S1/report.md")["header"] == "session: S1\nstop_reason: goal reached\ndispatches: 7"
+    assert b.file_path("../outside") is None and b.file_path("/etc/hosts") is None
+
+
+def test_writing_to_the_agents_and_answering(toy, times):
+    toy.card("CL-S1-1")
+    toy.card("Q-S1-1", kind="question")
+    paper(toy)
+    b = local(toy)
+    assert sb.split_text("  Is $X$ right?\r\n\r\nI doubt eq. (3).\n\nAnd (4).  ") == (
+        "Is $X$ right?", "I doubt eq. (3).\n\nAnd (4).")
+
+    assert "next session" in b.ask("alice", "Is X right?\n\nI doubt eq. (3).", about="CL-S1-1")
+    asked = Workspace(toy.root).cards["Q-alice-20261005T140000"]
+    assert (asked.kind, asked.statement, asked.depends_on, asked.body.strip()) == (
+        "question", "Is X right?", ["CL-S1-1"], "I doubt eq. (3).")
+    b.ask("alice", "Read its table 2.", about="P-2301.01234")  # a paper is named in the body, not in depends_on
+    about_paper = Workspace(toy.root).cards["Q-alice-20261005T140001"]
+    assert about_paper.depends_on == [] and about_paper.body.strip() == "About P-2301.01234."
+
+    assert b.answer("lead", "Q-S1-1", "The plus sign.\n\nAs in P1.") == "Wrote **CL-lead-20261005T140002**. It answers Q-S1-1."
+    ws = Workspace(toy.root)
+    assert ws.status("Q-S1-1") == "answered" and ws.cards["CL-lead-20261005T140002"].body.strip() == "As in P1."
+    with pytest.raises(sb.SpaceError, match="Write something"):
+        b.ask("alice", "  \n ")
+    with pytest.raises(sb.SpaceError, match=r"expected a question"):
+        b.answer("lead", "CL-S1-1", "Yes.")
+    with pytest.raises(sb.SpaceError, match="Sign in"):
+        b.ask(None, "Hello?")
+    assert not run_checks(ws).errors
+
+
+def test_proposals_on_the_hub(shared_toy, monkeypatch):
+    prs = [pr(3, "[S3] Derive X", "draft"), pr(2, "[S1] Plan proposal: X first"), pr(1, "[S1] Survey", "merged")]
+    b, fake = hub_backend(shared_toy, monkeypatch, prs, {2: {"plan.md": "# Plan\n\nX first.\n"}})
+    b.current()
+    assert [p["num"] for p in b.open_sessions()] == [3]
+    assert [p["num"] for p in b.proposal_prs()] == [2]  # drafted by S1, but not S1's own pull request
+    proposal = b.proposal("2")
+    assert proposal["description"] == "Description of #2."
+    assert proposal["files"] == [{"path": "plan.md", "text": "# Plan\n\nX first.\n"}]
+    with pytest.raises(sb.SpaceError, match="#3 is not a proposal"):
+        b.proposal(3)
+    assert b.hub_url("workspace", "discussions", "3") == f"{sb.HUB}/datasets/org/toy/discussions/3"
+
+    with pytest.raises(sb.SpaceError, match="Only a lead can close"):
+        b.close_proposal("alice", 2)
+    assert b.close_proposal("lead", 2) == "Closed pull request #2."
+    assert fake.closed == [(2, "Closed from the Space by lead.")] and fake.merged == []
 
 
 # ----- the explainer -----
@@ -523,23 +597,47 @@ def test_question_card_from_the_chat():
 # ----- the page -----
 
 
-def test_the_app_builds_without_a_server(toy, monkeypatch):
-    gr = pytest.importorskip("gradio")
+def test_the_pages_and_the_forms(toy, monkeypatch, times):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
     explainer_toy(toy)
+    toy.card("Q-S1-1", kind="question", statement="Which sign for $X$?")
+    toy.write("sessions/S1/report.md", {"session": "S1", "stop_reason": "goal reached", "dispatches": 3},
+              "## Found\n- CL-S1-1, from `derivations/D-S1-1.summary.md`\n\n## Needs a human decision\n- Q-S1-1\n")
     monkeypatch.setenv("PHYSICS_INTERN_LOCAL", str(toy.root))
     monkeypatch.setenv("PHYSICS_INTERN_LOCAL_USER", "lead")
     sys.modules.pop("app", None)
     import app
 
-    assert isinstance(app.demo, gr.Blocks)
     assert app.backend.local and app.backend.snap is None  # nothing is read before the first page view
-    # The Hub version (with the sign-in button) is not built here: outside a Space, Gradio replaces
-    # sign-in by the local Hugging Face login, which needs the network.
+    client = TestClient(app.app)
 
-    # The page-load event computes every view.
-    [load] = [f for f in app.demo.fns.values() if getattr(f.fn, "__name__", "") == "on_load"]
-    out = load.fn("All cards", "", "CL-S1-1", "P-2301.01234", 0, "problem.md", None)
-    texts = [v for v in out.values() if isinstance(v, str)]
-    assert any("Toy question." in t for t in texts)
-    assert any("**CL-S1-1** · working" in t for t in texts)
-    assert any("Signed in as **lead**, a lead." in t for t in texts)
+    status = client.get("/").text
+    assert "Toy question." in status and "Decisions asked by the" in status
+    assert '<a href="/card/Q-S1-1">Q-S1-1</a>' in status  # every existing card ID links to its card
+    assert '<a href="/file/derivations/D-S1-1.summary.md"><code>derivations/D-S1-1.summary.md</code></a>' in status
+    assert '<span class="math inline">X</span>' in client.get("/results").text  # equations are left to KaTeX
+    card = client.get("/card/CL-S1-1").text
+    assert '<a href="/file/derivations/D-S1-1.summary.md">D-S1-1</a> (derivation)' in card  # its evidence
+    assert "Promote to established" in card and "Write to the agents" in card
+    for url in ("/paper/P-2301.01234", "/session/S1", "/file/derivations/D-S1-1.tex", "/edit/plan.md"):
+        assert client.get(url).status_code == 200, url
+    assert client.get("/card/CL-S9-9").status_code == 404
+
+    csrf = re.search(r'name="csrf" value="([^"]+)"', card).group(1)
+    sent = client.post("/ask", data={"text": "Why $\\alpha^2$?", "about": "CL-S1-1", "csrf": csrf}, follow_redirects=False)
+    assert sent.status_code == 303 and sent.headers["location"] == "/card/CL-S1-1"
+    assert "Wrote <strong>" in client.get("/card/CL-S1-1").text  # the message after the write
+    assert Workspace(toy.root).cards["Q-lead-20261005T140000"].depends_on == ["CL-S1-1"]
+    forged = client.post("/ask", data={"text": "Lost?", "csrf": "forged"})
+    assert "This page was out of date" in forged.text and "Lost?" in forged.text  # refused, and the text is kept
+    answered = client.post("/card/Q-S1-1/answer", data={"text": "The plus sign.", "csrf": csrf}, follow_redirects=False)
+    assert answered.status_code == 303 and Workspace(toy.root).status("Q-S1-1") == "answered"
+
+    form = {"text": "# Plan\n\nTry $X$.", "base": "# Plan\n", "csrf": csrf}
+    preview = client.post("/edit/plan.md", data={**form, "action": "preview"})
+    assert "Preview (not saved)" in preview.text and (toy.root / "plan.md").read_text() == "# Plan\n"
+    saved = client.post("/edit/plan.md", data={**form, "action": "save"}, follow_redirects=False)
+    assert saved.status_code == 303 and (toy.root / "plan.md").read_text() == "# Plan\n\nTry $X$.\n"

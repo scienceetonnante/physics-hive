@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ name }}{% endblock %} · PhysicsIntern</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --text: #1d1f23; --muted: #646a73; --line: #e2e4e7; --soft: #f1f2f4;
+  --accent: #3451c6; --accent-text: #ffffff; --accent-soft: #eaeefc;
+  --attention: #fff7e3; --attention-line: #ecc96b;
+  --ok: #1d6b3a; --ok-bg: #e2f4e7; --warn: #8a5a00; --warn-bg: #fff1cf; --bad: #a12a2a; --bad-bg: #fbe5e5;
+  --info: #2f4fb8; --info-bg: #e8edff; --grey: #555b63; --grey-bg: #eceef0; --orange: #9a4b00; --orange-bg: #ffe7d1;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --panel: #1d2024; --text: #e6e7e9; --muted: #9aa0a8; --line: #30343a; --soft: #25292e;
+    --accent: #8aa2ff; --accent-text: #11131a; --accent-soft: #252c45;
+    --attention: #2c2617; --attention-line: #6b5520;
+    --ok: #7fd49b; --ok-bg: #1d3426; --warn: #f0c46a; --warn-bg: #3a2f14; --bad: #f19a9a; --bad-bg: #3d1f1f;
+    --info: #9fb4ff; --info-bg: #232d4d; --grey: #b3b8bf; --grey-bg: #2b2f35; --orange: #f5b27a; --orange-bg: #3b2817;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header.top { background: var(--panel); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 650; color: var(--text); }
+.brand span { color: var(--muted); font-weight: 500; }
+nav.tabs { display: flex; gap: 4px; }
+nav.tabs a { padding: 6px 12px; border-radius: 8px; color: var(--muted); font-weight: 550; }
+nav.tabs a.on { background: var(--accent-soft); color: var(--accent); }
+.who { margin-left: auto; color: var(--muted); font-size: .9rem; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 40px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } .grid.side-first > aside { order: -1; } }
+section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; }
+section.panel.attention { background: var(--attention); border-color: var(--attention-line); }
+h1 { font-size: 1.45rem; line-height: 1.3; margin: 0 0 12px; }
+h2.label { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 650; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+h2.label a { text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 550; }
+.prose h1, .prose h2, .prose h3, .prose h4 { font-size: 1.02rem; margin: 1.1em 0 .4em; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p, .prose ul, .prose ol { margin: .5em 0; }
+.prose li { margin: .2em 0; }
+.prose table { border-collapse: collapse; margin: .6em 0; display: block; overflow-x: auto; }
+.prose th, .prose td { border: 1px solid var(--line); padding: 4px 8px; }
+.prose blockquote { margin: .6em 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+code { font: .86em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+pre { font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 12px; border-radius: 8px; overflow: auto; max-height: 34rem; white-space: pre-wrap; word-break: break-word; }
+.math.block { overflow-x: auto; overflow-y: hidden; margin: .6em 0; }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.flash { background: var(--ok-bg); color: var(--ok); border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; }
+.error { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; }
+.badge { display: inline-block; font-size: .74rem; font-weight: 650; padding: 1px 8px; border-radius: 999px; background: var(--grey-bg); color: var(--grey); white-space: nowrap; vertical-align: 1px; }
+.b-working { background: var(--warn-bg); color: var(--warn); }
+.b-established { background: var(--ok-bg); color: var(--ok); }
+.b-refuted, .b-missing { background: var(--bad-bg); color: var(--bad); }
+.b-open { background: var(--info-bg); color: var(--info); }
+.b-recheck { background: var(--orange-bg); color: var(--orange); }
+ul.rows { list-style: none; margin: 0; padding: 0; }
+ul.rows > li { padding: 10px 0; border-top: 1px solid var(--line); }
+ul.rows > li:first-child { border-top: 0; padding-top: 2px; }
+.row-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.id { font: 600 .9rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.statement { margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { font-size: .84rem; color: var(--muted); margin-top: 3px; }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 550; margin: 4px 0; }
+details[open] > summary { margin-bottom: 8px; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.stat { background: var(--soft); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font-size: 1.25rem; line-height: 1.2; color: var(--text); }
+.stat:hover { text-decoration: none; background: var(--accent-soft); }
+.stat span { font-size: .8rem; color: var(--muted); }
+.item + .item { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--attention-line); }
+textarea { width: 100%; min-height: 7rem; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+textarea.big { min-height: 26rem; font: .9rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+button, .button { font: inherit; font-weight: 600; font-size: .92rem; border-radius: 8px; padding: 7px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; }
+button.quiet, .button.quiet { background: transparent; color: var(--accent); }
+.button:hover { text-decoration: none; }
+form + form { margin-top: 8px; }
+.claim-box { font-size: 1.12rem; line-height: 1.55; border-left: 4px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 14px; }
+.crumbs { font-size: .88rem; color: var(--muted); margin: 0 0 10px; }
+.warn-box { background: var(--orange-bg); color: var(--orange); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+.evidence + .evidence { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+dl.facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .9rem; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+footer.status { max-width: 1180px; margin: 0 auto; padding: 0 16px 30px; color: var(--muted); font-size: .82rem; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <a class="brand" href="/">PhysicsIntern <span>· {{ name }}</span></a>
+    <nav class="tabs">
+      <a href="/" class="{{ 'on' if here == '/' }}">Status</a>
+      <a href="/results" class="{{ 'on' if here.startswith(('/results', '/card/', '/paper/')) }}">Results</a>
+    </nav>
+    <div class="who">
+      <a id="full-page" href="{{ here }}" target="_blank" hidden>Open in a full page</a>
+      {% if user %}
+        <span>{{ user }}{% if lead %} · lead{% endif %}</span>
+        {% if not local %}<a href="{{ sign_out }}" target="_top">Sign out</a>{% endif %}
+      {% elif local %}
+        <span>Local folder, no user: set PHYSICS_INTERN_LOCAL_USER to write.</span>
+      {% else %}
+        <a class="button" href="{{ sign_in }}" target="_top">Sign in with Hugging Face</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  {% if flash %}<div class="flash">{{ flash | md_inline }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</div>
+<footer class="status">
+  {{ status | md_inline }} <a href="/refresh?back={{ here | urlencode }}">Load the latest version</a>
+</footer>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+  window.addEventListener("DOMContentLoaded", function () {
+    if (window.self !== window.top) document.getElementById("full-page").hidden = false;
+    document.querySelectorAll(".math").forEach(function (el) {
+      if (window.katex) katex.render(el.textContent, el, {displayMode: el.classList.contains("block"), throwOnError: false});
+    });
+  });
+</script>
+</body>
+</html>

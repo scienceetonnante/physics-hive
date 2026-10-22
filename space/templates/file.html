@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ path }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/">Status</a> › file</p>
+<section class="panel">
+  <h1 style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.1rem">{{ path }}</h1>
+  {% if header %}<details><summary>Header</summary><pre>{{ header }}</pre></details>{% endif %}
+  {% if body is not none %}<div class="prose">{{ body | md }}</div>{% else %}<pre>{{ text }}</pre>{% endif %}
+</section>
+{% endblock %}
