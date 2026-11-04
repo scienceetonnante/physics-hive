@@ -1,0 +1,68 @@
+\documentclass{article}
+\title{Walk methods for the Laplacian spectrum: what the literature allows}
+\author{Note on session S1, 22 October 2026}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Walk-on-spheres estimators of the Helmholtz equation $\Delta u+k^2u=0$ exist, but only below the first Dirichlet eigenvalue: for $k^2\ge\lambda_1$ every positive-weight Monte Carlo representation has an infinite mean. The first eigenvalue itself can be computed without a grid, from the decay of the survival probability of walkers absorbed at the wall. No paper computes several eigenvalues, or the response above $\lambda_1$, with a grid-free walk method. The best candidate we found estimates correlation matrices of the heat semigroup with walks and extracts the levels with the generalized eigenvalue method of lattice field theory. Nobody has tried it on this problem.
+\end{abstract}
+
+\section*{Setting}
+Walls are Dirichlet throughout; Neumann walls, as in a rigid acoustic cavity, come once the Dirichlet route works~\cite{sawhney2023}. We write $-\Delta\phi_n=\lambda_n\phi_n$ with $\phi_n=0$ on the wall and $\int\phi_n^2=1$, and use walkers $X_t=x+\sqrt2\,W_t$, whose generator is $\Delta$. Papers differ by a factor 2 in time, so any use of the generator $\tfrac12\Delta$ is stated.
+
+\section{Helmholtz by walks stops at the first eigenvalue}
+\label{sec:barrier}
+With exit time $\tau$ from the domain, the Feynman--Kac formula for $\Delta u+k^2u=0$ with boundary data $g$ reads
+\begin{equation}
+u(x)=\mathbb E_x\!\left[e^{k^2\tau}\,g(X_\tau)\right].
+\label{eq:fk}
+\end{equation}
+Since $\mathbb P_x(\tau>t)\sim c\,e^{-\lambda_1 t}$, the mean is finite only for $k^2<\lambda_1$. This is the gauge condition of Chung and Zhao, used in~\cite{yang2015,rasila2026}. The exit-time-weighted estimator has a finite variance only for $2k^2<\lambda_1$~\cite{rasila2026}. Walk on spheres applies \eqref{eq:fk} with one weight per ball of radius $R$,
+\begin{equation}
+w_{3\mathrm D}=\frac{kR}{\sin kR},\qquad w_{2\mathrm D}=\frac{1}{J_0(kR)}.
+\label{eq:weights}
+\end{equation}
+These closed forms were derived during the survey and do not come from a paper; nobody has checked them yet.\footnote{The 3D form is the continuation of $\sqrt{s}\,R/\sinh(\sqrt{s}\,R)$ to $s=-k^2$. The series given in~\cite{yang2015} for this weight does not converge in 3D.}
+
+Two other constructions stop at the same barrier: a Neumann series of screened problems~\cite{bernal2023}, and the parametric differentiation of Mikhailov and Makarov~\cite{mikhailov1998}, which gives $\lambda_1$ and nothing above it.
+
+\section{The first eigenvalue without a grid}
+The survival probability expands on the Dirichlet eigenfunctions,
+\begin{equation}
+\mathbb P_x(\tau>t)=\sum_n e^{-\lambda_n t}\,\phi_n(x)\int_\Omega\phi_n ,
+\end{equation}
+so its late-time decay rate is $\lambda_1$. Lejay and Maire obtain $\lambda_1$ to about 0.4\% with $10^6$ walks~\cite{lejay2007}. Fleming--Viot populations, in which absorbed walkers are reborn on survivors, avoid the exponential loss of walkers and also give $\phi_1$~\cite{burdzy1996,villemonais2011}.
+
+\section{Several eigenvalues: a candidate route}
+\label{sec:route}
+Choose $N$ smooth functions $f_i$ that vanish on the wall, and estimate with time-budget walks~\cite{zhou2026} the matrix
+\begin{equation}
+C_{ij}(t)=\langle f_i,e^{t\Delta}f_j\rangle=\sum_n e^{-\lambda_n t}\,\langle f_i,\phi_n\rangle\langle f_j,\phi_n\rangle .
+\label{eq:corr}
+\end{equation}
+The generalized eigenvalue problem $C(t)\,v=\rho\,C(t_0)\,v$ then gives $\lambda_n\approx-\log\rho_n/(t-t_0)$. In lattice field theory the error on level $n$ decays like $e^{-(\lambda_{N+1}-\lambda_n)t}$~\cite{blossier2009}; the method goes back to Ceperley and Bernu~\cite{ceperley1988}. It avoids both the barrier of Section~\ref{sec:barrier} and signed walkers.
+
+The route has two risks. The relative noise on level $n$ grows roughly like $e^{(\lambda_n-\lambda_1/2)t}/\sqrt M$ for $M$ walks; this is an estimate made during the session, not yet derived. And the functions $f_i$ must overlap the wanted modes while being computable from the SDF alone. A variant replaces $e^{t\Delta}$ by powers of the Green's operator, which plain walk on spheres can estimate.
+
+\section{Response to a point source}
+The response at $x$ to a source at $x_0$ is
+\begin{equation}
+G_k(x,x_0)=\sum_n\frac{\phi_n(x)\,\phi_n(x_0)}{\lambda_n-k^2}.
+\end{equation}
+Plain walk on spheres cannot evaluate it above $\lambda_1$, but once the levels $\lambda_n$ and the values $\phi_n(x_0)$ are known, it can be rebuilt for $k^2$ sufficiently below the first level not resolved. Modes with a node at $x_0$ are invisible from $x_0$. At the driving point itself $G_k(x_0,x_0)$ is infinite (logarithmic in 2D, like $1/r$ in 3D), so ``the response at $x_0$'' has to mean the weights $\phi_n(x_0)^2$ or the regular part $G_k-G_0$. This note uses the first reading.
+
+\section{What does not work}
+\begin{itemize}
+\item Power iteration with signed walkers reaches $\lambda_2$, but cancellations between signs make it a sign problem, as in fermionic Monte Carlo~\cite{booth2008}.
+\item Deflating $\phi_1$ did not give $\lambda_2$~\cite{lejay2008}.
+\item Branching walks do not reach $k^2\ge\lambda_1$: their mean weight is the same infinite expectation~\cite{lejay2008}.
+\item The Brownian representation of the wave equation excludes resonant solutions~\cite{chatterjee2013}.
+\item Fitting exponentials to $p_t(x_0,x_0)$ alone carries too little information to separate several levels~\cite{ceperley1988}.
+\end{itemize}
+
+\section{Open question and next steps}
+Whether the method must use only SDF queries and walks is for the lead to decide. Walk on spheres inside a global eigensolver on a point set would make several eigenvalues fairly direct~\cite{shardlow2018,cimpean2026}; walks alone make it an open problem, which is what this note assumes. I suggest three next steps: reference spectra on a rectangle, the unit disk and one asymmetric SDF domain; a test of the extraction of Section~\ref{sec:route} on exact matrices with synthetic walk noise; and a check of the weights~\eqref{eq:weights} by sampling exit times.
+
+\bibliography{references}
+\end{document}

@@ -28,7 +28,7 @@ This document is for people who work on the PhysicsIntern method itself: the pro
 
 ## What this repo is
 
-This repo holds the **method**: the prompts that turn an AI coding harness (Claude Code, Codex CLI, OpenCode, Pi) into a research coordinator with fresh-context sub-agents; the renderer that writes them in each harness's format; the **workspace scripts** that do the deterministic work (computing views, validating, opening and closing sessions, Hub operations, trace export); the **Space** app for browser-only reviewers; the plugin bootstraps; and the audit skill used to improve all of this from real runs.
+This repo holds the **method**: the prompts that turn an AI coding harness (Claude Code, Codex CLI, OpenCode, Pi) into a research coordinator with fresh-context sub-agents; the renderer that writes them in each harness's format; the **workspace scripts** that do the deterministic work (computing views, validating, opening and closing sessions, what a session receives from the researcher, Hub operations, trace export, PDFs); the **Space** app where the researcher reads and answers in a browser; the plugin bootstraps; and the audit skill used to improve all of this from real runs.
 
 The harness provides tool-use loops, sub-agent dispatch, shell, web search and slash commands; we do not rebuild those. Research content (cards, derivations, sessions) is produced inside workspaces, never here.
 
@@ -44,22 +44,24 @@ physics-intern/
 │   ├── render.py                 renderer (stdlib only)
 │   ├── workspace-doc.md          body of AGENTS.md
 │   ├── agents/                   8 sub-agent roles (surveyor, planner, deriver, computer,
-│   │                             reviewer, critic, finalizer, writer)
-│   ├── skills/                   10 skill workflows (session-run, survey, research-plan, derive,
-│   │                             compute, review, critique, finalize, write-up, autoresearch)
-│   └── templates/                problem.md, plan.md, conventions.md, seeds.md, gitignore
+│   │                             reviewer, critic, finalizer, writer of the note)
+│   ├── skills/                   9 skill workflows (session-run, survey, research-plan, derive,
+│   │                             compute, review, critique, finalize, autoresearch)
+│   └── templates/                project.md, conventions.md, draft.tex, seeds.md, gitignore (written by
+│                                 init); note.tex and debrief.md (the shapes sessions follow)
 ├── hosts/<host>/                 harness glue: host.toml, section.md, extras/ (settings files)
 ├── scripts/                      workspace scripts (uv inline dependencies)
 │   ├── cards.py                  library: load a workspace, compute status, evidence, re-check flags
-│   ├── regen.py, check.py        generated views; validation
-│   ├── session.py                start, status, next, brief, end, abort
-│   ├── promote.py, propose.py    promotion records; proposal pull requests for the lead's files
+│   ├── human.py                  library: project.md, debriefs, the draft, ratings; what a session receives
+│   ├── regen.py, check.py        INDEX.md and references.bib; validation
+│   ├── session.py                start, status, next, answer, tick, brief, end, abort
+│   ├── pdf.py                    compile the draft or a note to PDF
 │   ├── hub.py, hubgit.py         Hub operations; git with the Hub token
 │   ├── export_trace.py           harness records → trace.jsonl
 │   ├── literature.py             arXiv / INSPIRE / Semantic Scholar CLI and MCP server
 │   ├── init.py                   create, join, refresh, upgrade
 │   └── common.py                 git helpers, the active-session file
-├── space/                        the Space app (FastAPI pages), deployed by init --mode create
+├── space/                        the Space app (FastAPI pages, LaTeX converter), deployed by init --mode create
 ├── bench/reviewer/               reviewer benchmark: cases with planted errors, runner
 ├── plugins/<host>/               authored files of the plugin bootstraps
 ├── build-*plugin.sh              assemble the publishable plugin repos
@@ -77,9 +79,9 @@ Four layers, each with one job:
 - **`commons/`** carries the substance of the method, written once: the workspace doc (what the coordinator does), the role prompts, the skill workflows, the skeletons of a new workspace. Skill bodies contain no harness-specific values.
 - **`hosts/<host>/`** carries the glue for one harness: where its files go, the shape of its agent frontmatter, its tool names, its section of `AGENTS.md` (dispatch syntax, tool discipline), and its settings files.
 - **`commons/render.py`** writes the harness files of a workspace for one or several harnesses. It is the only code that knows both sides.
-- **`scripts/`** does the deterministic work inside a workspace, so that models are left only with judgment: `regen` and `check`, the session lifecycle, Hub operations, trace export, the literature tools.
+- **`scripts/`** does the deterministic work inside a workspace, so that models are left only with judgment: `regen` and `check`, the session lifecycle and what a session receives from the researcher, Hub operations, trace export, PDFs, the literature tools.
 
-**The method copy.** `scripts/init.py` copies `commons/`, `hosts/`, `scripts/`, `space/` and `VERSION` into a committed `.physics-intern/` folder in every workspace, and records the version in `project.toml`. Harness files are rendered from that copy (`.physics-intern/commons/render.py`), the scripts run from it (`uv run .physics-intern/scripts/…`), and the Space imports `cards.py` from it. So every operator and the Space use exactly the same prompts and scripts, the prompts that produced a result sit in the git history next to it, and an upgrade is one replacement of the folder (`init.py --upgrade`, a pull request in shared mode). `check` refuses session changes that touch it.
+**The method copy.** `scripts/init.py` copies `commons/`, `hosts/`, `scripts/`, `space/` and `VERSION` into a committed `.physics-intern/` folder in every workspace, and records the version in `project.toml`. Harness files are rendered from that copy (`.physics-intern/commons/render.py`), the scripts run from it (`uv run .physics-intern/scripts/…`), and the Space imports the scripts from it. So every operator and the Space use exactly the same prompts and scripts, the prompts that produced a result sit in the git history next to it, and an upgrade is one replacement of the folder (`init.py --upgrade`, a pull request in shared mode). `check` refuses session changes that touch it.
 
 
 ## The render pipeline
@@ -97,7 +99,7 @@ For each selected host, in a fixed order (claude, codex, opencode, pi):
 
 Then, once:
 
-5. **Render `AGENTS.md`**: a stamp line with the method version (`<!-- Rendered from the PhysicsIntern method 0.3.0 … -->`), then `commons/workspace-doc.md` with `{{harness_names}}` and `{{harness_sections}}` filled from each selected host's `section.md`. When Claude Code is selected, `CLAUDE.md` is the single line `@AGENTS.md`.
+5. **Render `AGENTS.md`**: a stamp line with the method version (`<!-- Rendered from the PhysicsIntern method 0.4.0 … -->`), then `commons/workspace-doc.md` with `{{harness_names}}` and `{{harness_sections}}` filled from each selected host's `section.md`. When Claude Code is selected, `CLAUDE.md` is the single line `@AGENTS.md`.
 
 The renderer is stdlib-only (Python 3.11+, `tomllib`). Placeholders are `{{key}}`; an unknown placeholder raises. Skill bodies are substituted with an empty context, so a harness-specific placeholder in a skill fails the render.
 
@@ -106,31 +108,40 @@ The renderer is stdlib-only (Python 3.11+, `tomllib`). Placeholders are `{{key}}
 
 ## The workspace format
 
-The authoritative description, as agents see it, is `commons/workspace-doc.md`. The computations are in `scripts/cards.py`. In summary:
+The authoritative description, as agents see it, is `commons/workspace-doc.md`. The computations are in `scripts/cards.py` and `scripts/human.py`. The design is `design/DESIGN-shared-spaces.md`. In summary, a workspace has two layers.
 
-**Cards** (`claims/<id>.md`): YAML header `id`, `kind` (`claim`, `question`, `dead-end`), `statement`, `depends_on`, `produced_by` (`{kind: agent, model, operator}` or `{kind: human, user}`), `session`, `supersedes` (claims), `refutes` (dead ends), `answers` (claims and dead ends); free prose body. A card is edited only during the session that wrote it (`check` compares with the session's base, so a file added since the base may change) and never afterwards. Agents write claims for results obtained by a derivation or a computation, or to answer a question, and dead ends; question cards are written by people (`produced_by.kind: human`), and `check` refuses one added by an agent in a session. A statement is one sentence; `check` warns above 300 characters.
+**The human view** is a few files the researcher reads and writes:
 
-**Artefacts**: `derivations/D-S<n>-<k>.summary.md` + `.tex`; `computations/C-S<n>-<k>.md` + `.py` + `.out` (+ text data files). The summary header holds `id`, `kind` and `supports` (the claims it supports), and no authorship, for blind review.
+- `project.md`: `# <the question in one line>`, then `## Goal`, `## Approach`, `## Next steps` (a numbered list; a session takes the first), `## Done`, `## Definition of done`, `## The question in full`. `parse_project` reads it; `session.py start` refuses while the title or the goal is missing.
+- `conventions.md`: free text; agents may edit it.
+- `draft.tex`: the draft paper. A `result` or `conjecture` environment names its claim card with `\card{CL-…}` (several cards may be named, separated by commas). `parse_draft` reads the environments, ignoring LaTeX comments.
+- `sessions/S<n>/note.tex`: the note, written by the writer role in the LaTeX subset of the design (section 7).
+- `sessions/S<n>/debrief.md`: plain Markdown with fixed markers: a summary, `#### Changed by this session` (filled by `session.py end`), questions `**Question N.** …` each followed by a blockquote `> **Answer:** …`, tick lines `- [ ] …` / `- [x] …`, and `#### Anything else for the next session` with `> **Note:** …`. `parse_debrief` reads it; `set_answer`, `set_ticks`, `set_note` and `set_changed` write back into it, keeping the rest; `debrief_problems` lists what is malformed.
+- `literature/overview.md` (written by surveys, `## <Topic>` headings), `literature/seeds.md` and `literature/ratings.yaml` (paper card ID → high, medium, low, not relevant; written only by the researcher, through the Space).
 
-**Reviews**: `derivations/<target>_R-S<n>-<k>.md` (or in `computations/`), header `id`, `kind: review`, `target`, `supports`, `claim` (the statement reviewed), `verdict`, `by: {kind: agent}`, `session`, `date`. **Human verifications** are reviews in `feedback/` with `id: R-<user>-<timestamp>` and `by: {kind: human, user}`, with or without an artefact `target`.
+**The record** is everything else:
 
-**Feedback** (`feedback/`): reactions (`kind: reaction`, `target`, `value`, `by`, `date`, the comment as body; the latest per person and target counts), human reviews, and promotion records (`kind: promotion`, `target`, `by`, `date`, `session`, the reason as body).
+- **Cards** (`claims/<id>.md`): YAML header `id`, `kind` (`claim` or `dead-end`), `statement`, `depends_on`, `produced_by` (`{kind: agent, model, operator}` or `{kind: human, user}`), `session`, `supersedes` (claims), `refutes` (dead ends); free prose body. There are no question cards: questions reach agents through debriefs. A card is edited only during the session that wrote it (`check` compares with the session's base) and never afterwards. A statement is one sentence; `check` warns above 300 characters.
+- **Artefacts**: `derivations/D-S<n>-<k>.summary.md` + `.tex`; `computations/C-S<n>-<k>.md` + `.py` + `.out` (+ text data files). The summary header holds `id`, `kind` and `supports`, and no authorship, for blind review.
+- **Reviews**: `derivations/<target>_R-S<n>-<k>.md` (or in `computations/`), header `id`, `kind: review`, `target`, `supports`, `claim`, `verdict`, `by`, `session`, `date`. `by` is `{kind: agent}` for a blind review, or `{kind: human, user}` for a verification by the researcher, which a session writes when a debrief reports it.
+- **Paper cards** (`literature/P-<arXiv id>.md`) with `why`, `topic` and `rating` (the agent's estimate) besides the bibliographic fields; **critiques** (`critiques/CR-S<n>-<k>.md`); and **session folders**: `received.md` (front matter `session`, `started`, `base`, `previous`, and `debriefs`: per debrief read, the answers, ticked lines and note received; body: the text `session.py start` printed), `brief.md` (`goal`, `budget`, `starts_from`), `log.md` (ending with `## Handoff`), and `plan.md` when `/research-plan` ran.
 
-**Paper cards** (`literature/P-<arXiv id>.md`), survey summaries (`literature/survey-S<n>.md`), critiques (`critiques/CR-S<n>-<k>.md`), and session folders (`sessions/S<n>/brief.md` with `goal`, `budget`, `merge`, `starts_from`; `log.md`; `report.md` with `stop_reason`, `dispatches` and fixed sections).
-
-**IDs** embed the session (`CL-S12-2`, `D-S12-3`, `D-S3-2_R-S12-1`); items written outside a session carry the author and a UTC timestamp (`CL-alice-20261005T141233`); paper cards use the arXiv identifier.
+**IDs** embed the session (`CL-S12-2`, `D-S12-3`, `D-S3-2_R-S12-1`); paper cards use the arXiv identifier.
 
 **What is computed** (never stored):
 
 | | Rule |
 |---|---|
-| Claim status | `refuted` if a dead end refutes it; else `revised` if a claim supersedes it; else `established` if a valid promotion record names it (in shared mode, by a lead); else `working`. |
-| Question status | `answered` if a claim or dead end names it in `answers`; else `open`. |
-| Evidence of a claim | Every artefact whose summary names it in `supports`, or that a review attaches by naming it in `supports`; with the reviews of that artefact that concern the claim (they name it, or name nothing while the artefact names it). Plus human verifications without an artefact target. |
+| Claim status | `refuted` if a dead end refutes it; else `revised` if a claim supersedes it; else `established` if a `result` environment of `draft.tex` names it; else `working`. |
+| Evidence of a claim | Every artefact whose summary names it in `supports`, or that a review attaches by naming it in `supports`; with the reviews of that artefact that concern the claim (they name it, or name nothing while the artefact names it). A human verification is one of these reviews. |
 | Needs re-check | The refuted or revised cards in the transitive closure of `depends_on`. |
-| Promotion rule (`promotion_problems`) | Shared mode: the author is a human in `leads`. Always: the card is a claim, neither refuted nor revised, with at least one confirmed piece of evidence (an artefact with a confirming review for the claim, or a confirming human verification). |
+| Result rule (`result_problems`) | A result of the draft names a claim that is neither refuted nor revised, with at least one supporting artefact that has a confirming review. |
+| Draft flags | Cards named in the draft that are refuted, revised, missing, need a re-check, or (for results) have no confirmed evidence. |
+| Debrief state | *Open* until a session's `received.md` lists it; then *closed*, "read by S<m>". |
+| What a session receives (`human.received`) | Per debrief: everything, if no session has read it; otherwise the answers, ticks and note that differ from what earlier sessions recorded as received. Plus the researcher's edits of `project.md`, `conventions.md` and `draft.tex` since the previous session started (commits whose subject does not start with `[S<n>]`, and uncommitted changes), changed ratings, and the first next step. |
+| Changed by this session (`human.changed_by_session`) | Per human file, the line counts and subjects of the session's own `[S<n>]` commits since its base (`[S<n>] apply the lines ticked in the S<m> debrief` reads "as you ticked in S<m>"), and the diff of `conventions.md`. |
 
-**Generated views** (git-ignored): `INDEX.md` (one line per item, grouped by status) and `research_log.md` (Open Questions, Working Claims, Established Results, Dead Ends, Answered Questions, then the session reports' main sections). Both are deterministic: regenerating gives identical files.
+**Generated files** (git-ignored): `INDEX.md` (claims grouped by status with their evidence and place in the draft, dead ends, the draft's results and flags, artefacts, papers with their BibTeX key and ratings, sessions with their debrief state) and `references.bib` (one entry per paper card; keys `<first author's family name><year>`, and when two papers share a key the one recorded first keeps it and the others get `b`, `c`, …; each entry carries `paperid`). Both are deterministic.
 
 
 ## The workspace scripts
@@ -139,19 +150,23 @@ All run with `uv run .physics-intern/scripts/<script>` from a workspace, with PE
 
 | Script | Role |
 |---|---|
-| `cards.py` | Library, no side effects: `Workspace` (loading, `status`, `evidence`, `needs_recheck`, `current_reactions`), `promotion_problems`, front-matter helpers. Imported by every other script and by the Space. |
-| `regen.py` | Writes `INDEX.md` and `research_log.md`. |
-| `check.py` | Validates headers, ID formats, references and their kinds, cycles, artefact authorship, reviews, feedback. With a base commit (default: the active session's), also: no file in `claims/`, `feedback/`, `derivations/`, `computations/` or paper cards edited or deleted; `.physics-intern/` untouched; in shared mode the lead's files and `project.toml` untouched by a session; other sessions' folders untouched; new IDs belong to the session; new promotion records follow the rule (and are refused inside shared sessions). |
-| `session.py` | `start`, `status`, `next <prefix>` / `next review <artefact>` (next free ID, counting IDs already mentioned in the session's briefs and log), `brief`, `end [--no-merge]`, `abort`. State in `.active-session` (JSON, git-ignored). |
-| `promote.py` | Records a promotion. Local: `--by-agent` for the coordinator. Shared: run by a lead, checked against the latest `main` in a temporary worktree, committed to `main` through the API. |
-| `propose.py` | Opens a pull request that changes one lead's file (`create_commit(create_pr=True)`). |
-| `hub.py` | Create and join, the session pull request lifecycle, sources sync, promotions, proposals, upgrades. |
-| `hubgit.py` | Runs a git command with the Hub token passed in a header (for leads' own pushes). |
-| `export_trace.py` | Collects the harness's record of a session: OpenCode's SQLite store (sessions, messages, parts in the window), Claude Code's JSONL files including sub-agent transcripts; Codex rollouts and Pi sessions as raw files, best effort. Returns the models found. |
+| `cards.py` | Library, no side effects: `Workspace` (loading, `status`, `in_draft`, `evidence`, `needs_recheck`, `draft_flags`), `result_problems`, front-matter helpers. Imported by every other script and by the Space. |
+| `human.py` | Library: the parsers and writers of the human files, `History` (git access to a checkout), `received` and `format_received`, `received_record`, `previous_start`, `read_by`, `handoff`, `changed_by_session`. Stdlib and PyYAML only. |
+| `regen.py` | Writes `INDEX.md` and `references.bib`. |
+| `check.py` | Validates headers, ID formats, references and their kinds, cycles, artefact authorship, reviews, paper cards and ratings, the draft (`draft_problems`), the `\card` names of notes, and debriefs. With a base commit (default: the active session's): no record file edited or deleted; `.physics-intern/` and `project.toml` untouched; and for the paths the session changed itself (its `[S<n>]` commits and uncommitted changes, `common.session_paths`), no other session's folder, no seeds or ratings, new IDs that belong to the session. Problems in the draft are errors only when the session changed the draft and named the card at fault itself; problems in a debrief are errors for the session's own debrief. |
+| `session.py` | `start`, `status`, `next <prefix>` / `next review <artefact>`, `answer <S> <n|note> <text>`, `tick <S> <k>…`, `brief`, `end [--no-merge]`, `abort`. State in `.active-session` (JSON, git-ignored). |
+| `pdf.py` | `build_pdf(tex, bib, name)` compiles in a temporary folder with `latexmk` (dropping `\bibliography` when nothing is cited, since BibTeX fails then); the CLI writes `draft.pdf` or `sessions/S<n>/note.pdf`. |
+| `hub.py` | Create and join, the session pull request lifecycle, other open sessions, sources sync, upgrades. |
+| `hubgit.py` | Runs a git command with the Hub token passed in a header (for the researcher's own pushes). |
+| `export_trace.py` | Collects the harness's record of a session: OpenCode's SQLite store, Claude Code's JSONL files including sub-agent transcripts; Codex rollouts and Pi sessions as raw files, best effort. Returns the models found. |
 | `literature.py` | Literature tools; see below. |
 | `init.py` | Create, join, refresh, upgrade; see below. |
 
-**`session.py start` waiting list.** Open questions; cards that need a re-check; human cards, reactions, verifications and promotions added since the last commit that added a session report; the `Proposed plan changes` of reports added since `plan.md` last changed; working claims proposed for promotion; and in shared mode, other open session pull requests (with the `starts_from` of their brief) and pull request comments since the last report. It also refuses to start when the harness files were rendered from another method version than the one on `main` (it re-renders and asks for a harness restart), when the checkout is dirty, or when a session is already active.
+**`session.py start`.** Refuses when a session is active, when `project.md` has no title or goal, or when the checkout has uncommitted changes; in local mode it first commits the researcher's uncommitted edits of their own files (`project.md`, `conventions.md`, `draft.tex`, seeds, ratings, debriefs) as "Researcher's edits", and refuses only for other files. It also refuses when the harness files were rendered from another method version (it re-renders and asks for a restart). It then opens the session (shared: the pull request and the branch), computes what the session receives (from the previous session's `received.md` base), writes `sessions/S<n>/received.md`, and prints it, followed by the *Handoff* of each session whose debrief it reads in full, the cards that need a re-check, the draft's flags, other open sessions (shared), and the questions without an answer.
+
+**`session.py answer` and `tick`** write what the researcher said in the terminal into a debrief, commit it as theirs (a message without the session prefix, so that `check` does not count it as the session's), and add it to the active session's `received.md`, so that no later session receives it again.
+
+**`session.py end`** needs `note.tex` and `debrief.md`. It writes *Changed by this session* into the debrief (a commit `[S<n>] debrief: changed by this session`), runs `check`, and in shared mode does the Hub steps below (after rebasing, so the section is computed against the latest `main`).
 
 
 ## Sessions and the Hub
@@ -161,8 +176,8 @@ A shared space is five private repositories in one organisation: the workspace (
 **Session lifecycle in shared mode** (`scripts/hub.py`):
 
 1. `start`: fetch `main`; refuse if local `main` has unpushed commits; `create_pull_request` (a draft; its number is the session number); rename it `[S<n>] (brief pending) by <user>`; `git checkout -B session/S<n> origin/main`; download paper sources.
-2. `brief`: commit the brief; push to `refs/pr/<n>`; rename the pull request `[S<n>] <goal>`; replace its description with the brief.
-3. `end`: rebase on `origin/main` if it moved (stop on conflict, branch unchanged); `check` against `origin/main`; force-push to `refs/pr/<n>`; upload sources; export the trace and upload `S<n>/trace.jsonl` and `S<n>/meta.json`; mark the draft ready; merge (one retry after a fresh rebase); record the merge commit in `meta.json`; reset the checkout to the new `main`.
+2. `brief`: commit the brief and `received.md`; push to `refs/pr/<n>`; rename the pull request `[S<n>] <goal>`; replace its description with the brief.
+3. `end`: rebase on `origin/main` if it moved (stop on conflict, branch unchanged); write *Changed by this session* and run `check` against `origin/main`; force-push to `refs/pr/<n>`; upload sources; export the trace and upload `S<n>/trace.jsonl` and `S<n>/meta.json`; mark the draft ready; merge (one retry after a fresh rebase); record the merge commit in `meta.json`; reset the checkout to the new `main`.
 
 **Hub behaviours this relies on**, verified on scratch repositories before writing `session.py end`: a pull request is the ref `refs/pr/<n>` and accepts pushes and force-pushes of a rebased branch; a draft cannot be merged until `change_discussion_status(..., "open")`; **merging squashes** the pull request into one commit titled `<title> (#<n>)`, so session commits do not keep their SHAs on `main` (they stay reachable through `refs/pr/<n>`, and `meta.json` lists them with the merge commit); `create_commit(create_pr=True)` opens a ready pull request; small binary files push fine over plain git, and new repositories come with a `.gitattributes` routing many extensions to LFS, which `create` removes so that workspaces stay plain git.
 
@@ -175,9 +190,9 @@ A shared space is five private repositories in one organisation: the workspace (
 
 `scripts/init.py` (launched by `init-physics-intern.sh` and by the plugins) asks, each with a default and a flag: the mode (`--mode local|create|join`), the harnesses (`--harness`, a tick list with installed ones ticked), the folder (`--dir`), and for create the organisation and name (`--org`, `--name`), for join the repository (`--repo`). `--yes` never asks; `--list-harnesses` and `--list-orgs` print choices for the plugins.
 
-- **local / create**: refuse a non-empty folder (except `problem.md`) and a workspace in the earlier format; copy the method; write `project.toml`, the skeletons, the card folders and the committed `.gitignore`; render; first commit; regen. **create** then creates the repositories, fetches the Hub's initial commit and builds on it (dropping its `.gitattributes`), pushes, and deploys the Space (`space/` from the method copy, with the variables `PHYSICS_INTERN_WORKSPACE` and `CHAT_DEBUG`, and the secret `HF_TOKEN` set to the creator's token unless `--space-token none`). A personal namespace is accepted with a warning, for trying shared mode alone.
+- **local / create**: refuse a non-empty folder (except `project.md`) and a workspace in the earlier format; copy the method; write `project.toml`, the skeletons (`project.md`, `conventions.md`, `draft.tex`, `literature/seeds.md`), the record folders and the committed `.gitignore`; render; first commit; regen. **create** then creates the repositories, fetches the Hub's initial commit and builds on it (dropping its `.gitattributes`), pushes, and deploys the Space (`space/` from the method copy, with the variables `PHYSICS_INTERN_WORKSPACE` and `CHAT_DEBUG`, and the secret `HF_TOKEN` set to the creator's token unless `--space-token none`). A personal namespace is accepted with a warning, for trying shared mode alone.
 - **join**: clone into an empty folder, then render the selected harnesses from the clone's method copy.
-- **inside a workspace**: render the selected harnesses plus those already rendered (to add one or refresh); `--upgrade` replaces the method copy with the running script's copy (a commit in local mode, a pull request for a lead in shared mode).
+- **inside a workspace**: render the selected harnesses plus those already rendered (to add one or refresh); `--upgrade` replaces the method copy with the running script's copy (a commit in local mode, a pull request in shared mode). It refuses a workspace of the 0.3 format (`problem.md` without `project.md`), which this method does not convert.
 
 
 ## Authoring agents
@@ -195,7 +210,7 @@ output_pattern: derivations/D-S<n>-<k>.summary.md
 
 `capabilities` come from `{file_read, file_write, file_edit, shell, glob, grep, web_search, web_fetch, literature}` and are mapped per host. `literature` lists the literature MCP server's tools in Claude Code's allowlist (an explicit `tools:` list hides MCP tools otherwise) and maps to the shell for Pi, which has no MCP. `output_pattern` is emitted as Pi's `output:`; `false` for the reviewer, whose path is given at dispatch.
 
-Every role body follows the same contract: what you receive and read (and what you must not read); your artefact(s), with their header and sections; behaviour; the **return block** `## Summary` / `## Result` / `## Flags` (with `- (none)` when empty), identical at the top of the artefact and in the final reply (the planner and the writer return it in the reply only); constraints (write only your files; never cards, the session folder or the lead's files). Artefact headers carry no authorship.
+Every role body follows the same contract: what you receive and read (and what you must not read); your artefact(s), with their header and sections; behaviour; the **return block** `## Summary` / `## Result` / `## Flags` (with `- (none)` when empty), identical at the top of the artefact and in the final reply (the surveyor, the planner and the writer, whose files the researcher or the coordinator reads as they are, return it in the reply only); constraints (write only your files; never cards, the session folder or the researcher's files). Artefact headers carry no authorship.
 
 Codex roles are TOML, so a body must not contain `"""`.
 
@@ -232,18 +247,20 @@ The body is the coordinator's workflow for that skill: get the IDs (`session.py 
 
 ## The Space
 
-`space/` is a small FastAPI app that serves plain HTML pages, deployed as a private Docker Space by `init --mode create` (`hub.deploy_space`): `backend.py` (workspace access, the data of every page, every write; no web code), `app.py` (the routes, Markdown rendering and the forms), `templates/` (Jinja pages; `base.html` holds the style), `Dockerfile`, `README.md` (Space metadata: Docker SDK, port 7860, OAuth) and `requirements.txt`. `chat.py` (the explainer) is kept and tested but no page offers it in this version. `tests/test_space_backend.py` covers the backend and the pages in local mode.
+`space/` is a small FastAPI app that serves plain HTML pages, deployed as a private Docker Space by `init --mode create` (`hub.deploy_space`): `backend.py` (workspace access, the data of every page, every write; no web code), `app.py` (the routes, Markdown rendering and the forms), `latex.py` (a converter from the LaTeX subset of notes and the draft to HTML), `latex.css`, `templates/` (Jinja pages; `base.html` holds the style), `Dockerfile` (Python, git, `latexmk` and a small TeX Live), `README.md` (Space metadata: Docker SDK, port 7860, OAuth) and `requirements.txt`. `tests/test_space_backend.py` covers the backend, the Hub store and the pages.
 
-- **Pages.** `/` (Status: the question, the plan, the conventions, the latest report, *Needs your attention*, counts, running sessions, recent changes), `/results` (claims, open questions, dead ends, papers, seed papers), and one page per object: `/card/<id>`, `/paper/<id>`, `/session/<id>`, `/proposal/<number>` (the files the pull request changes, as they are in it, found by comparing its file tree with the commit of `main` it starts from, because the Hub does not always return a diff), `/file/<path>` and `/edit/<lead file>`. Markdown is rendered on the server with `markdown-it-py` (raw HTML shown as text), equations with KaTeX in the browser. Every existing card, paper, artefact, critique and session ID, every `#<n>` that is an open proposal, and every workspace path in the text becomes a link.
-- **Data.** It downloads `main` at its current commit with the `HF_TOKEN` secret (one cache folder per commit), on a page view when older than two minutes, on *Load the latest version* and after each write, and imports `cards`, `regen`, `check` and `promote` from the snapshot's `.physics-intern/scripts/` (restoring `sys.path` and `sys.modules` afterwards), so that status, evidence and the promotion rule are computed by the workspace's own method version.
-- **Identity.** Hugging Face sign-in (`attach_huggingface_oauth`, `parse_huggingface_oauth`); the sign-in link opens the app outside the huggingface.co frame, because browsers block its cookie inside a frame. The signed-in user is recorded inside every file the Space writes. Leads are `[people] leads` of `project.toml`. Forms carry a token tied to the session, so that another site cannot post them.
-- **Writes** are new files with unique names (user and timestamp), committed to `main` with the Space token, after the workspace's own `check` has accepted them on a copy: *Write to the agents* (a question card, with the card at hand in `depends_on`; a paper is named in the body) and *Answer* (a claim card with `answers`), each from one text box whose first paragraph is the statement; and, for leads, promotions (after `promotion_problems`, committed with `parent_commit` set to the commit they were checked on), edits of the lead's files (a commit to `main`, refused if the file changed since the editor loaded it), and merging or closing proposals. Session pull requests (titled `[S<n>]` with their own number) are never proposals. The backend can still write reactions, human verifications and non-lead proposals, which no page offers in this version.
-- **Local development**: `PHYSICS_INTERN_LOCAL=<workspace> PHYSICS_INTERN_LOCAL_USER=<name> uvicorn app:app --reload` in `space/` reads and writes a local folder instead of the Hub, without sign-in.
+- **Pages** (design, section 14). `/` *Latest*: the debriefs, newest first; open ones as forms (an answer box per question, a checkbox per tick line, the note box; one Save per debrief), closed ones folded to one line ("read by S3 on …") but still editable, since the next session receives what changes; and *What the next session will receive*, the text `session.py start` would print (without the diffs). `/project`: `project.md` and `conventions.md`. `/draft`: the draft with a contents column, the draft's flags, a PDF button and `/draft/edit` (the source beside a preview that `/preview` re-renders as you type). `/sessions`: one row per session (the title and the first sentence of the abstract of its note); `/note/<S>` renders a note, with its PDF and source. `/literature`: the overview, then the papers grouped by the overview's topics, each with its `why` and a rating menu; then the seeds. Record pages: `/card/<id>`, `/paper/<id>`, `/session/<S>` (what it received, its brief, cards, artefacts, log), `/file/<path>`. Editors: `/edit/<path>` for `project.md`, `conventions.md`, `literature/seeds.md` and any debrief (raw Markdown).
+- **Rendering.** Markdown is rendered on the server with `markdown-it-py` (raw HTML and HTML comments are not shown); LaTeX by `latex.py`; math by MathJax 3 in the browser (`\(…\)`, `\[…\]` and equation environments, numbered with `tags: 'ams'`). In Markdown, every existing card, paper, artefact and session ID and every workspace path in a code span becomes a link; a session ID opens its note. In LaTeX, `\card{…}` links to the card page, a citation's entry links to its paper card (through `paperid` in `references.bib`), and in the draft a result whose card is refuted, revised or in doubt carries a warning.
+- **Data.** In the deployed Space, `HubStore` keeps a bare git clone of the workspace (token passed in a header), fetches `main` on a page view when the last load is older than two minutes, on *Load the latest version* and after each write, and checks out each commit in its own git worktree (the last three are kept), so that pages read a fixed state and `human.received` can read the history. The method's modules (`cards`, `common`, `human`, `regen`, `check`, `pdf`) are imported from the snapshot's `.physics-intern/scripts/` (restoring `sys.path` and `sys.modules` afterwards), so everything is computed by the workspace's own method version. `references.bib` is rendered in memory, never written.
+- **Writes.** The researcher's answers, ticks and note (`save_debrief`, which re-reads the debrief and refuses if it changed since the form was loaded), edits of their files (`save_file`; a draft that adds a result the workspace's `check` refuses is not saved), and ratings (`rate`, which rewrites `literature/ratings.yaml`). Each is one commit to `main` through the Hub API with `parent_commit` set to the commit the page was built from, with the signed-in user in the message. The Space applies nothing.
+- **Identity.** Hugging Face sign-in (`attach_huggingface_oauth`, `parse_huggingface_oauth`); the sign-in link opens the app outside the huggingface.co frame, because browsers block its cookie inside a frame. Anyone signed in (a member of the organisation, since the Space is private) may write. Forms carry a token tied to the session, so that another site cannot post them.
+- **Local mode**: `PHYSICS_INTERN_LOCAL=<workspace> PHYSICS_INTERN_LOCAL_USER=<name> uvicorn app:app --reload` in `space/` reads a local folder and writes files into it without committing; the next `session.py start` commits them as the researcher's.
+- **The LaTeX converter** (`latex.py`) handles the subset agents are told to use, documented in its docstring; anything else is rendered as text and listed in `Rendered.problems`. The design proposed LaTeXML; the Space uses this converter for both the preview and the saved page, because it is fast enough to run on every view, has no system dependency, and keeps the preview and the page identical. If notes need more than the subset, LaTeXML can replace it behind the same `render` function.
 
 
 ## Literature tools
 
-`scripts/literature.py` is both a CLI and an MCP server (`literature.py mcp`, stdio, tool names with underscores), so that it works in every harness: `search-inspire`, `search-arxiv`, `references`, `citations` (INSPIRE when the paper is a core INSPIRE record, Semantic Scholar otherwise), `download` (arXiv LaTeX source preferred, PDF otherwise, extracted into `literature/sources/<id>/` with links, absolute and `..` paths skipped), `card` (a paper-card skeleton with the header filled; only the card goes to stdout, so it can be redirected into `literature/P-<id>.md`), and `search-cards` (keyword search over paper cards, survey summaries and card statements). Papers are named by arXiv identifier (with or without version, old or new style, or a paper-card ID) or `insp:<INSPIRE record>`. Every command takes `--json`; errors are one `ERROR:` line. arXiv requests are spaced by 3 seconds, also across runs; `SEMANTIC_SCHOLAR_API_KEY` raises the Semantic Scholar rate limit. Claude Code, Codex and OpenCode get the server through their extras; Pi has no MCP support, and the surveyor role says how to call the CLI instead. `init` installs the script's dependencies once (skipped when `PHYSICS_INTERN_NO_WARMUP` is set), so that the harnesses' first start of the server fits in their startup timeout. In shared mode, sources are synced with the `-sources` dataset at session start and end.
+`scripts/literature.py` is both a CLI and an MCP server (`literature.py mcp`, stdio, tool names with underscores), so that it works in every harness: `search-inspire`, `search-arxiv`, `references`, `citations` (INSPIRE when the paper is a core INSPIRE record, Semantic Scholar otherwise), `download` (arXiv LaTeX source preferred, PDF otherwise, extracted into `literature/sources/<id>/` with links, absolute and `..` paths skipped), `card` (a paper-card skeleton with the header filled; only the card goes to stdout, so it can be redirected into `literature/P-<id>.md`), and `search-cards` (keyword search over paper cards, the literature overview and card statements). The card skeleton has empty `why`, `topic` and `rating` fields, which the surveyor fills. Papers are named by arXiv identifier (with or without version, old or new style, or a paper-card ID) or `insp:<INSPIRE record>`. Every command takes `--json`; errors are one `ERROR:` line. arXiv requests are spaced by 3 seconds, also across runs; `SEMANTIC_SCHOLAR_API_KEY` raises the Semantic Scholar rate limit. Claude Code, Codex and OpenCode get the server through their extras; Pi has no MCP support, and the surveyor role says how to call the CLI instead. `init` installs the script's dependencies once (skipped when `PHYSICS_INTERN_NO_WARMUP` is set), so that the harnesses' first start of the server fits in their startup timeout. In shared mode, sources are synced with the `-sources` dataset at session start and end.
 
 
 ## The reviewer benchmark
@@ -274,27 +291,30 @@ uv run --no-project --with pytest --with httpx --with-requirements space/require
 
 Without `fastapi` and `httpx`, the test of the Space's pages is skipped.
 
-- `tests/test_cards.py`: status precedence, evidence (artefacts, attached artefacts, human verifications), propagation of needs re-check, deterministic regeneration, the promotion rule, and the check rules (headers, references, cycles, immutability against a base and corrections within a session, question cards refused from agents, long statements, lead's files and foreign IDs in shared sessions, promotions in sessions).
-- `tests/test_local_flow.py`: a local workspace end to end through the real scripts: init, adding a harness, two sessions, reserved IDs, a review, a promotion, and a refused edit of an existing card.
-- `tests/test_export_trace.py`: the trace exporter on a fake OpenCode store and fake Claude Code transcripts.
-- `tests/test_space_backend.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the Space's backend and its pages (through a test client) in local mode, with a fake Hub for pull requests, the literature tools without network, the benchmark in dry-run mode (and the shape of every case).
+- `tests/test_cards.py`: status precedence (the draft's results make claims established), evidence (artefacts, attached artefacts, human verifications), propagation of needs re-check, deterministic regeneration, stable BibTeX keys, the result rule, and the check rules (headers, references, cycles, immutability against a base and corrections within a session, session rules applied only to the session's own commits, the draft blamed on the session only for what it did, notes and debriefs).
+- `tests/test_human.py`: `project.md`, parsing and writing back debriefs, the draft's environments, what a session receives (in full, then only what changed after a session recorded it), and *Changed by this session*.
+- `tests/test_local_flow.py`: the acceptance test of phase A, through the real scripts: init, then three local sessions in which the researcher only edits debriefs and `project.md` in an editor. Each decision is applied by the session after it; a result copied into the draft shows as established; an unreviewed result is refused by `check`; a question answered in the terminal is recorded as the researcher's; an edited card is refused at the end.
+- `tests/test_space_backend.py`: the Space's backend in local mode, the Hub store against a local git repository with a fake API, and every page and form through a test client.
+- `tests/test_latex.py`: the LaTeX converter on a real note and a sample draft.
+- `tests/test_export_trace.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the trace exporter, the literature tools without network, the benchmark in dry-run mode.
 - `tests/ACCEPTANCE.md` maps each acceptance test of the design's build plan to how it is checked, and gives the steps of those that need real agents.
-- `tests/hub_e2e.py` (manual, live, not collected by pytest): creates scratch repositories under your account and runs the shared-mode flow with two operators: parallel sessions adding evidence to the same claim, a rebase, merges, a promotion refused for a non-lead and accepted for the lead, a proposal, an abort. It deletes the repositories at the end. `uv run tests/hub_e2e.py [--keep]`.
+- `tests/hub_e2e.py` (manual, live, not collected by pytest): creates scratch repositories under your account and runs the shared-mode flow with two operators: parallel sessions adding evidence to the same claim, a rebase, merges, a debrief answered through the API and received by the next session, an abort. It deletes the repositories at the end. `uv run tests/hub_e2e.py [--keep]`.
 
 
 ## Design choices worth remembering
 
+- **Two layers.** The record is complete and for agents; the human view is a handful of files for the researcher (`project.md`, `conventions.md`, the draft, one note and one debrief per session, the literature overview). The same document never serves both readers.
+- **The researcher decides through files, at session boundaries.** Answers, ticks and notes in a debrief take effect when the next session starts; agents never change the meaning of what the researcher wrote, and every change they make to a human file is listed in their debrief, from git.
+- **What a session receives is computed, not remembered.** From git and the files: everything written since the previous session started, minus what earlier sessions recorded as received in their `received.md`. A note written while a session runs reaches the session after; a tick is never applied twice.
+- **Established means: in the draft as a result.** The researcher decides what enters the draft; `check` keeps the bar (a confirming review of a supporting artefact). Sessions merge without the researcher, because a merge endorses nothing.
 - **Research files and harness files are separated.** Harness files are rendered locally from the method copy and git-ignored; only research content and the method copy are shared.
-- **The method is copied into each workspace**, so that every participant runs the same prompts and the prompts sit in history next to the results.
-- **One file per item, never edited once its session ends.** Status and evidence are computed by `regen`, so parallel sessions add files and never edit the same file; their pull requests do not conflict. Within its own session, a card is corrected in place rather than superseded, so that wording fixes do not show as revisions.
-- **Cards are results, questions come from people.** Claims are what the project obtained, not summaries of the literature; agents leave open work in the report and the plan, so that the cards people read stay few.
-- **Deterministic work is done by scripts, not prompts.** IDs (`session.py next`), views, validation, the pull request lifecycle, uploads. Models keep the judgment.
-- **Sessions with briefs, not a fixed pipeline.** A brief can name a plan item, an open question, a doubt, a re-check, papers to read. The pipeline survives only in `/autoresearch` for benchmarks.
-- **Sessions merge without a lead; promotion needs one.** A merge makes nothing established. Requiring a lead on every merge would make the lead the bottleneck.
+- **The method is copied into each workspace**, so that every checkout and the Space run the same prompts, and the prompts sit in history next to the results.
+- **One file per item, never edited once its session ends.** Status and evidence are computed by `regen`, so parallel sessions add files and never edit the same file. The human files are the exception, edited by the researcher and, as ticked, by sessions.
+- **Deterministic work is done by scripts, not prompts.** IDs (`session.py next`), views, validation, what a session receives, the debrief's *Changed by this session*, the pull request lifecycle, uploads, PDFs. Models keep the judgment.
 - **Draft pull requests as claims.** Unique numbers without a shared counter, and the open sessions are visible.
 - **A branch in the checkout, not a worktree.** Harness files are git-ignored and the harness runs in the checkout; one checkout holds at most one session.
 - **Blind review.** Reviewers get the artefact and the claim's statement, never who produced it nor earlier verdicts; tests with a clear outcome come before opinions, and "no issue found" is a respected outcome.
-- **Fresh context and second opinions.** No single verdict changes direction; a refutation becomes a dead-end card only after a second, independent review agrees.
+- **Fresh context and second opinions.** The note is written by a fresh writer, for a reader who was not there; no single verdict changes direction; a refutation becomes a dead-end card only after a second, independent review agrees.
 - **Do not over-engineer the skills.** Prompts as short as they can be while effective; the audit skill catches drift.
 
 
@@ -311,7 +331,7 @@ python3 commons/render.py --hosts=claude,codex,opencode,pi --target=/tmp/render-
 
 ## Auditing a run: investigate-run
 
-`.claude/skills/investigate-run/SKILL.md` is a repo-level skill that audits a workspace and its session record (harness JSONL, OpenCode's SQLite store, or the trace in the traces dataset for shared sessions) and writes a post-mortem to `/tmp/audit-<workspace>.md`. It detects the workspace format: for card-based workspaces it audits ten promises (coordinator only, valid immutable cards, robust evidence behind promotions, blind test-based review, review after every artefact, the integration loop, edit scope, return schema, session discipline, scripts not bypassed); legacy workspaces keep their rules. Update it when the method's contract changes.
+`.claude/skills/investigate-run/SKILL.md` is a repo-level skill that audits a workspace and its session record (harness JSONL, OpenCode's SQLite store, or the trace in the traces dataset for shared sessions) and writes a post-mortem to `/tmp/audit-<workspace>.md`. It detects the workspace format: for card-based workspaces it audits ten promises (coordinator only, valid immutable cards, robust evidence behind promotions or, from method 0.4, behind the draft's results, blind test-based review, review after every artefact, the integration loop, edit scope, return schema, session discipline, scripts not bypassed), plus, from 0.4, the researcher's attention (the size and content of notes and debriefs, and whether ticked lines were applied exactly once); legacy workspaces keep their rules. Update it when the method's contract changes.
 
 
 ## Validation workflow

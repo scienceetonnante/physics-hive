@@ -1,0 +1,121 @@
+/* Styles for the HTML produced by space/latex.py, in the spirit of arXiv's HTML papers.
+   The app themes it by setting these variables: --ink, --muted, --line, --accent, --paper,
+   --warn-bg, --warn-ink. The defaults below have zero specificity, so any app rule wins. */
+:where(:root) {
+  --ink: #17202c; --muted: #586375; --line: #d9dde4; --accent: #2443a3;
+  --paper: #fffffd; --warn-bg: #fdf4dc; --warn-ink: #6b4a00;
+}
+
+.ltx-document {
+  font-family: "STIX Two Text", "STIX Two", Georgia, "Times New Roman", serif;
+  font-size: 1.125rem; line-height: 1.6; color: var(--ink); background: var(--paper);
+  max-width: 46rem; margin: 0 auto; overflow-wrap: break-word;
+}
+.ltx-document p { margin: 0.7em 0; text-wrap: pretty; }
+.ltx-document a { color: var(--accent); text-decoration: none; }
+.ltx-document a:hover { text-decoration: underline; }
+.ltx-document code { font-size: 0.88em; }
+.ltx-macros { display: none; }
+
+/* Title block and abstract */
+.ltx-title { text-align: center; font-size: 1.75em; line-height: 1.25; font-weight: 600; margin: 0.4em 0; text-wrap: balance; }
+.ltx-authors, .ltx-date { text-align: center; color: var(--muted); }
+.ltx-date { font-size: 0.9em; }
+.ltx-abstract { margin: 1.8em 2.5em; font-size: 0.95em; }
+.ltx-abstract h6 { text-align: center; font-size: 1em; font-weight: 600; margin: 0 0 0.3em; }
+
+/* Headings */
+.ltx-section, .ltx-subsection, .ltx-subsubsection { font-weight: 600; line-height: 1.3; text-wrap: balance; }
+.ltx-section { font-size: 1.3em; margin: 1.8em 0 0.5em; }
+.ltx-subsection { font-size: 1.12em; margin: 1.5em 0 0.4em; }
+.ltx-subsubsection { font-size: 1em; margin: 1.3em 0 0.3em; }
+.ltx-num { margin-right: 0.5em; font-variant-numeric: tabular-nums; }
+.ltx-paragraph { font-weight: 600; margin-right: 0.3em; }
+
+/* Display math; long equations scroll instead of overflowing on narrow screens */
+.ltx-eq { display: block; margin: 0.8em 0; overflow-x: auto; overflow-y: hidden; }
+.ltx-eq mjx-container[display="true"] { margin: 0.2em 0; }
+
+/* Theorem-like blocks and proofs (amsthm style) */
+.ltx-thm, .ltx-proof { margin: 1.1em 0; }
+.ltx-thm-it p { font-style: italic; }
+.ltx-thm-it em { font-style: normal; }
+.ltx-thm-head { font-weight: 700; font-style: normal; }
+.ltx-proof-head { font-style: italic; }
+.ltx-qed { float: right; margin-left: 1em; }
+.ltx-qed-line { margin-top: 0; }
+.ltx-flag {
+  background: var(--warn-bg); color: var(--warn-ink); border-left: 3px solid currentColor;
+  padding: 0.4em 0.8em; margin: 0 0 0.5em; font: 0.85rem/1.45 system-ui, sans-serif;
+}
+
+/* Card tags: small raised labels after a statement */
+.ltx-card {
+  font: 0.6em/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-style: normal;
+  vertical-align: super; white-space: nowrap; padding: 0.15em 0.4em; margin-left: 0.2em;
+  border: 1px solid var(--line); border-radius: 0.35em; color: var(--muted);
+}
+a.ltx-card { color: var(--accent); }
+.ltx-card-flagged { background: var(--warn-bg); color: var(--warn-ink); border-color: currentColor; }
+
+/* Lists */
+.ltx-list { padding-left: 1.6em; margin: 0.6em 0; }
+.ltx-list li { margin: 0.3em 0; }
+.ltx-list li > p:first-child { margin-top: 0; }
+ol.ltx-list ol.ltx-list { list-style-type: lower-alpha; }
+ol.ltx-list ol.ltx-list ol.ltx-list { list-style-type: lower-roman; }
+.ltx-item-labelled { list-style: none; }
+.ltx-item-label { display: inline-block; min-width: 1.4em; margin-left: -1.6em; margin-right: 0.2em; }
+.ltx-description dt { font-weight: 600; }
+.ltx-description dd { margin: 0 0 0.5em 1.6em; }
+
+/* Tables: booktabs rules, caption above */
+.ltx-table { margin: 1.5em 0; }
+.ltx-table figcaption, .ltx-caption { font-size: 0.92em; margin-bottom: 0.6em; }
+.ltx-caption { text-align: center; }
+.ltx-caption-head { font-weight: 600; margin-right: 0.2em; }
+.ltx-tabular-wrap { overflow-x: auto; }
+.ltx-tabular {
+  border-collapse: collapse; margin: 0.4em auto; font-variant-numeric: tabular-nums;
+  border-top: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
+}
+.ltx-tabular th, .ltx-tabular td { padding: 0.25em 0.8em; vertical-align: baseline; }
+.ltx-tabular th { font-weight: normal; }
+.ltx-tabular thead tr { border-bottom: 1px solid var(--ink); }
+.ltx-tabular tr.ltx-rule { border-top: 1px solid var(--line); }
+.ltx-al-l { text-align: left; }
+.ltx-al-c { text-align: center; }
+.ltx-al-r { text-align: right; }
+
+/* Footnotes: the marker, the text shown on click (class ltx-open), the list at the end */
+.ltx-fn { font-size: 0.72em; line-height: 0; }
+.ltx-fn > a { padding: 0 0.1em; font-weight: 600; }
+.ltx-fn.ltx-open > .ltx-fn-text { display: block; }
+.ltx-fn-text {
+  font-size: 0.92rem; line-height: 1.5; font-style: normal; font-weight: normal; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  padding: 0.5em 0.8em; margin: 0.5em 0; text-align: left;
+}
+.ltx-footnotes { margin-top: 2.5em; padding-top: 0.5em; border-top: 1px solid var(--line); font-size: 0.88em; }
+.ltx-footnotes ol { padding-left: 1.6em; }
+.ltx-fn-back { margin-left: 0.3em; }
+
+/* Citations and references */
+.ltx-cite-missing { color: var(--warn-ink); }
+.ltx-bib { list-style: none; padding: 0; font-size: 0.9em; }
+.ltx-bib li { padding-left: 2.6em; text-indent: -2.6em; margin: 0.4em 0; }
+.ltx-bib-label { display: inline-block; width: 2.6em; text-indent: 0; color: var(--muted); }
+.ltx-bib-title { font-style: italic; }
+
+/* Other blocks */
+.ltx-center { text-align: center; }
+.ltx-quote { margin: 1em 2em; }
+.ltx-sc { font-variant: small-caps; }
+.ltx-sf { font-family: system-ui, sans-serif; }
+.ltx-source { white-space: pre-wrap; font-size: 0.85em; }
+
+@media (max-width: 600px) {
+  .ltx-document { font-size: 1rem; }
+  .ltx-abstract { margin: 1.2em 0.5em; }
+  .ltx-tabular th, .ltx-tabular td { padding: 0.2em 0.5em; }
+}

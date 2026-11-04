@@ -14,7 +14,7 @@ It is the "measured reviewers" part of the review design (`design/DESIGN-shared-
 For each configuration in `configs.toml` and each case in `cases/`, `run.py`:
 
 1. creates a fresh local workspace for that harness with `scripts/init.py --mode local --harness <h> --yes`, in a temporary folder with a neutral name;
-2. writes the case's `problem.md` and `conventions.md`, copies the artefact into `derivations/` or `computations/`, and commits, as a session would leave it (no claim card is written: the reviewer may not read `claims/`, and the card would need an invented author);
+2. writes the case's problem into `project.md`, and `conventions.md`, copies the artefact into `derivations/` or `computations/`, and commits, as a session would leave it (no claim card is written: the reviewer may not read `claims/`, and the card would need an invented author);
 3. runs the harness non-interactively, in the workspace, with a prompt that tells it to act as the reviewer by following its rendered role file (`.claude/agents/reviewer.md`, `.codex/agents/reviewer.toml`, `.opencode/agents/reviewer.md` or `.pi/agents/reviewer.md`), followed by the dispatch that `/review` would send: the target, the statement of the claim, `supports: [CL-S1-1]`, the output path `<folder>/<artefact>_R-S1-1.md`, session `S1` and `conventions.md`. Nothing in the prompt or the workspace says who wrote the artefact, that it is a test, or which case it is;
 4. reads the `verdict:` of the review file and its `## Remarks`, and scores them.
 

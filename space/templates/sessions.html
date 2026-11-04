@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sessions{% endblock %}
+{% block content %}
+<div class="narrow">
+  <p class="muted">Each session takes the first next step in <a href="/project">project.md</a>, runs in a terminal, and ends with a note and a debrief. Newest first.</p>
+  {% if not sessions %}<p class="muted">No session yet.</p>{% endif %}
+  <ul class="rows">
+    {% for s in sessions %}
+    <li><a class="srow" href="{{ '/note/' ~ s.id if s.has_note else '/session/' ~ s.id }}">
+      <span class="sid">{{ s.id }}</span>
+      <span>
+        <div class="s-title">{{ (s.title | safe) if s.title else (s.goal or "(no brief yet)") | md_inline }}</div>
+        {% if s.abstract %}<div class="s-sum">{{ s.abstract }}</div>{% endif %}
+        <div class="s-meta">{{ s.goal | md_inline if s.title and s.goal }}{{ " · " if s.title and s.goal }}{{ s.state }}{% if not s.has_note %} · no note{% endif %}</div>
+      </span>
+    </a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

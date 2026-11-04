@@ -43,8 +43,8 @@ HARNESSES = {
     "pi": ("Pi", "pi"),
 }
 DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
-WORKSPACE_DIRS = ("claims", "derivations/.briefs", "computations/.briefs", "critiques", "literature", "sessions", "feedback")
-ALLOWED_IN_NEW_DIR = {"problem.md", ".DS_Store"}
+WORKSPACE_DIRS = ("claims", "derivations/.briefs", "computations/.briefs", "critiques", "literature", "sessions")
+ALLOWED_IN_NEW_DIR = {"project.md", ".DS_Store"}
 
 
 def method_version() -> str:
@@ -158,11 +158,11 @@ def project_toml(version: str, hub: dict | None, leads: list[str], chat_model: s
             lines.append(f"{key:<10} = {toml_string(hub[key])}")
     lines += [
         "",
-        "[people]                               # shared mode: leads may promote claims and own the lead's files",
+        "[people]                               # the researcher; more people later (see the design, section 4)",
         "leads = [" + ", ".join(toml_string(u) for u in leads) + "]",
         "",
         "[models]",
-        f"chat = {toml_string(chat_model)}        # explainer chat in the Space",
+        f"chat = {toml_string(chat_model)}        # the Space's assistant, when it has one",
         "",
     ]
     return "\n".join(lines)
@@ -170,7 +170,7 @@ def project_toml(version: str, hub: dict | None, leads: list[str], chat_model: s
 
 def write_skeleton(target: Path) -> None:
     templates = METHOD_ROOT / "commons" / "templates"
-    for name, dest in (("problem.md", "problem.md"), ("plan.md", "plan.md"), ("conventions.md", "conventions.md"),
+    for name, dest in (("project.md", "project.md"), ("conventions.md", "conventions.md"), ("draft.tex", "draft.tex"),
                        ("seeds.md", "literature/seeds.md"), ("gitignore", ".gitignore")):
         path = target / dest
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -220,14 +220,14 @@ def check_new_dir(target: Path) -> None:
     if extra:
         raise ScriptError(
             f"{target} is not empty ({', '.join(extra[:6])}{', …' if len(extra) > 6 else ''}). "
-            "Use an empty folder (it may already contain problem.md)."
+            "Use an empty folder (it may already contain project.md)."
         )
 
 
 def first_commit(target: Path, message: str) -> None:
     if not is_git_repo(target):
         git(target, "init", "-q", "-b", "main")
-    paths = [".gitignore", ".physics-intern", "project.toml", "problem.md", "plan.md", "conventions.md", *WORKSPACE_DIRS]
+    paths = [".gitignore", ".physics-intern", "project.toml", "project.md", "conventions.md", "draft.tex", *WORKSPACE_DIRS]
     git(target, "add", "--", *paths)
     git(target, "commit", "-q", "-m", message, "-m", f"Bootstrapped by init (method {method_version()}).")
 
@@ -269,6 +269,12 @@ def upgrade(target: Path, harnesses: list[str] | None) -> None:
         raise ScriptError("the workspace has uncommitted changes; commit or discard them before an upgrade")
     if (target / ".active-session").exists():
         raise ScriptError("a session is active in this checkout; end or abort it before an upgrade")
+    if (target / "problem.md").is_file() and not (target / "project.md").is_file():
+        raise ScriptError(
+            f"this workspace uses the earlier format of method {old} (problem.md, plan.md, question cards, session "
+            f"reports, promotion records). Method {new} reads project.md, debriefs, notes and draft.tex instead, and "
+            "does not convert a workspace. Keep this one on its own method copy, or start a new workspace."
+        )
     if project.get("hub", {}).get("workspace"):
         from hub import upgrade_shared
 
@@ -301,10 +307,11 @@ def say_next_steps(harnesses: list[str], mode: str) -> None:
     say("")
     say("Next steps:")
     if mode in ("local", "create"):
-        say("  1. Write the question and its definition of done in problem.md, and seed papers in")
-        say("     literature/seeds.md if you have some (or ask the coordinator to write them with you).")
+        say("  1. In project.md, write the question in one line as the title, and the goal under ## Goal")
+        say("     (the other sections can wait), and seed papers in literature/seeds.md if you have some.")
+        say("     You can also dictate them to the coordinator.")
     else:
-        say("  1. Read problem.md and plan.md, written by the lead.")
+        say("  1. Read project.md and the latest debrief (the Space shows both).")
     say_launch(harnesses, prefix="  2. ")
     codex = " ($session-run in Codex)" if "codex" in harnesses else ""
     bench = " For a benchmark run, use /autoresearch instead." if mode == "local" else ""
@@ -410,7 +417,7 @@ def main() -> int:
         if not org or not name:
             raise ScriptError("create needs --org and --name")
         space_token = args.space_token or ("mine" if not asking else
-                                           ("mine" if ask("Give the Space your Hugging Face token so it can commit feedback? (y/n)", "y").lower().startswith("y") else "none"))
+                                           ("mine" if ask("Give the Space your Hugging Face token so it can save your answers and edits? (y/n)", "y").lower().startswith("y") else "none"))
         create_shared(target, org, name, harnesses, chat_model, space_token,
                       create_local=create_local, first_commit=first_commit, regen=regen, version=method_version())
     say_next_steps(harnesses, mode)

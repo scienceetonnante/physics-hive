@@ -5,13 +5,20 @@
 """Validate a PhysicsIntern workspace.
 
 Checks only what a script can verify: that every card, artefact summary,
-review, feedback record and paper card has a well-formed header; that every
-reference points to an existing item of the right kind; that the dependency
-graph has no cycle; and, compared with a base commit, that no file was edited
-after its creation, that the method copy and (in shared mode) the lead's files
-were not touched, that a session wrote no question card of its own (people
-write them), and that new promotion records follow the promotion rule. A file
-added since the base may be edited until the session ends.
+review and paper card has a well-formed header; that every reference points to
+an existing item of the right kind; that the dependency graph has no cycle;
+that every card named with \\card in the draft and the notes exists; that every
+`result` environment of the draft names a claim with confirmed evidence; and
+that debriefs have the shape the Space and the next session read.
+
+Compared with a base commit (a session's start), it also checks the changes:
+no record file edited or deleted after its creation (a file added since the
+base may change until the session ends), the method copy and project.toml
+untouched, and, for the changes the session made itself (its `[S<n>]` commits
+and uncommitted changes): no other session's folder touched, no file of the
+researcher's alone (seeds, ratings) touched, new IDs that belong to the
+session, a valid draft, and a well-formed note and debrief. Problems in the
+draft or a debrief that the session did not cause are warnings.
 
 When a session is active in this checkout, the base and the session default to
 those recorded in `.active-session`.
@@ -31,27 +38,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cards import (  # noqa: E402
     CARD_KINDS,
-    CLAIM_REACTIONS,
-    LEAD_FILES,
     PAPER_ID_RE,
-    PAPER_REACTIONS,
     PREFIX_TO_KIND,
+    RATINGS,
+    RATINGS_FILE,
+    RESEARCHER_FILES,
     REVIEW_ID_RE,
     SESSION_ID_RE,
-    USER_ID_RE,
     VERDICTS,
     Problem,
     Workspace,
     find_root,
     natural_key,
-    promotion_problems,
+    result_problems,
     session_of,
 )
-from common import changes_since, is_git_repo, load_active  # noqa: E402
+from common import changes_since, is_git_repo, load_active, session_paths  # noqa: E402
+from human import debrief_problems, tex_cards  # noqa: E402
 
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 MAX_STATEMENT = 300  # characters; a longer statement is usually several sentences
-IMMUTABLE_DIRS = ("claims/", "feedback/", "derivations/", "computations/")
+IMMUTABLE_DIRS = ("claims/", "derivations/", "computations/")
 SESSION_FOLDER_RE = re.compile(r"^sessions/(S\d+)/")
 
 
@@ -65,6 +72,9 @@ class Report:
     def warning(self, path: str, message: str) -> None:
         self.problems.append(Problem("warning", path, message))
 
+    def add(self, severity: str, path: str, message: str) -> None:
+        self.problems.append(Problem(severity, path, message))
+
     @property
     def errors(self) -> list[Problem]:
         return [p for p in self.problems if p.severity == "error"]
@@ -76,14 +86,15 @@ def check_cards(ws: Workspace, r: Report) -> None:
         stem = Path(path).stem
         if card.id != stem:
             r.error(path, f"id {card.id!r} does not match the file name {stem!r}")
-        m_session, m_user = SESSION_ID_RE.match(card.id), USER_ID_RE.match(card.id)
-        prefix = (m_session or m_user).group(1) if (m_session or m_user) else None
+        m = SESSION_ID_RE.match(card.id)
+        prefix = m.group(1) if m else None
         if prefix not in PREFIX_TO_KIND:
-            r.error(path, f"id {card.id!r} is not a card ID (CL-S<n>-<k>, Q-…, DE-…, or <prefix>-<user>-<timestamp>)")
+            r.error(path, f"id {card.id!r} is not a card ID (CL-S<n>-<k> or DE-S<n>-<k>)")
         elif card.kind != PREFIX_TO_KIND[prefix]:
             r.error(path, f"kind {card.kind!r} does not match the ID prefix {prefix}- (expected {PREFIX_TO_KIND[prefix]!r})")
         if card.kind not in CARD_KINDS:
-            r.error(path, f"kind must be one of {', '.join(CARD_KINDS)}")
+            r.error(path, f"kind must be one of {', '.join(CARD_KINDS)} (questions come from the researcher, "
+                          "through debriefs)")
         if not card.statement:
             r.error(path, "statement is empty")
         elif CONTROL_CHARS.search(card.statement):
@@ -101,10 +112,10 @@ def check_cards(ws: Workspace, r: Report) -> None:
                 r.error(path, "produced_by of a human card needs a user")
         else:
             r.error(path, "produced_by must be {kind: agent, model, operator} or {kind: human, user}")
-        if m_session and card.session != session_of(card.id):
+        if m and card.session != session_of(card.id):
             r.error(path, f"session is {card.session!r} but the ID belongs to {session_of(card.id)}")
-        if m_user and card.session:
-            r.warning(path, "a card with a user ID was written outside a session; session should be null")
+        if card.meta.get("answers"):
+            r.error(path, "answers is no longer a card field (there are no question cards)")
         check_card_refs(ws, card, r)
 
 
@@ -113,7 +124,6 @@ def check_card_refs(ws: Workspace, card, r: Report) -> None:
         ("depends_on", card.depends_on, None, None),
         ("supersedes", card.supersedes, "claim", ("claim",)),
         ("refutes", card.refutes, "claim", ("dead-end",)),
-        ("answers", card.answers, "question", ("claim", "dead-end")),
     )
     for field, ids, target_kind, allowed_on in rules:
         if ids and allowed_on and card.kind not in allowed_on:
@@ -176,56 +186,28 @@ def check_reviews(ws: Workspace, r: Report) -> None:
     for review in sorted(ws.reviews.values(), key=lambda x: natural_key(x.id)):
         path = review.path
         stem = Path(path).stem
-        if review.id != stem and not path.startswith("feedback/"):
+        if review.id != stem:
             r.error(path, f"id {review.id!r} does not match the file name {stem!r}")
         if review.verdict not in VERDICTS:
             r.error(path, f"verdict must be one of {', '.join(VERDICTS)}")
-        if path.startswith("feedback/"):
-            if not review.by_human or not review.by.get("user"):
-                r.error(path, "a review in feedback/ is a human verification and needs by: {kind: human, user}")
-            if not USER_ID_RE.match(review.id) or not review.id.startswith("R-"):
-                r.error(path, f"id {review.id!r} should look like R-<user>-<timestamp>")
-            if review.target and review.target not in ws.artefacts and review.target not in ws.cards:
-                r.error(path, f"target {review.target} does not exist")
-            if not review.supports:
-                r.error(path, "a verification must name the card(s) it verifies in supports")
-        else:
-            m = REVIEW_ID_RE.match(review.id)
-            if not m:
-                r.error(path, f"id {review.id!r} should look like <target>_R-S<n>-<k>")
-            elif review.target != m.group(1):
-                r.error(path, f"target {review.target!r} does not match the file name ({m.group(1)})")
-            if review.target not in ws.artefacts:
-                r.error(path, f"target {review.target} has no summary file")
-            if m and review.session != f"S{m.group(2)}":
-                r.error(path, f"session is {review.session!r} but the ID belongs to S{m.group(2)}")
+        m = REVIEW_ID_RE.match(review.id)
+        if not m:
+            r.error(path, f"id {review.id!r} should look like <target>_R-S<n>-<k>")
+        elif review.target != m.group(1):
+            r.error(path, f"target {review.target!r} does not match the file name ({m.group(1)})")
+        if review.target not in ws.artefacts:
+            r.error(path, f"target {review.target} has no summary file")
+        if m and review.session != f"S{m.group(2)}":
+            r.error(path, f"session is {review.session!r} but the ID belongs to S{m.group(2)}")
+        if review.by_human and not review.by.get("user"):
+            r.error(path, "a human verification needs by: {kind: human, user}")
+        elif not review.by_human and review.by.get("kind") != "agent":
+            r.error(path, "by must be {kind: agent} or, for a verification by the researcher, {kind: human, user}")
         for ref in review.supports:
             if ref not in ws.cards:
                 r.error(path, f"supports {ref}, which does not exist in claims/")
             elif ws.cards[ref].kind != "claim":
                 r.error(path, f"supports {ref}, a {ws.cards[ref].kind} card (only claims are supported)")
-
-
-def check_feedback(ws: Workspace, r: Report) -> None:
-    for reaction in ws.reactions:
-        if not reaction.user:
-            r.error(reaction.path, "a reaction needs by: {kind: human, user}")
-        if reaction.target in ws.papers:
-            allowed = PAPER_REACTIONS
-        elif reaction.target in ws.cards:
-            allowed = CLAIM_REACTIONS
-        else:
-            r.error(reaction.path, f"target {reaction.target!r} is neither a card nor a paper card")
-            continue
-        if reaction.value not in allowed:
-            r.error(reaction.path, f"value must be one of {', '.join(allowed)}")
-    for promotion in ws.promotions:
-        if promotion.target not in ws.cards:
-            r.error(promotion.path, f"target {promotion.target!r} does not exist in claims/")
-        elif ws.cards[promotion.target].kind != "claim":
-            r.error(promotion.path, f"target {promotion.target} is not a claim")
-        if promotion.by.get("kind") not in ("human", "agent"):
-            r.error(promotion.path, "by must be {kind: human, user} or {kind: agent, model, operator}")
 
 
 def check_papers(ws: Workspace, r: Report) -> None:
@@ -236,20 +218,85 @@ def check_papers(ws: Workspace, r: Report) -> None:
             r.error(paper.path, f"id {paper.id!r} should look like P-<arXiv id> (slashes replaced by underscores)")
         if not paper.title:
             r.warning(paper.path, "no title")
+        if paper.rating and paper.rating not in ("high", "medium", "low"):
+            r.warning(paper.path, "rating should be high, medium or low")
+    text = ws.text(RATINGS_FILE)
+    if text:
+        import yaml
+
+        try:
+            data = yaml.safe_load(text) or {}
+        except yaml.YAMLError as exc:
+            r.warning(RATINGS_FILE, f"invalid YAML: {exc}")
+            data = {}
+        for paper, value in (data.items() if isinstance(data, dict) else []):
+            if str(value).strip().lower().replace("-", " ") not in RATINGS:
+                r.warning(RATINGS_FILE, f"{paper}: rating {value!r} is not one of {', '.join(RATINGS)}")
+            if str(paper) not in ws.papers:
+                r.warning(RATINGS_FILE, f"{paper} has no paper card")
 
 
-def check_sessions(ws: Workspace, r: Report) -> None:
-    for session in ws.sessions.values():
-        if session.brief is not None and not session.goal:
-            r.warning(f"{session.path}/brief.md", "the brief has no goal in its front matter")
-        if session.report is not None and not session.report.get("stop_reason"):
-            r.warning(f"{session.path}/report.md", "the report has no stop_reason in its front matter")
+def draft_problems(ws: Workspace, tex: str | None = None) -> list[tuple[str, str, str]]:
+    """What the draft may not contain, as (card ID, 'result' or 'card', message): unknown cards, and
+    results whose claims fail result_problems. `tex` defaults to the current draft.tex."""
+    from human import parse_draft
+
+    tex = ws.text("draft.tex") if tex is None else tex
+    blocks = parse_draft(tex)
+    problems = []
+    for block in blocks:
+        if block.kind == "result" and not block.cards:
+            problems.append(("", "result", f"the result at line {block.line} names no card (\\card{{CL-...}})"))
+        for card_id in block.cards:
+            if block.kind == "result":
+                problems += [(card_id, "result", f"the result at line {block.line}: {reason}; copy it as a "
+                                                 "conjecture instead") for reason in result_problems(ws, card_id)]
+    for card_id in tex_cards(tex):
+        if card_id not in ws.cards and not any(p[0] == card_id for p in problems):
+            problems.append((card_id, "card", f"\\card{{{card_id}}} names a card that does not exist"))
+    return problems
 
 
-def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> None:
-    """Rules that compare the working tree with a base commit."""
+def check_human_files(ws: Workspace, r: Report, session_changed: set[str], session: str | None,
+                      base: str | None) -> None:
+    """The draft, the notes and the debriefs: errors for what the active session wrote, warnings otherwise.
+
+    In the draft, a problem is the session's when the session changed draft.tex and the card at fault was
+    not already named that way at the base (so a researcher's own edit never blocks a session).
+    """
+    before_results: set[str] = set()
+    before_cards: set[str] = set()
+    if "draft.tex" in session_changed and base:
+        from common import git
+        from human import parse_draft
+
+        old = git(ws.root, "show", f"{base}:draft.tex", check=False).stdout
+        before_results = {c for b in parse_draft(old) if b.kind == "result" for c in b.cards}
+        before_cards = set(tex_cards(old))
+    for card_id, kind, message in draft_problems(ws):
+        before = before_results if kind == "result" else before_cards
+        mine = "draft.tex" in session_changed and (not card_id or card_id not in before)
+        r.add("error" if mine else "warning", "draft.tex", message)
+    for s in ws.sessions.values():
+        mine = s.id == session
+        if s.has_note:
+            rel = f"{s.path}/note.tex"
+            for card_id in tex_cards(ws.text(rel)):
+                if card_id not in ws.cards:
+                    r.add("error" if mine else "warning", rel, f"\\card{{{card_id}}} names a card that does not exist")
+        if s.debrief is not None:
+            rel = f"{s.path}/debrief.md"
+            severity = "error" if mine and rel in session_changed else "warning"
+            for problem in debrief_problems(ws.text(rel)):
+                r.add(severity, rel, problem)
+        if s.brief is not None and not s.goal:
+            r.warning(f"{s.path}/brief.md", "the brief has no goal in its front matter")
+
+
+def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> set[str]:
+    """Rules that compare the working tree with a base commit. Returns the paths the session changed."""
     changes = changes_since(ws.root, base)
-    added = {path for status, path in changes if status == "A"}
+    mine = session_paths(ws.root, base, session) if session else set()
     for status, path in changes:
         if path.startswith(".physics-intern/"):
             r.error(path, "the method copy changes only through an upgrade, never inside a session")
@@ -257,32 +304,27 @@ def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> N
             verb = "edited" if status == "M" else "deleted"
             r.error(path, f"{verb} after creation; nothing is edited or deleted, write a new file that names it instead")
         if status in ("M", "D") and path.startswith("literature/P-"):
-            r.error(path, "paper cards are not edited after creation")
-        if session and ws.mode == "shared" and (path in LEAD_FILES or path == "project.toml"):
-            r.error(path, "this is a lead's file; a session proposes changes in its report or with propose.py")
+            r.error(path, "paper cards are not edited after creation; the researcher's ratings go to "
+                          f"{RATINGS_FILE}")
+        if session and path == "project.toml":
+            r.error(path, "a session does not change project.toml")
+        if path not in mine:
+            continue
+        if path in RESEARCHER_FILES:
+            r.error(path, "only the researcher writes this file")
         m = SESSION_FOLDER_RE.match(path)
-        if session and m and m.group(1) != session:
-            r.error(path, f"belongs to session {m.group(1)}, not to {session}")
-    if not session:
-        return
-    for path in sorted(added):
+        if m and m.group(1) != session:
+            r.error(path, f"belongs to session {m.group(1)}, not to {session}; never edit another session's "
+                          "files, and never the researcher's answers in a debrief")
+    added = {path for status, path in changes if status == "A"}
+    for path in sorted(added & mine):
         name = Path(path).name
         stem = name.removesuffix(".summary.md").removesuffix(".md")
         if path.startswith(("claims/", "derivations/", "computations/", "critiques/")) and "/.briefs/" not in path:
             owner = session_of(stem.split(".")[0])
             if owner and owner != session:
                 r.error(path, f"new in this session but its ID belongs to {owner}")
-    for card in ws.sorted_cards("question"):
-        if card.path in added and card.produced_by.get("kind") != "human":
-            r.error(card.path, "question cards are written by people; put open work under Proposed plan changes, "
-                               "or under Needs a human decision, in the session report")
-    new_promotions = [p for p in ws.promotions if p.path in added]
-    for promotion in new_promotions:
-        if ws.mode == "shared":
-            r.error(promotion.path, "in shared mode a lead records promotions with promote.py or from the Space, not inside a session")
-            continue
-        for reason in promotion_problems(ws, promotion.target, promotion.by):
-            r.error(promotion.path, f"promotion refused: {reason}")
+    return mine
 
 
 def run_checks(ws: Workspace, base: str | None = None, session: str | None = None) -> Report:
@@ -292,11 +334,11 @@ def run_checks(ws: Workspace, base: str | None = None, session: str | None = Non
     check_cycles(ws, r)
     check_artefacts(ws, r)
     check_reviews(ws, r)
-    check_feedback(ws, r)
     check_papers(ws, r)
-    check_sessions(ws, r)
+    mine: set[str] = set()
     if base:
-        check_changes(ws, base, session, r)
+        mine = check_changes(ws, base, session, r)
+    check_human_files(ws, r, mine, session, base)
     return r
 
 

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_box, toc %}
+{% block title %}Draft{% endblock %}
+{% block content %}
+<div class="filebar">
+  <div class="fleft"><span class="fname">draft.tex</span><span class="fmeta">What you decided to keep: {{ results }} result{{ 's' if results != 1 }}, {{ conjectures }} conjecture{{ 's' if conjectures != 1 }}. A claim is established when a result here names it.</span></div>
+  <div class="ftools"><a class="btn" href="/draft.pdf">PDF</a><a class="btn" href="/draft/edit">Edit source</a></div>
+</div>
+{% if flags %}
+<div class="warn"><b>To look at.</b> {% for f in flags %}{{ f | md_inline }}{{ "; " if not loop.last else "." }}{% endfor %} The next debrief proposes the change.</div>
+{% endif %}
+<div class="ltx-wrap">
+  {{ toc(html) }}
+  {{ paper_box(html) }}
+</div>
+{% endblock %}

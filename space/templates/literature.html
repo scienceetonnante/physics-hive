@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "macros.html" import rating_menu %}
+{% block title %}Literature{% endblock %}
+{% block content %}
+<div class="narrow">
+  {% if overview %}
+  <div class="sheet md">
+    <details open><summary class="label">Overview of the field, updated by each survey</summary>{{ overview | md }}</details>
+  </div>
+  {% else %}
+  <p class="muted">No survey yet: the overview of the field appears here after the first one.</p>
+  {% endif %}
+  {% if count %}<p class="fmeta">{{ count }} papers. Click a title to read the agent's digest. Change a rating from its menu; the next survey follows your ratings.</p>{% endif %}
+  {% for topic, rows in groups %}
+  <h3 class="topic-h">{{ topic | md_inline }}</h3>
+  <ul class="plist">
+    {% for p in rows %}
+    <li class="prow">
+      <div>
+        <a class="ptitle" href="/paper/{{ p.id }}">{{ p.title | md_inline }}</a>
+        <div class="pby">{{ p.by }}{% if p.year %} {{ p.year }}{% endif %}</div>
+        {% if p.why %}<div class="pwhy">{{ p.why | md_inline }}</div>{% endif %}
+      </div>
+      {{ rating_menu(p.id, p.mine, p.agent if not p.mine else None, ratings, user, csrf, "/literature") }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+
+  <div class="filebar" style="margin-top:28px">
+    <div class="fleft"><span class="fname">literature/seeds.md</span><span class="fmeta">The papers surveys start from.</span></div>
+    <div class="ftools"><a class="btn" href="/edit/literature/seeds.md">Edit</a></div>
+  </div>
+  <div class="sheet md">{{ seeds | md }}</div>
+</div>
+{% endblock %}

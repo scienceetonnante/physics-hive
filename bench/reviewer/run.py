@@ -152,9 +152,12 @@ def make_workspace(case: Case, harness: str) -> Path:
     proc = subprocess.run(init, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"init.py failed: {proc.stderr.strip() or proc.stdout.strip()}")
-    (ws / "problem.md").write_text(case.meta["problem"].strip() + "\n", encoding="utf-8")
+    problem = case.meta["problem"].strip()
+    title = problem.splitlines()[0].lstrip("# ").strip()
+    (ws / "project.md").write_text(f"# {title}\n\n## Goal\n\n{problem}\n\n## The question in full\n\n{problem}\n",
+                                   encoding="utf-8")
     (ws / "conventions.md").write_text(case.meta["conventions"].strip() + "\n", encoding="utf-8")
-    git(ws, "add", "problem.md", "conventions.md")
+    git(ws, "add", "project.md", "conventions.md")
     git(ws, "commit", "-q", "-m", "Write the problem and conventions")
     for path in case.files:
         shutil.copy2(path, ws / case.subdir / path.name)

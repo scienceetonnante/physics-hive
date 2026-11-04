@@ -1,25 +1,4 @@
-{% macro badge(status) -%}
-<span class="badge b-{{ status }}">{{ status }}</span>
-{%- endmacro %}
-
-{% macro card_row(row, proposed=None) -%}
-<li>
-  <div class="row-head">
-    <a class="id" href="/card/{{ row.id }}">{{ row.id }}</a>
-    {{ badge(row.status) }}
-    {% if row.recheck %}<span class="badge b-recheck">needs re-check</span>{% endif %}
-    {% if row.author %}<span class="badge">written by {{ row.author }}</span>{% endif %}
-  </div>
-  <div class="statement">{{ row.statement | md_inline }}</div>
-  {% set notes = [] %}
-  {% if row.status_text != row.status %}{% set _ = notes.append(row.status_text) %}{% endif %}
-  {% if row.evidence is not none %}{% set _ = notes.append("evidence: " ~ (row.evidence | join(", ") if row.evidence else "none yet")) %}{% endif %}
-  {% if proposed %}{% set _ = notes.append("promotion proposed in " ~ proposed | join(", ")) %}{% endif %}
-  {% if notes %}<div class="meta">{{ notes | join(" · ") | md_inline }}</div>{% endif %}
-</li>
-{%- endmacro %}
-
-{% macro sign_in_first(user, local, sign_in, what) -%}
+{% macro sign_in_first(local, sign_in, what) -%}
 {% if local %}
 <p class="muted small">Set PHYSICS_INTERN_LOCAL_USER to {{ what }} from this local copy.</p>
 {% else %}
@@ -27,20 +6,80 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro ask_form(about, user, local, sign_in, csrf, error=None, draft=None, draft_for=None) -%}
-<section class="panel">
-  <h2 class="label">Write to the agents</h2>
-  <p class="small muted" style="margin-top:0">A question, a doubt, an idea or an instruction.
-  {%- if about %} It is linked to {{ about }}.{% endif %} It becomes a question card that the next session
-  reads, and it stays open until a session answers it.</p>
-  {% if user %}
-  <form method="post" action="/ask">
-    {% if error and draft_for == "ask" %}<div class="error">{{ error | md_inline }}</div>{% endif %}
-    <textarea name="text" placeholder="The first paragraph is the card's statement; anything after a blank line is its body. Equations in LaTeX between $…$." required>{{ draft if draft_for == "ask" else "" }}</textarea>
-    <input type="hidden" name="about" value="{{ about or '' }}">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="actions"><button>Send to the agents</button></div>
-  </form>
-  {% else %}{{ sign_in_first(user, local, sign_in, "write to the agents") }}{% endif %}
-</section>
+{% macro debrief_form(d, user, local, sign_in, csrf) -%}
+<form method="post" action="/debrief/{{ d.id }}">
+  <div class="md">{{ d.d.summary | md }}</div>
+  {% if d.d.changed %}
+  <h4 class="section-label">Changed by this session</h4>
+  <div class="md">{{ d.d.changed | md }}</div>
+  {% endif %}
+  {% for q in d.d.questions %}
+  <div class="md" style="margin-top:18px">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
+  <div class="answer {{ 'filled' if q.answer }}">
+    <label for="a-{{ d.id }}-{{ q.number }}">Answer</label>
+    <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="2" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
+  </div>
+  {% endfor %}
+  {% if d.d.ticks %}
+  <p class="md" style="margin-top:18px"><b>Tick what you accept.</b> The next session applies the ticked lines.</p>
+  <ul class="ticks md">
+    {% for t in d.d.ticks %}
+    <li><label><input type="checkbox" name="tick-{{ loop.index0 }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <h4 class="section-label">Anything else for the next session</h4>
+  <div class="answer note-box {{ 'filled' if d.d.note }}">
+    <textarea name="note" rows="3" placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
+  </div>
+  <input type="hidden" name="base" value="{{ d.text }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="actions">
+    {% if user %}<button class="primary">Save</button>{% endif %}
+    {% if d.note %}<a href="/note/{{ d.id }}">Read note {{ d.id }}</a>{% endif %}
+    <a href="/edit/{{ d.path }}" class="small">Edit the markdown</a>
+  </div>
+  {% if not user %}{{ sign_in_first(local, sign_in, "answer") }}{% endif %}
+</form>
+{%- endmacro %}
+
+{% macro paper_box(html) -%}
+<div class="paper">{{ html | latex_doc }}</div>
+{%- endmacro %}
+
+{% macro toc(html) -%}
+<nav class="toc" aria-label="Contents">
+  <div class="tl">Contents</div>
+  <ol>
+    {% for e in html.toc %}<li class="lvl{{ e.level }}"><a href="#{{ e.anchor }}"><span>{{ e.number }}</span><span>{{ e.title | safe }}</span></a></li>{% endfor %}
+  </ol>
+</nav>
+{%- endmacro %}
+
+{% macro rating_menu(paper_id, current, agent, ratings, user, csrf, back) -%}
+<form class="rate" method="post" action="/rate">
+  <input type="hidden" name="paper_id" value="{{ paper_id }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <select name="rating" class="r-{{ (current or '') | replace(' ', '-') }}" onchange="this.form.submit()" {{ 'disabled' if not user }} aria-label="Your rating of {{ paper_id }}">
+    <option value="" {{ 'selected' if not current }}>not rated</option>
+    {% for r in ratings %}<option value="{{ r }}" {{ 'selected' if r == current }}>{{ r }}</option>{% endfor %}
+  </select>
+  <noscript><button class="small">Save</button></noscript>
+  {% if agent %}<span class="agent">agent's estimate: {{ agent }}</span>{% endif %}
+</form>
+{%- endmacro %}
+
+{% macro badge(status) -%}
+<span class="chip {{ status }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro card_row(row) -%}
+<li>
+  <a class="fname" href="/card/{{ row.id }}">{{ row.id }}</a> {{ badge(row.status) }}
+  {% if row.draft %}<span class="chip">in the draft as a {{ row.draft }}</span>{% endif %}
+  {% if row.recheck %}<span class="chip open">needs re-check</span>{% endif %}
+  <div>{{ row.statement | md_inline }}</div>
+  {% if row.evidence is not none %}<div class="fmeta">evidence: {{ (row.evidence | join(", ") if row.evidence else "none yet") | md_inline }}</div>{% endif %}
+</li>
 {%- endmacro %}

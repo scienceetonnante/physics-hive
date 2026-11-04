@@ -24,7 +24,7 @@ Run an analytical derivation. The `deriver` sub-agent works only from the brief 
 
 3. **Dispatch the `deriver` sub-agent** with the brief path and the artefact ID (see the dispatch syntax for your harness in AGENTS.md). It writes `derivations/<id>.tex` and `derivations/<id>.summary.md`.
 
-4. **Integrate** (AGENTS.md §5):
+4. **Integrate** (AGENTS.md §6):
    - Read the return block.
    - Write the claim card with the reserved ID, stating what was actually derived (which may differ from the target), with `depends_on` naming the cards the derivation relied on. If the derivation reached nothing, write a dead-end card describing the obstacle instead and leave the reserved ID unused.
    - Disposition every flag in the session log and log the dispatch.

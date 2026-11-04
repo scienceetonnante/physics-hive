@@ -6,8 +6,8 @@
 
 The workspace repository is private, so `git pull` and `git push` need
 credentials. This passes the token of `hf auth login` in an HTTP header for
-this one command, without storing it. Leads use it to push their own edits of
-problem.md, plan.md or conventions.md to main.
+this one command, without storing it. The researcher uses it to push their own
+edits of project.md, conventions.md or draft.tex to main from a terminal.
 
 Usage: uv run .physics-intern/scripts/hubgit.py <git arguments>
   e.g. uv run .physics-intern/scripts/hubgit.py push origin main

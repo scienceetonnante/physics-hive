@@ -21,7 +21,7 @@ Run an independent review of an artefact. The `reviewer` sub-agent checks whethe
 
    **Blind and without priors.** Do not pass the card's path, the model or operator that produced the work, or the name of a human author. Do not pass earlier verdicts, objections or framing. The reviewer reads the target directly.
 
-4. **Integrate** (AGENTS.md §5):
+4. **Integrate** (AGENTS.md §6):
    - Read the verdict and check that the review file exists.
    - A confirming review needs no card: `regen` counts it as evidence for the cards in `supports`.
    - On `refuted` or `inconclusive`, do not act yet. Dispatch a second `/review` of the same target, with no mention of the first. If the second also refutes, write a dead-end card that refutes the claim (and names the reason, such as the equation at fault); then decide whether a new `/derive` or `/compute` should attempt the corrected claim. If the two reviews disagree, record the disagreement in the log and seek a third, independent check (often a `/compute`).

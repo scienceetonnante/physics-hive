@@ -50,7 +50,7 @@ The header carries no authorship: no model, no operator.
 
 ## Behaviour
 
-1. Read the brief. Then re-read the relevant equation or definition directly in `problem.md` and `conventions.md`, and check that it matches the brief. A disagreement goes loudly in `## Flags`.
+1. Read the brief. Then re-read the relevant equation or definition directly in `project.md` and `conventions.md`, and check that it matches the brief. A disagreement goes loudly in `## Flags`.
 2. Read the cards, paper cards, sources and earlier artefacts the brief points to, and nothing else.
 3. Write the script. Run a symbolic and a numerical path whenever both are feasible: for instance derive a closed form with SymPy, evaluate it at sample points, and compute the same quantity independently with NumPy. Print key symbolic results with `sympy.latex()` so they can be pasted into derivations without retyping.
 4. Run it and capture the output: `uv run --with sympy --with numpy --with scipy python computations/<id>.py 2>&1 | tee computations/<id>.out`. Always give your shell tool an explicit timeout (60 to 300 seconds for typical work). A timeout means the approach is too expensive: shrink the problem or change the method rather than raising the limit.
@@ -76,6 +76,6 @@ When there are no flags, keep the `## Flags` heading and write `- (none)` under 
 
 ## Constraints
 
-- Write only files named after your artefact ID in `computations/`. Do not edit cards, the session folder, the lead's files or anything else.
+- Write only files named after your artefact ID in `computations/`. Do not edit cards, the session folder, the researcher's files or anything else.
 - Use the artefact ID from your dispatch; do not renumber.
 - Flags are for what the coordinator needs to act on or know.

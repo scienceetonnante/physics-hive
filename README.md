@@ -1,21 +1,20 @@
 # PhysicsIntern
 
-PhysicsIntern is a method for using AI coding agents (Claude Code, OpenAI Codex CLI, OpenCode, Pi) to do research in theoretical physics and mathematics. A lead scientist states the question and what counts as done. Agents then work in bounded sessions: they read the literature, derive and compute in sub-agents that start from a fresh context, review every result blindly, and record results as small files called **cards**. Scripts compute each card's status and evidence, so that every result can be traced to who produced it, how, and with which version of the method.
+PhysicsIntern is a method for using AI coding agents (Claude Code, OpenAI Codex CLI, OpenCode, Pi) to do research in theoretical physics and mathematics. It is modelled on how a theoretical physicist works with a student: the researcher sets the goal and the next steps; agents work in bounded sessions of a few hours; each session comes back with a short LaTeX note and a one-page debrief; the researcher answers in the debrief; and a shared LaTeX draft holds what the researcher decided to keep.
 
-A workspace is either **local** (one person, one machine, a git repository) or a **shared space** on the Hugging Face Hub, private by default, where several people and many agents work on the same problem:
+Behind that human view, agents keep a complete **record**: they read the literature, derive and compute in sub-agents that start from a fresh context, review every result blindly, and record results as small files called **cards**. Scripts compute each card's status and evidence, so that every result can be traced to who produced it, how, and with which version of the method. The researcher is never asked to read the record; notes and the draft link into it for anyone who wants to check a step.
 
-- **Leads** own the question (`problem.md`), the strategy (`plan.md`) and the conventions, and are the only ones who mark a claim as *established*.
-- **Operators** run agent sessions from their terminal, each with the harness and model of their choice. Each session ends in a pull request that merges on its own.
-- **Reviewers** use only a browser: in the project's private Space they read the results and the session reports, write questions and remarks to the agents, and answer open questions. Leads also take the decisions the session reports ask for.
+A workspace is either **local** (one machine, a git repository) or a **shared space** on the Hugging Face Hub, private by default, where the researcher reads and answers in a browser while the agents run in a terminal. By default one person is both the researcher, in the browser or an editor, and the operator, in the terminal.
 
-> **Working on the method itself?** See [DOCUMENTATION.md](DOCUMENTATION.md): render pipeline, workspace format, scripts, Hub operations, authoring contracts and the audit workflow.
+> **Working on the method itself?** See [DOCUMENTATION.md](DOCUMENTATION.md): render pipeline, workspace format, scripts, Hub operations, authoring contracts and the audit workflow. The design is in `design/DESIGN-shared-spaces.md`.
 
 
 ## Prerequisites
 
 - **git** and **[uv](https://docs.astral.sh/uv/)** (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`). The scripts run through uv with their dependencies declared inline; nothing else needs installing by hand.
 - At least one harness: **[Claude Code](https://claude.com/claude-code)** (`claude`), **[Codex CLI](https://github.com/openai/codex)** (`codex`), **[OpenCode](https://opencode.ai)** (`opencode`) or **[Pi](https://pi.dev)** (`pi`).
-- For a shared space: a Hugging Face account, membership of the organisation that will own the project, and `hf auth login` on each operator's machine. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project).
+- Optional, to compile the draft and the notes to PDF on your machine: a TeX distribution with `latexmk` (TeX Live or MacTeX). The Space compiles them itself.
+- For a shared space: a Hugging Face account, membership of the organisation that will own the project, and `hf auth login`. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project).
 - Optional: `SEMANTIC_SCHOLAR_API_KEY`, which raises the rate limit of the citation lookups for papers outside INSPIRE.
 
 
@@ -28,11 +27,14 @@ git clone <this repo> physics-intern
 
 The script asks what to do (start a local workspace, create a shared space, or join one), which harnesses you will use on this machine (a tick list, with the installed ones ticked), and where (the current folder by default). Then:
 
-1. Write the question and its definition of done in `problem.md`, and 5 to 10 seed papers in `literature/seeds.md` if you have them. Both are free text. You can also ask the coordinator to write them with you.
+1. In `project.md`, write the question in one line as the title, and the goal under *Goal*; the other sections can wait. List a few seed papers in `literature/seeds.md` if you have them. You can also dictate them to the coordinator.
 2. Launch your harness in the workspace folder (`claude`, `codex`, `opencode` or `pi`).
-3. Run **`/session-run`** (in Codex, `$session-run`). The coordinator proposes a brief; you adjust and confirm it; it works on its own until a stop condition and writes a report.
+3. Run **`/session-run`** (in Codex, `$session-run`). The coordinator proposes a brief, by default the first next step of `project.md`; you adjust and confirm it; it works on its own until a stop condition, then writes its note (`sessions/S1/note.tex`) and its debrief (`sessions/S1/debrief.md`).
+4. Read the note, and answer the debrief in your editor: write under each `> **Answer:**`, tick the lines you accept (`- [x]`), and add anything under `> **Note:**`. Run `/session-run` again: the next session applies what you ticked before anything else.
 
-For a benchmark problem whose shape is known in advance, `/autoresearch` runs the whole pipeline (survey, plan, derive and review, finalize) in one session without stopping for you.
+To read the notes and the draft rendered, and answer debriefs in a browser, run the Space on your folder: `cd .physics-intern/space && PHYSICS_INTERN_LOCAL=../.. PHYSICS_INTERN_LOCAL_USER=<you> uv run --with-requirements requirements.txt uvicorn app:app`. To compile them to PDF: `uv run .physics-intern/scripts/pdf.py` (the draft) or `pdf.py S3` (a note).
+
+For a benchmark problem whose shape is known in advance, `/autoresearch` runs the whole pipeline (survey, plan, derive and review, draft, finalize) in one session without stopping for you.
 
 Every question of the init script also has a flag, for scripts and the plugin bootstraps:
 
@@ -40,32 +42,48 @@ Every question of the init script also has a flag, for scripts and the plugin bo
 ./init-physics-intern.sh --mode local --harness claude,opencode --dir ../my-problem --yes
 ```
 
-Run it again inside a workspace to add a harness or refresh the rendered files (`--harness codex`), or with `--upgrade` to replace the workspace's copy of the method with a newer one.
+Run it again inside a workspace to add a harness or refresh the rendered files (`--harness codex`), or with `--upgrade` to replace the workspace's copy of the method with a newer one. Workspaces of method 0.3 (with `problem.md` and `plan.md`) are not upgraded to 0.4; they keep working on their own method copy.
+
+
+## The researcher's files
+
+| File | What it is | Who changes it |
+|---|---|---|
+| `project.md` | The question in one line as its title, then *Goal*, *Approach*, *Next steps*, *Done*, *Definition of done*, and the question in full | You. Agents only apply a line you ticked, and move the step their session finished to *Done*. |
+| `conventions.md` | Notation, units, sign conventions | You and the agents; every change an agent makes appears as a diff in its debrief. |
+| `draft.tex` | The best current state of the research, as a draft paper | You. Agents copy into it only what you tick, or edit it when a next step asks them to. |
+| `sessions/S<n>/note.tex` | What session S<n> found, in two to four pages of LaTeX | A fresh writer agent. |
+| `sessions/S<n>/debrief.md` | What session S<n> asks of you: a summary, *Changed by this session*, questions, tick lines, a note box | The session, then you. |
+| `literature/overview.md`, `seeds.md`, `ratings.yaml` | The field in a few paragraphs; your seed papers; your rating of papers | Surveys write the overview; you write the seeds and the ratings. |
+
+**How decisions flow.** You never ask the agents for anything in the middle of their work. You answer the latest debrief, tick its lines, and write in its note box, in an editor or in the Space; you may also edit `project.md`, `conventions.md` or the draft directly. The next `session.py start` prints, and records in `sessions/S<n>/received.md`, everything you wrote since the previous session started; the session applies the ticked lines first, asks you any question you left unanswered, and then proposes its brief. An unticked line is not applied. An unanswered question that still matters is asked again in the next debrief.
+
+**What "established" means.** A claim is *established* when a `result` environment of `draft.tex` names its card (`\card{CL-S2-1}`). Only you decide what enters the draft, by ticking a line such as "Copy Result 1 of note S2 into the draft, as a result" or by editing it. `check` refuses a result whose claim has no confirming review of a supporting derivation or computation (or a verification by you, which you report in a debrief); such a claim goes in a `conjecture` environment instead.
 
 
 ## Shared spaces on the Hub
 
-**Create** (a lead, once):
+**Create** (once):
 
 ```bash
 ./init-physics-intern.sh --mode create --org our-lab --name x-correction
 ```
 
-This creates the local workspace, the private dataset repositories `our-lab/x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/x-correction-space`; it pushes the first commit and prints the line to send to collaborators. The creator is the first lead (`[people] leads` in `project.toml`).
+This creates the local workspace, the private dataset repositories `our-lab/x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/x-correction-space`, and pushes the first commit.
 
-**Join** (every operator, once per checkout):
+**Join** (once per checkout, for a second machine or a second operator):
 
 ```bash
 ./init-physics-intern.sh --mode join --repo our-lab/x-correction
 ```
 
-This clones the workspace and renders the harness files you selected from the workspace's own copy of the method, so that every operator and the Space run exactly the same prompts and scripts. Harness files are personal: they are git-ignored, and only research content and the method copy are shared.
+This clones the workspace and renders the harness files you selected from the workspace's own copy of the method, so that every checkout and the Space run exactly the same prompts and scripts. Harness files are personal: they are git-ignored, and only research content and the method copy are shared.
 
-**What happens in a session.** `/session-run` claims a session by opening a draft pull request; its number is the session number (`S12`). It puts your checkout on the branch `session/S12`, lists what is waiting (open questions, cards that need a re-check, reactions and cards written by people, plan-change proposals, other open sessions), and proposes a brief. You confirm it; this is the only step that needs your attention. The session then works on its own within its budget (20 dispatches by default) and stops when the goal is reached, the budget is spent, four dispatches pass without progress, or the work shows that `problem.md` should change. At the end, `session.py end` checks the workspace, pushes the branch, uploads the trace, and merges the pull request, rebasing on `main` first if other sessions merged in the meantime.
+**What happens in a session.** `/session-run` claims a session by opening a draft pull request; its number is the session number (`S12`). It puts your checkout on the branch `session/S12`, prints what you sent since the previous session started, applies your ticked lines, and proposes a brief. You confirm it. The session then works on its own within its budget (20 dispatches by default) and stops when the goal is reached, the budget is spent, four dispatches in a row add nothing, or the work shows that `project.md` should change. At the end, it writes the note and the debrief, and `session.py end` adds *Changed by this session* to the debrief from git, checks the workspace, pushes the branch, uploads the trace, and merges the pull request. A merge adds to the record and endorses nothing: what you endorse is what is in the draft.
 
-**What needs a lead.** A merge adds cards, artefacts, reviews and a report; it makes nothing established by itself. Promotion to *established* is a separate, recorded decision by a lead, made from the Space or with `uv run .physics-intern/scripts/promote.py <card>`. The lead's files (`problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`) change only by a lead's own edit or by a pull request a lead merges; `/research-plan` drafts plan proposals as such pull requests. To push their own edits from a terminal, leads can use `uv run .physics-intern/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
+**The Space** shows your files, one kind per page, each with an editor. *Latest* (the first page) shows the debriefs, newest first: the open ones in full, as forms where you answer, tick and write a note; the ones a session has read, folded to one line; and what the next session will receive. *Project* shows `project.md` and `conventions.md`. *Draft* shows `draft.tex` rendered like an arXiv HTML paper (contents, numbered sections and equations, results, footnotes, references), with an editor beside a preview, and the PDF. *Sessions* lists the sessions; each opens its note, rendered the same way. *Literature* shows the overview, then the papers by topic with their one-line reason, and a menu to rate each one. Saving commits to `main` with the Space's token and names you in the commit. The Space applies nothing: ticked lines are applied by the next session. The session record (cards, artefacts, reviews, logs) has its own pages, reached from the notes, the draft and the Sessions page.
 
-**The Space** is where leads and reviewers work, in a browser. It has two pages. *Status* shows the question, the plan, the latest session report, and what needs a person: proposals to merge or close, the decisions the latest report asks for, and the promotions sessions propose. *Results* lists the claims, the open questions and the dead ends with their computed status, and the paper cards. Every card, paper, session, proposal and file has its own page and address, and every card ID in a text links to its card. Anyone signed in can *write to the agents* (a question card, which the next session reads and which stays open until a session answers it) and *answer* an open question (a claim card). Leads also edit their files, merge or close proposals, and promote claims.
+To push your own edits from a terminal, use `uv run .physics-intern/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
 
 
 ## Plugins
@@ -92,51 +110,49 @@ A workspace rendered for several harnesses opens in any of them without running 
 ## What a workspace looks like
 
 ```
-problem.md            question, definition of done, sanity checks (lead's file)
-plan.md               current strategy (lead's file)
-conventions.md        notation, units, signs (lead's file)
-project.toml          method version, Hub repositories, leads, chat model
-.physics-intern/      copy of the method: prompts, renderer, scripts, Space app
-claims/               one card per claim, question or dead end
+project.md            the question, goal, approach, next steps, done steps, definition of done (yours)
+conventions.md        notation, units, signs
+draft.tex             the draft paper (yours); references.bib is generated from the paper cards
+project.toml          method version, Hub repositories, people
+.physics-intern/      copy of the method: prompts, renderer, scripts, templates, Space app
+sessions/S12/         received.md, brief.md, log.md, note.tex (for you), debrief.md (for you to answer)
+claims/               one card per claim or dead end
 derivations/          D-S12-3.summary.md (one page) + D-S12-3.tex (full LaTeX) + reviews
 computations/         C-S12-1.md (one page) + .py + .out + reviews
 critiques/            strategic critiques
-literature/           seeds.md, one card per paper (P-<arXiv id>.md), one survey summary per session
-sessions/S12/         brief.md, log.md, report.md
-feedback/             reactions, human verifications, promotion records
-answer.md, write-up/  the final answer and the LaTeX write-up
-INDEX.md              generated: one line per item with its status and evidence (git-ignored)
-research_log.md       generated: claims grouped by status, then the session reports (git-ignored)
+literature/           overview.md, one card per paper (P-<arXiv id>.md), seeds.md, ratings.yaml
+answer.md             the final answer, at the end of the project
+INDEX.md              generated: one line per card, artefact, paper and session (git-ignored)
 ```
 
-**Cards.** A claim, question or dead end is one file in `claims/` with a small YAML header and a free prose body. A claim is one assertion about the physics, in one sentence, that a derivation or a computation can check; agents write claims for the results they obtain, not for what the literature says. Questions are written by people, to hand work to the agents; agents put open work in their session report instead. A card can be corrected during the session that wrote it and never changes afterwards; everything that happens to it later is a new file that names it (an artefact that supports it, a review, a human verification, a promotion record, a dead end that refutes it, a claim that supersedes it). The scripts compute each claim's status (`working`, `established`, `refuted`, `revised`) and evidence, and flag as *needs re-check* every card that depends on a refuted or revised one. IDs embed the session number (`CL-S12-2`), so parallel sessions never collide and their pull requests never conflict.
+**Cards** are the record of results. A claim is one assertion about the physics, in one sentence, that a derivation or a computation can check; a dead end records an obstacle or a refutation. A card can be corrected during the session that wrote it and never changes afterwards; everything that happens to it later is a new file that names it (an artefact that supports it, a review, a dead end that refutes it, a claim that supersedes it). The scripts compute each claim's status (`working`, `established`, `refuted`, `revised`) and evidence, and flag as *needs re-check* every card that depends on a refuted or revised one. IDs embed the session number (`CL-S12-2`), so parallel sessions never collide.
 
 
 ## Skills
 
 | Skill | What it does |
 |---|---|
-| `/session-run` | Runs one session: start, a brief you confirm, autonomous work within a budget, report, end (and merge, in shared mode). |
-| `/survey` | Literature: expands from the seed papers along citations (INSPIRE, arXiv), writes paper cards and a survey summary. Usable in any session. |
-| `/research-plan` | Drafts the strategy: `plan.md` in local mode, a proposal pull request for the lead in shared mode. |
+| `/session-run` | Runs one session: start, apply your ticked lines, a brief you confirm, autonomous work within a budget, note and debrief, end (and merge, in shared mode). |
+| `/survey` | Literature: expands from the seed papers and the papers you rated high, along citations (INSPIRE, arXiv), writes paper cards and updates the overview. Usable in any session. |
+| `/research-plan` | Drafts an approach and next steps, which the session offers you as tick lines. |
 | `/derive <target>` | Analytical derivation in LaTeX with a one-page summary, by a fresh-context sub-agent. |
 | `/compute <target>` | Symbolic and numerical computation (SymPy, NumPy), with both paths compared. |
 | `/review <artefact>` | Blind, test-based review: dimensions, limits, symmetries and spot checks first, then located remarks with a severity. |
 | `/critique` | Strategic critique of the overall state. |
-| `/finalize` | Writes `answer.md` from the established claims, at the end of the project. |
-| `/write-up` | Assembles the established claims into a LaTeX document compiled to PDF, each statement naming its card. |
-| `/autoresearch` | Local mode: the whole pipeline in one session, without stopping for you; for benchmark runs. |
+| `/finalize` | Writes `answer.md` from the results in the draft, at the end of the project. |
+| `/autoresearch` | Local mode: the whole pipeline in one session, acting for you; for benchmark runs. |
 
 ## Scripts
 
-The deterministic work is done by scripts in `.physics-intern/scripts/`, which the skills call with `uv run`: `regen.py` (rebuild the generated views), `check.py` (validate cards, references, immutability and the promotion rule), `session.py` (start, status, next ID, brief, end, abort), `promote.py`, `propose.py`, `export_trace.py`, `literature.py` (arXiv and INSPIRE search, citations, sources; also an MCP server), and `hubgit.py`.
+The deterministic work is done by scripts in `.physics-intern/scripts/`, which the skills call with `uv run`: `regen.py` (rebuild `INDEX.md` and `references.bib`), `check.py` (validate cards, references, immutability, the draft's results, notes and debriefs), `session.py` (start, status, next ID, record an answer or a tick given in the terminal, brief, end, abort), `pdf.py` (compile the draft or a note), `export_trace.py`, `literature.py` (arXiv and INSPIRE search, citations, sources; also an MCP server), and `hubgit.py`.
 
 
 ## Limitations and next steps
 
-- Agents run only on operators' machines; nothing runs agents in the cloud or from the Space.
+- Agents run only on the operator's machine; nothing runs agents in the cloud or from the Space.
 - Shared spaces are private; there are no public spaces.
-- Model diversity between authors and reviewers is not enforced. Every card and trace records the models used, and the reviewer benchmark (`bench/reviewer/`) measures how often each reviewer configuration catches planted errors and raises false alarms, which will tell whether the rule should come back.
+- One researcher by default. The file format supports more people (IDs embed the session, every item is its own file), and colleagues can be added later; the Space records who wrote what in its commits.
+- The Space's *Ask* page (a read-only assistant that answers questions about the project) is not built yet.
+- Model diversity between authors and reviewers is not enforced. Every card and trace records the models used, and the reviewer benchmark (`bench/reviewer/`) measures how often each reviewer configuration catches planted errors and raises false alarms.
 - Trace export is complete for OpenCode and Claude Code, best effort for Codex and Pi.
-- Existing workspaces in the earlier format keep working with their own rendered files; they are not converted. Migrating cards when the card format itself changes is not designed yet.
-- A Mathematica backend for licence holders, as a second symbolic engine next to SymPy, is not implemented.
+- Workspaces in earlier formats keep working with their own method copy; they are not converted.

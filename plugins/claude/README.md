@@ -2,7 +2,7 @@
 
 Set up a **PhysicsIntern** research workspace from inside Claude Code: a local workspace on your machine, a new shared space on the Hugging Face Hub for a team, or a shared space you join.
 
-PhysicsIntern is a method for using AI coding agents to do theoretical physics and mathematics research. The lead scientist writes the question and its definition of done in `problem.md`. Agents then work in bounded sessions: they read the literature, derive and compute in fresh-context sub-agents, review each result blindly, and record results as cards whose status and evidence are computed by scripts. In a shared space, every session ends in a pull request, and reviewers follow the work in a browser through the project's private Space.
+PhysicsIntern is a method for using AI coding agents to do theoretical physics and mathematics research. The researcher writes the question and the goal in `project.md`. Agents then work in bounded sessions: they read the literature, derive and compute in fresh-context sub-agents, review each result blindly, and record results as cards whose status and evidence are computed by scripts. Each session comes back with a short LaTeX note and a one-page debrief, which the researcher answers; what they decide to keep goes into a shared LaTeX draft. In a shared space, every session ends in a pull request, and the researcher reads and answers in a browser through the project's private Space.
 
 ## Install
 
@@ -26,14 +26,14 @@ The agent asks what to do (local, create or join), which other harnesses the fol
 
 Then:
 
-1. In a new workspace, write the question in `problem.md` (and seed papers in `literature/seeds.md`).
+1. In a new workspace, write the question in one line as the title of `project.md` and the goal under *Goal* (and seed papers in `literature/seeds.md`).
 2. **Exit and restart Claude Code in the workspace folder**, so that its skills and sub-agents load.
 3. Run **`/session-run`**. For a benchmark run in a local workspace, `/autoresearch`.
 
 ## What it sets up
 
 - `.physics-intern/` — a committed copy of the method (prompts, renderer, scripts, Space app), so that everyone on a project runs the same version.
-- `project.toml`, `problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`, and the folders for cards, artefacts, sessions and feedback.
+- `project.toml`, `project.md`, `conventions.md`, `draft.tex`, `literature/seeds.md`, and the folders for cards, artefacts and sessions.
 - The harness files rendered from the method copy (`AGENTS.md`, `CLAUDE.md`, `.claude/`, and those of any other harness you chose), which are git-ignored and personal to each checkout.
 - For a shared space: the private workspace, traces, sources and chat-debug datasets and the Space, in your organisation.
 

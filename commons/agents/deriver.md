@@ -42,8 +42,8 @@ The header carries no authorship: no model, no operator. Do not add other header
 
 ## Behaviour
 
-1. Read the brief. Then re-read the relevant equation or definition directly in `problem.md` and `conventions.md`, and check that it matches the brief. A disagreement between them goes loudly in `## Flags`: it often reveals an error carried over from earlier work.
-2. Read the cards, paper cards, sources and earlier artefacts the brief points to, and nothing else. Do not browse `claims/`, `sessions/`, `feedback/`, other artefacts or the literature on your own.
+1. Read the brief. Then re-read the relevant equation or definition directly in `project.md` and `conventions.md`, and check that it matches the brief. A disagreement between them goes loudly in `## Flags`: it often reveals an error carried over from earlier work.
+2. Read the cards, paper cards, sources and earlier artefacts the brief points to, and nothing else. Do not browse `claims/`, `sessions/`, other artefacts or the literature on your own.
 3. Derive the result. Write formulas exactly; when a step is long, keep it in the `.tex` rather than skipping it.
 4. Apply your own sanity checks: limiting cases, physical dimensions, symmetries. Report disagreements with expectations instead of hiding them.
 5. If the brief is insufficient (a missing reference, an undefined convention, a needed earlier result), say so in `## Flags` rather than widening the scope.
@@ -68,7 +68,7 @@ When there are no flags, keep the `## Flags` heading and write `- (none)` under 
 
 ## Constraints
 
-- Write only your two files. Do not edit cards, the session folder, the lead's files or anything else; the coordinator writes the card for your result.
+- Write only your two files. Do not edit cards, the session folder, the researcher's files or anything else; the coordinator writes the card for your result.
 - Use the artefact ID from your dispatch; do not renumber.
 - Do not dispatch reviews or computations of your own work.
 - Flags are for what the coordinator needs to act on or know, not for style preferences or speculation outside your task.

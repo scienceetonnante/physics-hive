@@ -527,7 +527,7 @@ def cmd_download(paper: str, force: bool = False) -> dict:
 
 
 def cmd_search_cards(query: str, limit: int = 10) -> dict:
-    """Keyword search over paper cards, survey summaries and cards in claims/."""
+    """Keyword search over paper cards, the literature overview and cards in claims/."""
     root = workspace_root()
     return {"command": "search-cards", "query": query, **search_cards(root, query, clamp(limit))}
 
@@ -566,6 +566,9 @@ def render_card(paper: Paper, session: str | None = None) -> str:
         f"arxiv: {yaml_quote(paper.arxiv) if paper.arxiv else 'null'}",
         f"inspire: {paper.inspire if paper.inspire else 'null'}",
         f"doi: {yaml_quote(paper.doi) if paper.doi else 'null'}",
+        "why: ''",
+        "topic: ''",
+        "rating: ''",
         f"session: {session or 'S<n>'}",
         "---",
     ]
@@ -722,7 +725,7 @@ STOP_WORDS = {"a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "i
 
 
 def search_cards(root: Path, query: str, limit: int = 10) -> dict:
-    """Rank paper cards, survey summaries and claims/ cards by the query's words.
+    """Rank paper cards, the literature overview and claims/ cards by the query's words.
 
     A word counts where a word of the file starts with it ("gauge" finds
     "gauges"). Files matching more distinct words rank first; then words in the
@@ -733,7 +736,7 @@ def search_cards(root: Path, query: str, limit: int = 10) -> dict:
         raise LiteratureError("the query has no words to search for")
     patterns = [re.compile(r"\b" + re.escape(t), re.IGNORECASE) for t in terms]
     lit, claims = root / "literature", root / "claims"
-    paths = sorted(lit.glob("P-*.md")) + sorted(lit.glob("survey-*.md")) + sorted(claims.glob("*.md"))
+    paths = sorted(lit.glob("P-*.md")) + sorted(lit.glob("overview.md")) + sorted(claims.glob("*.md"))
     hits = []
     for path in paths:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -750,12 +753,12 @@ def search_cards(root: Path, query: str, limit: int = 10) -> dict:
                 score += 3 * min(in_head, 3) + min(in_body, 10)
         if not matched:
             continue
-        survey = path.name.startswith("survey-")
+        overview = path.name == "overview.md"
         hits.append({
             "path": path.relative_to(root).as_posix(),
-            "kind": str(meta.get("kind") or ("survey" if survey else "file")),
+            "kind": str(meta.get("kind") or ("overview" if overview else "file")),
             "title": one_line(meta.get("title") or meta.get("statement") or
-                              (f"survey summary of {path.stem[7:]}" if survey else first_heading(body) or path.stem)),
+                              ("literature overview" if overview else first_heading(body) or path.stem)),
             "matched": matched,
             "score": score,
             "snippet": best_snippet(body, patterns),
@@ -861,7 +864,7 @@ def card_hint(data: dict) -> str:
 
 def format_search_cards(data: dict) -> str:
     results = data["results"]
-    head = f'{data["total"]} of {data["searched"]} cards and summaries match "{data["query"]}"'
+    head = f'{data["total"]} of {data["searched"]} cards and the overview match "{data["query"]}"'
     lines = [head + (f"; showing {len(results)}." if results else ".")]
     for hit in results:
         lines.append(f"{hit['path']}  [{hit['kind']}] {shorten(hit['title'], 160)}")
@@ -881,7 +884,7 @@ def serve_mcp() -> None:
     server = FastMCP("literature", instructions=(
         "Physics literature tools: search INSPIRE-HEP and arXiv, follow references and citations, "
         "download arXiv LaTeX sources into literature/sources/, draft paper cards, and search the "
-        "workspace's own paper cards, survey summaries and claim cards. Papers are named by arXiv ID "
+        "workspace's own paper cards, literature overview and claim cards. Papers are named by arXiv ID "
         "(2301.01234, hep-th/9711200) or insp:<INSPIRE record number>."
     ), log_level="WARNING")
     reads_web = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
@@ -922,13 +925,14 @@ def serve_mcp() -> None:
     @server.tool(annotations=reads_web)
     def card(paper: str, session: str | None = None) -> str:
         """Paper-card skeleton for literature/P-<id>.md, with title, authors, year, arXiv, INSPIRE and DOI
-        filled in and empty sections to write. Pass the session ID (e.g. S12) to fill `session:`."""
+        filled in, and why, topic, rating and the sections to write. Pass the session ID (e.g. S12) to fill
+        `session:`."""
         data = cmd_card(paper, session)
         return f"{card_hint(data)}\n\n{data['text']}"
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
     def search_cards(query: str, limit: int = 10) -> str:
-        """Keyword search over this workspace's paper cards, survey summaries and claim cards. Lists the
+        """Keyword search over this workspace's paper cards, literature overview and claim cards. Lists the
         best matches with their path and a snippet."""
         return format_search_cards(cmd_search_cards(query, limit))
 
@@ -972,7 +976,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paper", help="arXiv ID or insp:<INSPIRE record number>")
     p.add_argument("--session", help="session ID for the header (default: the active session, if any)")
 
-    p = add("search-cards", "keyword search over paper cards, survey summaries and claims/ cards")
+    p = add("search-cards", "keyword search over paper cards, the literature overview and claims/ cards")
     p.add_argument("query")
     p.add_argument("--limit", type=int, default=10)
 

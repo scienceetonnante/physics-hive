@@ -1,0 +1,35 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[hidelinks]{hyperref}
+\newtheorem{result}{Result}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{theorem}{Theorem}
+\newcommand{\card}[1]{\textsuperscript{\texttt{[#1]}}}
+
+\title{<What the session found, as a title>}
+\author{Note on session S<n>, <date>}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+<What was asked, and what was found, in a few sentences.>
+\end{abstract}
+
+\section*{Setting}
+<The conventions and assumptions the session used.>
+
+\section{<First finding>}
+<Its statement, equations and citations. A result names its claim card:>
+\begin{result}[<short title>]
+<Statement.>\card{CL-S<n>-<k>}
+\end{result}
+
+\section{What did not work}
+
+\section{Open question and next steps}
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

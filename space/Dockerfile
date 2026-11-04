@@ -1,5 +1,9 @@
 # The PhysicsIntern Space (a Docker Space: see README.md). The app listens on port 7860.
+# git reads the workspace and its history; latexmk and TeX Live compile the draft and the notes to PDF.
 FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git latexmk texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1

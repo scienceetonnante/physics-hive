@@ -13,6 +13,46 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 
+DRAFT_HEAD = "\\documentclass{article}\n\\begin{document}\n\\section{Results}\n"
+DRAFT_TAIL = "\n\\end{document}\n"
+
+
+def result(card_id: str, kind: str = "result") -> str:
+    return f"\\begin{{{kind}}}[A title]\nStatement.\\footnote{{Evidence.}}\\card{{{card_id}}}\n\\end{{{kind}}}\n"
+
+
+def conjecture(card_id: str) -> str:
+    return result(card_id, "conjecture")
+
+
+DEBRIEF = """Summary of what the session found.
+
+Read the full note: `sessions/{s}/note.tex`.
+
+#### Changed by this session
+
+(Written by session.py end, from git.)
+
+**Question 1.** Must the method use walks only?
+
+> **Answer:**
+
+**Question 2.** I assumed Dirichlet walls; no answer means you agree.
+
+> **Answer:**
+
+**Tick what you accept.** The next session applies the ticked lines.
+
+- [ ] Set the approach in the project: correlation matrices.
+- [ ] Next step: check the weights by sampling exit times.
+- [ ] Copy Result 1 of note {s} into the draft, as a result.
+
+#### Anything else for the next session
+
+> **Note:**
+"""
+
+
 class ToyWorkspace:
     """A temporary workspace with helpers to add cards, artefacts and records."""
 
@@ -21,10 +61,11 @@ class ToyWorkspace:
         hub = '[hub]\nworkspace = "org/toy"\ntraces = "org/toy-traces"\n' if shared else "[hub]\n"
         people = f"[people]\nleads = {list(leads)!r}\n".replace("'", '"')
         (root / "project.toml").write_text(f'[method]\nphysics_intern_version = "test"\n\n{hub}\n{people}')
-        for folder in ("claims", "derivations", "computations", "critiques", "literature", "sessions", "feedback"):
+        for folder in ("claims", "derivations", "computations", "critiques", "literature", "sessions"):
             (root / folder).mkdir(parents=True, exist_ok=True)
-        (root / "problem.md").write_text("# Problem\n\nToy question.\n")
-        (root / "plan.md").write_text("# Plan\n")
+        (root / "project.md").write_text("# Toy question?\n\n## Goal\n\nAnswer it.\n\n## Next steps\n\n1. Derive X.\n")
+        (root / "conventions.md").write_text("# Conventions\n")
+        (root / "draft.tex").write_text(DRAFT_HEAD + DRAFT_TAIL)
 
     def write(self, rel: str, meta: dict, body: str = "") -> Path:
         path = self.root / rel
@@ -44,7 +85,6 @@ class ToyWorkspace:
             "session": fields.pop("session", session),
             "supersedes": fields.pop("supersedes", []),
             "refutes": fields.pop("refutes", []),
-            "answers": fields.pop("answers", []),
             **fields,
         }
         return self.write(f"claims/{card_id}.md", meta, "Body.\n")
@@ -57,7 +97,7 @@ class ToyWorkspace:
         self.write(f"computations/{art_id}.md", {"id": art_id, "kind": "computation", "supports": supports}, "Summary.\n")
         (self.root / f"computations/{art_id}.py").write_text("print(1)\n")
 
-    def review(self, review_id: str, verdict: str, supports: list[str]) -> None:
+    def review(self, review_id: str, verdict: str, supports: list[str], human: str | None = None) -> None:
         target, rest = review_id.split("_R-")
         folder = "derivations" if target.startswith("D-") else "computations"
         meta = {
@@ -67,22 +107,25 @@ class ToyWorkspace:
             "supports": supports,
             "claim": "the claim",
             "verdict": verdict,
-            "by": {"kind": "agent"},
+            "by": {"kind": "human", "user": human} if human else {"kind": "agent"},
             "session": rest.split("-")[0],
             "date": "2026-10-05",
         }
         self.write(f"{folder}/{review_id}.md", meta, "Review.\n")
 
-    def promotion(self, target: str, user: str = "lead", kind: str = "human", stamp: str = "20261006T100000") -> Path:
-        by = {"kind": kind, "user": user} if kind == "human" else {"kind": "agent", "model": "m", "operator": "op"}
-        meta = {"kind": "promotion", "target": target, "by": by, "date": "2026-10-06T10:00:00Z", "session": None}
-        return self.write(f"feedback/promotion-{target}-{user}-{stamp}.md", meta, "")
+    def draft(self, *blocks: str) -> None:
+        """Write draft.tex with the given blocks, e.g. result("CL-S1-1") or conjecture("CL-S1-2")."""
+        (self.root / "draft.tex").write_text(DRAFT_HEAD + "\n".join(blocks) + DRAFT_TAIL)
 
-    def verification(self, user: str, stamp: str, supports: list[str], target: str | None = None, verdict: str = "confirmed") -> None:
-        review_id = f"R-{user}-{stamp}"
-        meta = {"id": review_id, "kind": "review", "target": target, "supports": supports, "verdict": verdict,
-                "by": {"kind": "human", "user": user}, "date": "2026-10-06T10:00:00Z"}
-        self.write(f"feedback/review-{supports[0]}-{user}-{stamp}.md", meta, "Checked by hand.\n")
+    def debrief(self, session: str, text: str) -> Path:
+        path = self.root / "sessions" / session / "debrief.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def received(self, session: str, base: str, started: str, debriefs: dict) -> None:
+        self.write(f"sessions/{session}/received.md", {"session": session, "started": started, "base": base,
+                                                      "debriefs": debriefs}, "```text\n```\n")
 
     def git_init(self) -> None:
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)

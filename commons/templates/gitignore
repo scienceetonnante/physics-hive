@@ -1,6 +1,6 @@
-# Generated views, rebuilt by .physics-intern/scripts/regen.py
+# Generated files, rebuilt by .physics-intern/scripts/regen.py
 /INDEX.md
-/research_log.md
+/references.bib
 
 # Harness files, rendered locally from .physics-intern/ by init
 /AGENTS.md
@@ -17,15 +17,22 @@
 /.active-session
 /literature/sources/
 
+# PDFs of the draft and the notes (uv run .physics-intern/scripts/pdf.py), and LaTeX build files
+/draft.pdf
+/sessions/*/note.pdf
+/*.aux
+/*.bbl
+/*.blg
+/*.fdb_latexmk
+/*.fls
+/*.log
+/*.out
+/*.synctex.gz
+/*.toc
+
 # Build products
 __pycache__/
 *.pyc
 .venv/
 .ipynb_checkpoints/
 .DS_Store
-write-up/*.aux
-write-up/*.log
-write-up/*.out
-write-up/*.fls
-write-up/*.fdb_latexmk
-write-up/*.synctex.gz

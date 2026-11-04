@@ -1,0 +1,87 @@
+\documentclass{article}
+\title{Walk-based Monte Carlo for the Dirichlet spectrum of SDF domains}
+\author{Working draft, not for circulation}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+To be written when there are more results.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+Walk on spheres estimates the solution of the Laplace equation at a single point, using only distances to the boundary. This makes it a natural tool for domains given by a signed distance function (SDF), as in computer graphics~\cite{sawhney2025}. We ask whether a Monte Carlo procedure of the same kind can compute the resonance frequencies of such a domain, that is, the lowest Dirichlet eigenvalues of the Laplacian, and its response to excitation at a point.
+
+% Copied from note S1 by session S2, as ticked in the S1 debrief.
+\section{Previous work}
+
+\subsection{Helmholtz by walks stops at the first eigenvalue}
+\label{sec:barrier}
+With exit time $\tau$ from the domain, the Feynman--Kac formula for $\Delta u+k^2u=0$ with boundary data $g$ reads
+\begin{equation}
+u(x)=\mathbb E_x\!\left[e^{k^2\tau}\,g(X_\tau)\right].
+\label{eq:fk}
+\end{equation}
+Since $\mathbb P_x(\tau>t)\sim c\,e^{-\lambda_1 t}$, the mean is finite only for $k^2<\lambda_1$. This is the gauge condition of Chung and Zhao, used in~\cite{yang2015,rasila2026}. The exit-time-weighted estimator has a finite variance only for $2k^2<\lambda_1$~\cite{rasila2026}. Walk on spheres applies \eqref{eq:fk} with one weight per ball of radius $R$,
+\begin{equation}
+w_{3\mathrm D}=\frac{kR}{\sin kR},\qquad w_{2\mathrm D}=\frac{1}{J_0(kR)}.
+\label{eq:weights}
+\end{equation}
+These closed forms were derived during the survey and do not come from a paper; nobody has checked them yet.\footnote{The 3D form is the continuation of $\sqrt{s}\,R/\sinh(\sqrt{s}\,R)$ to $s=-k^2$. The series given in~\cite{yang2015} for this weight does not converge in 3D.}
+
+Two other constructions stop at the same barrier: a Neumann series of screened problems~\cite{bernal2023}, and the parametric differentiation of Mikhailov and Makarov~\cite{mikhailov1998}, which gives $\lambda_1$ and nothing above it.
+
+\subsection{The first eigenvalue without a grid}
+The survival probability expands on the Dirichlet eigenfunctions,
+\begin{equation}
+\mathbb P_x(\tau>t)=\sum_n e^{-\lambda_n t}\,\phi_n(x)\int_\Omega\phi_n ,
+\end{equation}
+so its late-time decay rate is $\lambda_1$. Lejay and Maire obtain $\lambda_1$ to about 0.4\% with $10^6$ walks~\cite{lejay2007}. Fleming--Viot populations, in which absorbed walkers are reborn on survivors, avoid the exponential loss of walkers and also give $\phi_1$~\cite{burdzy1996,villemonais2011}.
+
+\section{Proposed route}
+\label{sec:route}
+Choose $N$ smooth functions $f_i$ that vanish on the wall, and estimate with time-budget walks~\cite{zhou2026} the matrix
+\begin{equation}
+C_{ij}(t)=\langle f_i,e^{t\Delta}f_j\rangle=\sum_n e^{-\lambda_n t}\,\langle f_i,\phi_n\rangle\langle f_j,\phi_n\rangle .
+\label{eq:corr}
+\end{equation}
+The generalized eigenvalue problem $C(t)\,v=\rho\,C(t_0)\,v$ then gives $\lambda_n\approx-\log\rho_n/(t-t_0)$. In lattice field theory the error on level $n$ decays like $e^{-(\lambda_{N+1}-\lambda_n)t}$~\cite{blossier2009}; the method goes back to Ceperley and Bernu~\cite{ceperley1988}. It avoids both the barrier of Section~\ref{sec:barrier} and signed walkers.
+
+The route has two risks. The relative noise on level $n$ grows roughly like $e^{(\lambda_n-\lambda_1/2)t}/\sqrt M$ for $M$ walks; this is an estimate made during the session, not yet derived. And the functions $f_i$ must overlap the wanted modes while being computable from the SDF alone. A variant replaces $e^{t\Delta}$ by powers of the Green's operator, which plain walk on spheres can estimate.
+
+\section{Results}
+\label{sec:results}
+% Copied from note S2 by session S3, as ticked in the S2 debrief.
+\begin{result}[Per-ball weights]
+Started at the centre of a ball of radius $R$, a walker with generator $\Delta$ leaves it at a time $\eta_R$ such that
+\begin{equation}
+\mathbb E\big[e^{k^2\eta_R}\big]=\frac{kR}{\sin kR}\ \ (d=3),\qquad \mathbb E\big[e^{k^2\eta_R}\big]=\frac{1}{J_0(kR)}\ \ (d=2),
+\label{eq:ball}
+\end{equation}
+finite if and only if $kR<\pi$, respectively $kR<j_{0,1}$.\card{CL-S2-1}\footnote{Supported by derivation~\card{D-S2-1} (Appendix~\ref{app:ball}) and computation~\card{C-S2-1}, each confirmed by a blind review. Copied from note S2.}
+\end{result}
+These are the weights of \eqref{eq:weights}. They make walk on spheres for the Helmholtz equation exact in expectation below $\lambda_1$, without the series of~\cite{yang2015}.
+
+\appendix
+\section{Proof of Result 1}
+\label{app:ball}
+The function $u(r)=\mathbb E_r\big[e^{k^2\eta_R}\big]$ solves $\Delta u+k^2u=0$ in the ball, with $u=1$ on the sphere. Its regular radial solution is $u(r)=R\sin kr/(r\sin kR)$ in three dimensions and $u(r)=J_0(kr)/J_0(kR)$ in two. At $r=0$ these give \eqref{eq:ball}. They diverge when $kR$ reaches the first zero of $\sin$ or of $J_0$, that is, when $k^2$ reaches the first Dirichlet eigenvalue of the ball.
+
+\section{Reference spectra}
+% Copied from note S2 by session S3, as ticked in the S2 debrief.
+The test domains of this work have the lowest levels of Table~\ref{tab:spectra}.
+\begin{table}
+\caption{\label{tab:spectra}First six Dirichlet eigenvalues of the rectangle $[0,\sqrt2]\times[0,1]$ and of the unit disk, counted with multiplicity. Both are exact: $\pi^2(m^2/2+n^2)$ and $j_{m,k}^2$.}
+\begin{tabular}{ccc}
+$n$ & rectangle & disk \\ \hline
+1 & 14.804 & 5.783 \\
+2 & 29.609 & 14.682 \\
+3 & 44.413 & 14.682 \\
+4 & 54.283 & 26.375 \\
+5 & 59.218 & 26.375 \\
+6 & 83.892 & 30.471 \\
+\end{tabular}
+\end{table}
+
+\bibliography{references}
+\end{document}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "macros.html" import debrief_form %}
+{% block title %}Latest{% endblock %}
+{% block content %}
+<div class="narrow">
+  {% if title %}<h1 class="project-title">{{ title | md_inline }}</h1>{% endif %}
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% for r in running %}
+  <div class="warn">{% if r.url %}<a href="{{ r.url }}">{{ r.title | md_inline }}</a>{% else %}Session {{ r.title }}{% endif %} is running now. Its note and debrief will appear here when it ends.</div>
+  {% endfor %}
+
+  {% if not debriefs %}
+  <div class="sheet md">
+    <p><b>No session has ended yet.</b></p>
+    <p>Before the first session, write the question in one line as the title of <a href="/project">project.md</a> and the goal under <em>Goal</em> (the other sections can wait), and list a few seed papers in <a href="/literature">literature/seeds.md</a> if you have some. Then run <code>/session-run</code> in the terminal.</p>
+  </div>
+  {% endif %}
+
+  {% set open = debriefs | selectattr("open") | list %}
+  {% set closed = debriefs | rejectattr("open") | list %}
+  {% if open %}<div class="filebar"><div class="fleft"><span class="fname">sessions/*/debrief.md</span><span class="fmeta">Answer the questions, tick what you accept, add a note. The next session applies what you ticked.</span></div></div>{% endif %}
+  {% for d in open %}
+  <article class="deb" id="{{ d.id }}">
+    <div class="deb-head"><span class="sid">{{ d.id }}</span><b>{{ (d.goal or d.summary) | md_inline }}</b><span class="chip open">open</span></div>
+    {% if error and error_for == d.id %}<div class="error" style="margin:12px 24px 0">{{ error }}</div>{% endif %}
+    {{ debrief_form(d, user, local, sign_in, csrf) }}
+  </article>
+  {% endfor %}
+
+  {% if debriefs %}
+  <details class="receives" {{ 'open' if open }}>
+    <summary>What the next session will receive</summary>
+    <pre>{{ receives }}</pre>
+  </details>
+  {% endif %}
+
+  {% for d in closed %}
+  <details class="deb closed" id="{{ d.id }}" {{ 'open' if error_for == d.id }}>
+    <summary><span class="sid">{{ d.id }}</span><span class="t">{{ d.summary | md_inline }}</span>
+      <span class="fmeta">read by {{ d.read_by }}{% if d.read_on %} on {{ d.read_on }}{% endif %}{% if loop.first %} · you can still add to it: the next session receives what changes{% endif %}</span></summary>
+    {{ debrief_form(d, user, local, sign_in, csrf) }}
+  </details>
+  {% endfor %}
+</div>
+{% endblock %}

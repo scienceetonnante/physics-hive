@@ -1,43 +1,29 @@
 {% extends "base.html" %}
-{% block title %}{{ session.id }}{% endblock %}
+{% from "macros.html" import card_row %}
+{% block title %}{{ session.id }} record{% endblock %}
 {% block content %}
-<p class="crumbs"><a href="/">Status</a> › session</p>
-<div class="grid">
-<main>
-  <section class="panel">
-    <h1>{{ session.id }} · {{ (session.goal or "(no brief yet)") | md_inline }}</h1>
-    {% if session.report %}
-    <p class="meta">Stopped: {{ session.report.stop_reason or "?" }}{% if session.report.dispatches %}, after {{ session.report.dispatches }} dispatches{% endif %}.</p>
-    <div class="prose">
-      {% for heading, text in sections.items() %}<h3>{{ heading }}</h3>{{ text | md }}{% endfor %}
-    </div>
-    {% else %}
-    <p class="muted">No report yet: the session is still running, or it was abandoned.</p>
-    {% endif %}
-  </section>
-  {% if brief %}
-  <section class="panel">
-    <details>
-      <summary>The brief</summary>
-      <div class="prose">{{ brief | md }}</div>
-    </details>
-  </section>
-  {% endif %}
-</main>
-<aside>
-  <section class="panel">
-    <h2 class="label">About this session</h2>
-    <dl class="facts">
-      {% if session.brief and session.brief.budget %}<dt>Budget</dt><dd>{{ session.brief.budget }} dispatches</dd>{% endif %}
-      {% if session.brief and session.brief.starts_from %}<dt>Starts from</dt><dd>{{ session.brief.starts_from | join(", ") | md_inline }}</dd>{% endif %}
-      {% if session.report and session.report.dispatches %}<dt>Used</dt><dd>{{ session.report.dispatches }} dispatches</dd>{% endif %}
-    </dl>
-    <ul class="small" style="padding-left:18px;margin:10px 0 0">
-      {% if log %}<li><a href="/file/{{ log }}">The coordinator's log</a></li>{% endif %}
+<div class="narrow">
+  <p class="record-note">Session record of {{ session.id }}: everything the agents wrote. {% if session.has_note %}<a href="/note/{{ session.id }}">Read the note instead</a>.{% endif %}</p>
+  <div class="sheet">
+    <h1 class="project-title">{{ session.id }} · {{ (session.goal or "(no brief yet)") | md_inline }}</h1>
+    <ul class="small" style="padding-left:18px;margin:0">
+      {% if session.has_note %}<li><a href="/note/{{ session.id }}">Note</a></li>{% endif %}
+      {% if session.debrief %}<li><a href="/#{{ session.id }}">Debrief</a></li>{% endif %}
+      {% if log %}<li><a href="/file/{{ log }}">The coordinator's log (with its handoff)</a></li>{% endif %}
       {% if pr %}<li><a href="{{ pr }}">Its pull request on the Hub</a></li>{% endif %}
       {% if trace %}<li><a href="{{ trace }}">Its full trace on the Hub</a></li>{% endif %}
     </ul>
-  </section>
-</aside>
+  </div>
+  {% if received %}<div class="sheet"><details><summary class="label">What it received from you</summary><pre>{{ received }}</pre></details></div>{% endif %}
+  {% if brief %}<div class="sheet"><details><summary class="label">Its brief</summary><div class="md">{{ brief | md }}</div></details></div>{% endif %}
+  {% if cards %}<div class="sheet"><div class="label">Cards it wrote</div><ul class="rows">{% for r in cards %}{{ card_row(r) }}{% endfor %}</ul></div>{% endif %}
+  {% if artefacts or critiques %}
+  <div class="sheet"><div class="label">Artefacts and critiques</div>
+    <ul class="small" style="padding-left:18px;margin:0">
+      {% for a in artefacts %}<li><a href="/file/{{ a.path }}">{{ a.id }}</a> ({{ a.kind }}){% if a.supports %} · supports {{ a.supports | join(", ") | md_inline }}{% endif %}</li>{% endfor %}
+      {% for c in critiques %}<li><a href="/file/{{ c }}">{{ c }}</a></li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

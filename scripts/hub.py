@@ -22,7 +22,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from huggingface_hub import CommitOperationAdd, HfApi, get_token
+from huggingface_hub import HfApi, get_token
 from huggingface_hub import constants as hf_constants
 from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars
 
@@ -132,10 +132,10 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
 
     deploy_space(target, repos, space_token)
     say("")
-    say(f"Shared space created: {repos['workspace']} (method {version}). You are its lead (project.toml).")
+    say(f"Shared space created: {repos['workspace']} (method {version}). You are its researcher ([people] leads in project.toml).")
     say(f"  Workspace: {repo_url(repos['workspace'])}")
     say(f"  Space:     {hf_constants.ENDPOINT}/spaces/{repos['space']}")
-    say("Invite your collaborators to the organisation, then send them this to join:")
+    say("To work from another checkout or machine (or, later, to add a colleague), join with:")
     say(f"  init-physics-intern.sh --mode join --repo {repos['workspace']}")
     say(f"  (or, in Claude Code or Codex, the init-physics-intern plugin command with the repository {repos['workspace']})")
 
@@ -155,8 +155,8 @@ def deploy_space(target: Path, repos: dict, space_token: str) -> None:
     say(f"Created private Space {repos['space']}")
     if space_token == "mine":
         hf.add_space_secret(repos["space"], "HF_TOKEN", get_token(),
-                            description="Token the Space uses to read the workspace and commit feedback")
-        say("The Space commits feedback with your token (Space secret HF_TOKEN). You can replace it, in the")
+                            description="Token the Space uses to read the workspace and save the researcher's edits")
+        say("The Space saves your answers and edits with your token (Space secret HF_TOKEN). You can replace it, in the")
         say(f"Space settings, with a fine-grained token that can write only to {repos['workspace']} and")
         say(f"{repos['chat_debug']}.")
     else:
@@ -286,7 +286,8 @@ def rebase_on_main(root: Path, env: dict) -> bool:
     return True
 
 
-def end_session(root: Path, active: dict, merge: bool, run_check) -> None:
+def end_session(root: Path, active: dict, merge: bool, finish) -> None:
+    """Rebase on main, finish the session (debrief section, check), push, upload the trace, merge."""
     from cards import Workspace
 
     from common import clear_active
@@ -305,7 +306,7 @@ def end_session(root: Path, active: dict, merge: bool, run_check) -> None:
 
     rebase_on_main(root, env)
     base = git_out(root, "rev-parse", "origin/main")
-    run_check(root, base, session)
+    finish(root, base, session)
     push_pr(root, number, env)
     say(f"Pushed the session branch to pull request #{number}.")
     sync_sources_up(root, repos, session)
@@ -358,7 +359,7 @@ def end_session(root: Path, active: dict, merge: bool, run_check) -> None:
                 if attempt == 2:
                     raise ScriptError(f"the Hub refused to merge pull request #{number}: {exc}") from exc
                 if rebase_on_main(root, env):
-                    run_check(root, git_out(root, "rev-parse", "origin/main"), session)
+                    finish(root, git_out(root, "rev-parse", "origin/main"), session)
                     push_pr(root, number, env)
     fetch(root, env)
     meta["merge_commit"] = git_out(root, "rev-parse", "origin/main")
@@ -390,87 +391,36 @@ def abort_session(root: Path, active: dict) -> None:
 
 
 def shared_waiting(ws, root: Path, active: dict) -> list[tuple[str, list[str]]]:
-    """Other open sessions and recent pull request comments, for the waiting list."""
+    """Other open sessions (their pull requests), so that the coordinator can avoid overlapping briefs."""
     from cards import split_front_matter
 
     repos = hub_repos(ws)
     hf = api()
-    import datetime as dt
-
-    since_text = git(root, "log", "-1", "--format=%cI", "--diff-filter=A", "--", "sessions/*/report.md",
-                     check=False).stdout.strip()
-    since = dt.datetime.fromisoformat(since_text) if since_text else None
-    others, comments = [], []
+    others = []
     try:
-        discussions = sorted(hf.get_repo_discussions(repos["workspace"], repo_type=DATASET),
+        discussions = sorted(hf.get_repo_discussions(repos["workspace"], repo_type=DATASET,
+                                                     discussion_type="pull_request"),
                              key=lambda d: d.num, reverse=True)
     except HfHubHTTPError as exc:
-        return [("Other open sessions and pull request comments", [f"(could not read them: {exc})"])]
+        return [("Other open sessions", [f"(could not list them: {exc})"])]
     for disc in discussions[:30]:
-        if disc.num == active.get("pr"):
+        if disc.num == active.get("pr") or disc.status not in ("draft", "open"):
             continue
-        details = hf.get_discussion_details(repos["workspace"], disc.num, repo_type=DATASET)
-        events = [e for e in details.events if e.type == "comment"]
-        # A session's pull request carries its own number; a proposal drafted in S1 is "[S1] Plan proposal: …".
-        if disc.is_pull_request and disc.status in ("draft", "open") and disc.title.startswith(f"[S{disc.num}]"):
-            starts = ""
-            if events:
-                try:
-                    meta, _ = split_front_matter(events[0].content or "")
-                    if meta.get("starts_from"):
-                        starts = " — starts from " + ", ".join(map(str, meta["starts_from"]))
-                except Exception:
-                    pass
-            others.append(f"#{disc.num} {disc.title} ({disc.status}){starts}")
-        for event in events[1:] if disc.is_pull_request else events:
-            if since and event.created_at and event.created_at < since:
-                continue
-            text = " ".join((event.content or "").split())[:160]
-            comments.append(f"#{disc.num} {disc.title}: {event.author}: \"{text}\"")
-    return [("Other open sessions", others), ("Pull request comments since the last session", comments)]
-
-
-# ----- promotions, proposals, upgrades -----
-
-
-def promote_shared(root: Path, card_id: str, reason: str, promotion_record) -> None:
-    from cards import Workspace, promotion_problems
-
-    ws = Workspace(root)
-    repos = hub_repos(ws)
-    user = username()
-    env = git_env()
-    for attempt in (1, 2):
-        fetch(root, env)
-        parent = git_out(root, "rev-parse", "origin/main")
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = Path(tmp) / "main"
-            git(root, "worktree", "add", "-q", "--detach", str(tree), parent)
-            try:
-                reasons = promotion_problems(Workspace(tree), card_id, {"kind": "human", "user": user})
-            finally:
-                git(root, "worktree", "remove", "--force", str(tree), check=False)
-        if reasons:
-            raise ScriptError(f"promotion of {card_id} refused: " + "; ".join(reasons))
-        path, content = promotion_record(card_id, {"kind": "human", "user": user}, None, reason)
+        if not disc.title.startswith((f"[S{disc.num}]", "[draft] session")):
+            continue
+        goal = ""
         try:
-            info = api().create_commit(repos["workspace"], repo_type=DATASET, parent_commit=parent,
-                                       commit_message=f"Promote {card_id} ({user})",
-                                       operations=[CommitOperationAdd(path, content.encode())])
-            say(f"Recorded the promotion of {card_id} on main: {path} ({info.oid[:12]}).")
-            return
-        except HfHubHTTPError as exc:
-            if attempt == 2:
-                raise ScriptError(f"the Hub refused the promotion commit: {exc}") from exc
+            details = hf.get_discussion_details(repos["workspace"], disc.num, repo_type=DATASET)
+            first = next((e for e in details.events if e.type == "comment"), None)
+            meta, _ = split_front_matter((first.content or "") if first else "")
+            goal = f" — {meta['goal']}" if meta.get("goal") else ""
+        except Exception:
+            pass
+        others.append(f"#{disc.num} {disc.title} ({disc.status}){goal}")
+    return [("Other open sessions", others)]
 
 
-def propose_file(root: Path, path: str, content: bytes, title: str, description: str) -> tuple[int, str]:
-    from cards import Workspace
-
-    repos = hub_repos(Workspace(root))
-    info = api().create_commit(repos["workspace"], repo_type=DATASET, create_pr=True, commit_message=title,
-                               commit_description=description, operations=[CommitOperationAdd(path, content)])
-    return info.pr_num, info.pr_url
+# ----- upgrades -----
 
 
 def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: list[str]) -> None:
@@ -482,7 +432,7 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     hf = api()
     pr = hf.create_pull_request(repos["workspace"], title=f"Upgrade the method from {old} to {new}",
                                 description="Replaces .physics-intern/ with a newer copy of the method. "
-                                            "A lead merges it; then every operator re-renders with init.",
+                                            "Merge it, then re-render in every checkout with init.",
                                 repo_type=DATASET)
     previous = git_out(target, "rev-parse", "--abbrev-ref", "HEAD")
     git(target, "checkout", "-q", "-B", f"upgrade/{new}", "origin/main")
@@ -498,4 +448,4 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     hf.change_discussion_status(repos["workspace"], pr.num, "open", repo_type=DATASET)
     git(target, "checkout", "-q", previous)
     say(f"Opened pull request #{pr.num} to upgrade the method: {pr_url(repos['workspace'], pr.num)}")
-    say("Once a lead merges it, every operator pulls main and runs init inside their workspace to re-render.")
+    say("Merge it from the Hub, then pull main and run init inside each checkout to re-render.")

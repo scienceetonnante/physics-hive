@@ -23,9 +23,9 @@ Run a symbolic and numerical computation. The `computer` sub-agent writes a scri
 
 3. **Dispatch the `computer` sub-agent** with the brief path and the artefact ID (see the dispatch syntax for your harness in AGENTS.md). It writes `computations/<id>.py`, `.out`, any data files, and the summary `computations/<id>.md`.
 
-4. **Integrate** (AGENTS.md §5):
+4. **Integrate** (AGENTS.md §6):
    - Read the return block.
-   - Write the claim card with the reserved ID (or none, if the computation supports existing cards), stating what was actually computed. If the symbolic and numerical paths disagree, do not write a claim; record the disagreement as a question card or a flag disposition.
+   - Write the claim card with the reserved ID (or none, if the computation supports existing cards), stating what was actually computed. If the symbolic and numerical paths disagree, do not write a claim; record the disagreement as a flag disposition, and in your debrief if it needs the researcher.
    - Disposition every flag in the session log and log the dispatch.
    - Run regen and commit: `[S<n>] compute(<id>): <one-line summary>`. The commit includes the script, its output and its data files.
 

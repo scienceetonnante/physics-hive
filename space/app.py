@@ -1,15 +1,21 @@
-"""The PhysicsIntern Space: a browser interface to a shared research workspace.
+"""The PhysicsIntern Space: the researcher's view of a research workspace, in a browser.
 
-Two pages, and one page per object. *Status* says where the project stands and
-what waits for a person; *Results* lists every card. Each card, paper, session,
-proposal and file has its own page, so that any of them can be sent as a link,
-and every card ID in a text links to its card.
+Five pages, each showing files (design, section 14):
 
-People write in two ways, and both become cards that the next session reads:
-*Write to the agents* (a question card, linked to the card at hand) and
-*Answer* (a claim card that answers an open question). Leads also edit their
-files, merge or close proposals, and promote claims. This file is the user
-interface only: reading and writing the workspace is in backend.py.
+- Latest: the debriefs, newest first (open ones in full, as forms: answers,
+  ticks, the note; closed ones folded), and what the next session will receive;
+- Project: project.md and conventions.md, each with an editor;
+- Draft: draft.tex rendered like an arXiv HTML paper, an editor with a preview
+  beside it, and the PDF;
+- Sessions: one line per session; each opens its note, rendered the same way;
+- Literature: the overview, then the papers by topic with their one-line reason
+  and a rating menu.
+
+The session record (cards, artefacts, reviews, logs) keeps its own pages,
+reached from the notes, the draft and the Sessions page. Nobody is sent there by
+default. The Space applies nothing: it writes files, and the next session
+applies what the researcher ticked. This file is the user interface only;
+reading and writing the workspace is in backend.py.
 
 Every write takes the signed-in user from the sign-in session itself
 (`parse_huggingface_oauth`), never from a value the page sends.
@@ -20,11 +26,12 @@ Run it on a local workspace folder, without the Hub and without sign-in:
 
 import re
 import secrets
+from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from huggingface_hub import attach_huggingface_oauth, parse_huggingface_oauth
 from markdown_it import MarkdownIt
@@ -33,19 +40,20 @@ from markupsafe import Markup
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from starlette.middleware.sessions import SessionMiddleware
 
+import latex
 from backend import Backend, SpaceError
 
 HERE = Path(__file__).resolve().parent
-# Workspace paths, card, paper, artefact and critique IDs, session numbers and pull request numbers.
-# Only those that exist become links.
-ID_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)+\.\w+|\b(?:CL|CR|DE|Q|P|D|C)-[\w.-]*[A-Za-z0-9]|\bS\d+\b|(?<![\w&])#\d+\b")
+# Workspace paths, card, paper, artefact and critique IDs, and session numbers. Only those that exist become links.
+ID_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)+\.\w+|\b(?:CL|CR|DE|P|D|C)-[\w.-]*[A-Za-z0-9]|\bS\d+\b")
+NOTE_RE = re.compile(r"^sessions/(S\d+)/note\.tex$")
 
 
 # ----- Markdown with equations and links -----
 
 
 def href_of(word: str) -> str | None:
-    """The page of an ID, or of a workspace file named in a code span."""
+    """The page of an ID, or of a workspace file named in a code span. A session's ID opens its note."""
     if backend.snap is None:
         return None
     ws = backend.snap.ws
@@ -54,14 +62,19 @@ def href_of(word: str) -> str | None:
     if word in ws.papers:
         return f"/paper/{word}"
     if word in ws.sessions:
-        return f"/session/{word}"
+        return f"/note/{word}" if ws.sessions[word].has_note else f"/session/{word}"
     if word in ws.artefacts:
         return f"/file/{ws.artefacts[word].path}"
-    if word.startswith("#") and int(word[1:]) in {pr["num"] for pr in backend.proposal_prs()}:
-        return f"/proposal/{word[1:]}"
+    m = NOTE_RE.match(word)
+    if m and m.group(1) in ws.sessions:
+        return f"/note/{m.group(1)}"
     for rel in (word, f"critiques/{word}.md"):
         if "/" in rel and backend.file_path(rel):
             return f"/file/{rel}"
+    if word in ("project.md", "conventions.md"):
+        return "/project"
+    if word == "draft.tex":
+        return "/draft"
     return None
 
 
@@ -94,13 +107,20 @@ def link_ids(state) -> None:
         block.children = children
 
 
-# Raw HTML in the workspace's files is shown as text: agents write them.
+# Raw HTML in the workspace's files is shown as text: agents write them. Math goes to MathJax as \( \) and \[ \].
 MD = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"]).use(dollarmath_plugin)
 MD.core.ruler.push("link_ids", link_ids)
+MD.add_render_rule("math_inline", lambda self, tokens, idx, options, env:
+                   f'<span class="math">\\({escape(tokens[idx].content)}\\)</span>')
+MD.add_render_rule("math_block", lambda self, tokens, idx, options, env:
+                   f'<div class="math block">\\[{escape(tokens[idx].content)}\\]</div>\n')
+MD.add_render_rule("math_block_label", lambda self, tokens, idx, options, env:
+                   f'<div class="math block">\\[{escape(tokens[idx].content)}\\]</div>\n')
 
 
 def md(text) -> Markup:
-    return Markup(MD.render(str(text or "")))
+    """Markdown as HTML, without the HTML comments that the templates use for instructions."""
+    return Markup(MD.render(re.sub(r"<!--.*?-->", "", str(text or ""), flags=re.S)))
 
 
 def md_inline(text) -> Markup:
@@ -124,7 +144,8 @@ if backend.local:
 else:
     attach_huggingface_oauth(app)  # adds the session, and the sign-in and sign-out pages
 templates = Jinja2Templates(directory=HERE / "templates")
-templates.env.filters.update(md=md, md_inline=md_inline)
+templates.env.filters.update(md=md, md_inline=md_inline, latex_doc=lambda rendered: Markup(latex.document_html(rendered)))
+LATEX_CSS = (HERE / "latex.css").read_text(encoding="utf-8") if (HERE / "latex.css").is_file() else ""
 
 
 def signed_in(request: Request) -> str | None:
@@ -149,11 +170,10 @@ def check_form(request: Request, token: str) -> str | None:
 
 
 def page(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
-    user = signed_in(request)
     here = quote(request.url.path)
-    context.update(request=request, user=user, lead=backend.is_lead(user), local=backend.local,
-                   name=backend.project_name(), status=backend.status_markdown(), csrf=csrf_token(request),
-                   flash=request.session.pop("flash", None), here=request.url.path,
+    context.update(request=request, user=signed_in(request), local=backend.local, name=backend.project_name(),
+                   status=backend.status_line(), csrf=csrf_token(request), open_count=backend.open_count(),
+                   flash=request.session.pop("flash", None), here=request.url.path, latex_css=LATEX_CSS,
                    sign_in=f"/oauth/huggingface/login?_target_url={here}",
                    sign_out=f"/oauth/huggingface/logout?_target_url={here}")
     return templates.TemplateResponse(request, template, context, status_code=status_code)
@@ -169,42 +189,80 @@ def show_problem(request: Request, exc: SpaceError) -> HTMLResponse:
     return page(request, "problem.html", status_code=503 if backend.snap is None else 404, problem=str(exc))
 
 
-# ----- pages -----
+# ----- the five pages -----
 
 
-def status_page(request: Request, **extra) -> HTMLResponse:
-    return page(request, "status.html", problem_text=backend.lead_text("problem.md"),
-                plan=backend.lead_text("plan.md"), conventions=backend.lead_text("conventions.md"),
-                attention=backend.attention(), counts=backend.counts(), sessions=backend.sessions(),
-                running=backend.open_sessions(), commits=backend.commits, **extra)
-
-
-def card_page(request: Request, card_id: str, **extra) -> HTMLResponse:
-    return page(request, "card.html", **backend.card(card_id), **extra)
-
-
-def paper_page(request: Request, paper_id: str, **extra) -> HTMLResponse:
-    return page(request, "paper.html", **backend.paper(paper_id), **extra)
+def latest_page(request: Request, **extra) -> HTMLResponse:
+    return page(request, "latest.html", debriefs=backend.debriefs(), running=backend.running(),
+                receives=backend.next_session_receives(), title=backend.title(), **extra)
 
 
 @app.get("/", response_class=HTMLResponse)
-def status(request: Request):
-    return status_page(request)
+def latest(request: Request):
+    return latest_page(request)
 
 
-@app.get("/results", response_class=HTMLResponse)
-def results(request: Request):
-    return page(request, "results.html", **backend.results(), seeds=backend.lead_text("literature/seeds.md"))
+@app.get("/project", response_class=HTMLResponse)
+def project(request: Request):
+    return page(request, "project.html", **backend.project())
+
+
+@app.get("/draft", response_class=HTMLResponse)
+def draft(request: Request):
+    return page(request, "draft.html", **backend.draft())
+
+
+@app.get("/draft/edit", response_class=HTMLResponse)
+def draft_edit(request: Request):
+    data = backend.draft()
+    return page(request, "draft_edit.html", text=data["tex"], base=data["tex"], html=data["html"])
+
+
+@app.get("/draft.pdf")
+def draft_pdf(request: Request):
+    data, name = backend.pdf("draft.tex")
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@app.post("/preview", response_class=HTMLResponse)
+def preview(request: Request, text: str = Form(""), csrf: str = Form("")):
+    check_form(request, csrf)
+    rendered = backend.render_tex(text, flags=True)
+    return templates.TemplateResponse(request, "latex_body.html", {"html": rendered, "request": request})
+
+
+@app.get("/sessions", response_class=HTMLResponse)
+def sessions(request: Request):
+    return page(request, "sessions.html", sessions=backend.sessions(), running=backend.running())
+
+
+@app.get("/note/{session_id}", response_class=HTMLResponse)
+def note(request: Request, session_id: str, source: int = 0):
+    return page(request, "note.html", source=bool(source), **backend.note(session_id))
+
+
+@app.get("/note/{session_id}/pdf")
+def note_pdf(request: Request, session_id: str):
+    data, name = backend.pdf(f"sessions/{session_id}/note.tex")
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@app.get("/literature", response_class=HTMLResponse)
+def literature(request: Request):
+    return page(request, "literature.html", **backend.literature())
+
+
+# ----- the session record -----
 
 
 @app.get("/card/{card_id}", response_class=HTMLResponse)
 def card(request: Request, card_id: str):
-    return card_page(request, card_id)
+    return page(request, "card.html", **backend.card(card_id))
 
 
 @app.get("/paper/{paper_id}", response_class=HTMLResponse)
 def paper(request: Request, paper_id: str):
-    return paper_page(request, paper_id)
+    return page(request, "paper.html", **backend.paper(paper_id))
 
 
 @app.get("/session/{session_id}", response_class=HTMLResponse)
@@ -212,20 +270,9 @@ def session(request: Request, session_id: str):
     return page(request, "session.html", **backend.session(session_id))
 
 
-@app.get("/proposal/{number}", response_class=HTMLResponse)
-def proposal(request: Request, number: str):
-    return page(request, "proposal.html", pr=backend.proposal(number))
-
-
 @app.get("/file/{rel:path}", response_class=HTMLResponse)
 def file(request: Request, rel: str):
     return page(request, "file.html", **backend.file(rel))
-
-
-@app.get("/edit/{rel:path}", response_class=HTMLResponse)
-def edit(request: Request, rel: str):
-    text = backend.lead_file(rel)
-    return page(request, "edit.html", path=rel, text=text, base=text, preview=None)
 
 
 @app.get("/refresh")
@@ -237,59 +284,54 @@ def refresh(request: Request, back: str = "/"):
 # ----- writes -----
 
 
-@app.post("/ask")
-def ask(request: Request, text: str = Form(""), about: str = Form(""), csrf: str = Form("")):
-    back = f"/card/{about}" if about in backend.current().ws.cards else (
-        f"/paper/{about}" if about in backend.current().ws.papers else "/")
-    try:
-        message = backend.ask(check_form(request, csrf), text, about or None)
-    except SpaceError as exc:
-        extra = {"error": str(exc), "draft": text, "draft_for": "ask"}
-        if back.startswith("/card/"):
-            return card_page(request, about, **extra)
-        if back.startswith("/paper/"):
-            return paper_page(request, about, **extra)
-        return status_page(request, **extra)
-    return done(request, message, back)
+def back_of(rel: str) -> str:
+    if rel in ("project.md", "conventions.md"):
+        return "/project"
+    if rel == "literature/seeds.md":
+        return "/literature"
+    if rel == "draft.tex":
+        return "/draft"
+    return "/"
 
 
-@app.post("/card/{card_id}/answer")
-def answer(request: Request, card_id: str, text: str = Form(""), csrf: str = Form("")):
-    try:
-        message = backend.answer(check_form(request, csrf), card_id, text)
-    except SpaceError as exc:
-        return card_page(request, card_id, error=str(exc), draft=text, draft_for="answer")
-    return done(request, message, f"/card/{card_id}")
-
-
-@app.post("/card/{card_id}/promote")
-def promote(request: Request, card_id: str, reason: str = Form(""), csrf: str = Form("")):
-    try:
-        message = backend.promote(check_form(request, csrf), card_id, reason)
-    except SpaceError as exc:
-        return card_page(request, card_id, error=str(exc), draft=reason, draft_for="promote")
-    return done(request, message, f"/card/{card_id}")
+@app.get("/edit/{rel:path}", response_class=HTMLResponse)
+def edit(request: Request, rel: str):
+    if not backend.editable(rel):
+        raise SpaceError(f"{rel} is not one of the files you edit here.")
+    if rel == "draft.tex":
+        return RedirectResponse("/draft/edit", status_code=303)
+    text = backend.read(rel)
+    return page(request, "edit.html", path=rel, text=text, base=text, back=back_of(rel))
 
 
 @app.post("/edit/{rel:path}")
-def save(request: Request, rel: str, text: str = Form(""), base: str = Form(""), action: str = Form("save"),
+def save(request: Request, rel: str, text: str = Form(""), base: str = Form(""), csrf: str = Form("")):
+    try:
+        message = backend.save_file(check_form(request, csrf), rel, text, base)
+    except SpaceError as exc:
+        if rel == "draft.tex":
+            return page(request, "draft_edit.html", text=text, base=base, html=backend.render_tex(text, flags=True),
+                        error=str(exc))
+        return page(request, "edit.html", path=rel, text=text, base=base, back=back_of(rel), error=str(exc))
+    return done(request, message, back_of(rel))
+
+
+@app.post("/debrief/{session_id}")
+async def answer(request: Request, session_id: str):
+    form = await request.form()
+    answers = {int(k.split("-", 1)[1]): str(v) for k, v in form.items() if re.match(r"^answer-\d+$", k)}
+    ticked = {int(k.split("-", 1)[1]) for k in form.keys() if re.match(r"^tick-\d+$", k)}
+    try:
+        message = backend.save_debrief(check_form(request, str(form.get("csrf", ""))), session_id, answers, ticked,
+                                       str(form.get("note", "")), str(form.get("base", "")))
+    except SpaceError as exc:
+        return latest_page(request, error=str(exc), error_for=session_id)
+    return done(request, message, f"/#{session_id}")
+
+
+@app.post("/rate")
+def rate(request: Request, paper_id: str = Form(""), rating: str = Form(""), back: str = Form("/literature"),
          csrf: str = Form("")):
-    if action == "preview":
-        return page(request, "edit.html", path=rel, text=text, base=base, preview=text)
-    try:
-        message = backend.save_lead_file(check_form(request, csrf), rel, text, base)
-    except SpaceError as exc:
-        return page(request, "edit.html", path=rel, text=text, base=base, preview=None, error=str(exc))
-    return done(request, message, "/results" if rel == "literature/seeds.md" else "/")
-
-
-@app.post("/proposal/{number}/{action}")
-def settle(request: Request, number: str, action: str, csrf: str = Form("")):
-    settle_with = {"merge": backend.merge_proposal, "close": backend.close_proposal}.get(action)
-    try:
-        if settle_with is None:
-            raise SpaceError(f"A proposal is merged or closed, not {action!r}.")
-        message = settle_with(check_form(request, csrf), number)
-    except SpaceError as exc:
-        return page(request, "proposal.html", pr=backend.proposal(number), error=str(exc))
-    return done(request, message, "/")
+    message = backend.rate(check_form(request, csrf), paper_id, rating)
+    target = back if back.startswith("/") and not back.startswith("//") else "/literature"
+    return done(request, message, target)

@@ -123,6 +123,9 @@ def test_card_follows_the_surveyor_format():
         "arxiv": "hep-th/9711200",
         "inspire": 451647,
         "doi": "10.4310/ATMP.1998.v2.n2.a1",
+        "why": "",  # written by the surveyor: one sentence for the researcher
+        "topic": "",
+        "rating": "",
         "session": "S3",
     }
 
@@ -270,17 +273,17 @@ def test_search_cards_ranks_and_snippets(toy, monkeypatch, capsys):
               "## Main result\nType IIB supergravity on AdS5 x S5 is dual to N=4 super-Yang-Mills.\n")
     toy.write("literature/P-1207.7214.md", {"id": "P-1207.7214", "kind": "paper", "title": "Observation of a new particle"},
               "## Main result\nA boson near 126 GeV.\n")
-    (toy.root / "literature" / "survey-S2.md").write_text(
-        "## Summary\nWrote it.\n\n## Known pitfalls\nThe sign of the supergravity action differs between papers.\n")
+    (toy.root / "literature" / "overview.md").write_text(
+        "# Overview of the literature\n\n## Holography\nThe sign of the supergravity action differs between papers.\n")
     toy.card("CL-S2-1", statement="At large N the central charge scales as $N^2$.")
 
     result = lit.search_cards(toy.root, "large N supergravity")
     paths = [hit["path"] for hit in result["results"]]
     assert paths[0] == "literature/P-hep-th_9711200.md"  # matches all three words
-    assert set(paths) == {"literature/P-hep-th_9711200.md", "literature/survey-S2.md", "claims/CL-S2-1.md"}
-    survey = next(hit for hit in result["results"] if hit["kind"] == "survey")
-    assert survey["title"] == "survey summary of S2"
-    assert "supergravity action" in survey["snippet"]
+    assert set(paths) == {"literature/P-hep-th_9711200.md", "literature/overview.md", "claims/CL-S2-1.md"}
+    overview = next(hit for hit in result["results"] if hit["kind"] == "overview")
+    assert overview["title"] == "literature overview"
+    assert "supergravity action" in overview["snippet"]
     assert result["searched"] == 4
 
     monkeypatch.chdir(toy.root / "claims")  # the workspace root is found from a subfolder

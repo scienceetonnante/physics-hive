@@ -13,8 +13,8 @@ The dispatch gives you: the target artefact ID; the **statement of the claim** u
 
 ## What you read, and what you do not
 
-- Read the target in full: for a derivation, `derivations/<target>.summary.md` and `derivations/<target>.tex`; for a computation, `computations/<target>.md`, `.py` and `.out`. Read `problem.md`, `conventions.md` and the references named in the dispatch.
-- **Do not read** any other review of the same target (`<target>_R-*.md`), `claims/`, `sessions/`, `feedback/`, `INDEX.md`, `research_log.md`, traces or the git history. They would tell you who produced the work or what others concluded, and your review must be independent of both.
+- Read the target in full: for a derivation, `derivations/<target>.summary.md` and `derivations/<target>.tex`; for a computation, `computations/<target>.md`, `.py` and `.out`. Read `project.md`, `conventions.md` and the references named in the dispatch.
+- **Do not read** any other review of the same target (`<target>_R-*.md`), `claims/`, `sessions/`, `draft.tex`, `INDEX.md`, traces or the git history. They would tell you who produced the work or what others concluded, and your review must be independent of both.
 
 ## How you review
 

@@ -1,35 +1,38 @@
 """Workspace access for the PhysicsIntern Space, without any user interface.
 
-The Space shows a workspace to people who only use a browser, and writes what
-they do there: question and claim cards, promotions, edits of the lead's files
-and decisions on proposals. Reactions and verifications are written here too,
-for the pages that may show them again. Everything except the page layout
-lives in this module, so that it can be tested on a folder.
+The Space shows the human view of a workspace (design, section 14): the
+debriefs, project.md and conventions.md, the draft, the session notes and the
+literature. It writes only files: the researcher's answers, ticks and notes in
+a debrief, their edits of project.md, conventions.md, the draft and the seeds,
+and their ratings of papers. It applies nothing: ticked lines are applied by
+the next session.
 
 Two ways to reach a workspace:
 
 - In the deployed Space, the workspace is a private dataset repository on the
-  Hub, named by the Space variable `PHYSICS_INTERN_WORKSPACE` (org/name). It is
-  downloaded with the Space secret `HF_TOKEN`, refreshed on demand and after
-  each write, and every write is a commit made with that token, whose message
-  names the signed-in user.
-- For development and tests, `PHYSICS_INTERN_LOCAL=/path/to/workspace` reads a
-  folder directly and writes files into it instead of committing. The
-  signed-in user is then `PHYSICS_INTERN_LOCAL_USER`.
+  Hub, named by the Space variable `PHYSICS_INTERN_WORKSPACE` (org/name). The
+  Space keeps a git clone of it (with the Space secret `HF_TOKEN`), fetched on
+  demand and after each write, and shows each commit of main from its own git
+  worktree, so that it can read the history as `session.py` does. Every write
+  is a commit made through the Hub API with that token, on the commit the page
+  was built from, and names the signed-in user in its message.
+- For development, tests and local mode, `PHYSICS_INTERN_LOCAL=/path/to/workspace`
+  reads a folder directly and writes files into it without committing; the next
+  `session.py start` commits them as the researcher's. The signed-in user is
+  then `PHYSICS_INTERN_LOCAL_USER`.
 
-What the files mean (status, evidence, needs re-check, current reactions, the
-promotion rule, the checks) comes from the workspace's own copy of the method
-scripts, `.physics-intern/scripts/`, imported again at every refresh. The Space
-therefore computes exactly what `regen` and `check` compute for that workspace.
-Every write is a new file with a unique name, except a lead's edit of a lead's
-file, so writes from the Space never conflict with sessions.
+What the files mean (status, evidence, the draft's results, debriefs, what a
+session receives, the checks, references.bib, the PDF) comes from the
+workspace's own copy of the method scripts, `.physics-intern/scripts/`,
+imported again at every refresh.
 """
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
+import hashlib
 import importlib
-import json
 import os
 import re
 import shutil
@@ -38,14 +41,15 @@ import sys
 import tempfile
 import threading
 import time
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
-from huggingface_hub import CommitOperationAdd, HfApi, snapshot_download
+from huggingface_hub import CommitOperationAdd, HfApi
 from huggingface_hub import constants as hf_constants
 from huggingface_hub.utils import disable_progress_bars
+
+import latex
 
 disable_progress_bars()
 
@@ -54,12 +58,14 @@ HUB = hf_constants.ENDPOINT
 # Fallback method scripts for a workspace without a method copy (the test toys):
 # this repository's scripts/, or those of the method copy this app sits in.
 REPO_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-# Modules of the method copy that import each other by plain name.
-METHOD_MODULES = ("cards", "common", "regen", "check", "promote")
+# Modules of the method copy, which import each other by plain name.
+METHOD_MODULES = ("cards", "common", "human", "regen", "check", "pdf")
 MAX_AGE = 120  # seconds after which a page load refreshes the workspace
 MAX_CHARS = 60_000  # longest file shown in full in the page
+KEEP_WORKTREES = 3  # commits of main kept checked out in the Hub clone
 
-LEAD_FILES = ("problem.md", "plan.md", "conventions.md", "literature/seeds.md")
+DEBRIEF_RE = re.compile(r"^sessions/S\d+/debrief\.md$")
+EDITABLE = ("project.md", "conventions.md", "draft.tex", "literature/seeds.md")
 CODE_LANGUAGES = {".tex": "latex", ".py": "python", ".json": "json", ".md": "markdown"}
 
 
@@ -71,33 +77,27 @@ def now_utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
 
 
-def iso(moment: dt.datetime) -> str:
-    return moment.isoformat().replace("+00:00", "Z")
-
-
 def clip(text: str, limit: int = MAX_CHARS) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n\n[… cut here: the file has {len(text)} characters, of which the first {limit} are shown]"
 
 
-def demote_headings(text: str, levels: int = 2) -> str:
-    """Make the headings of an included file smaller, so that they sit under the page's own."""
-    return re.sub(r"^(#{1,6}) ", lambda m: "#" * min(6, len(m.group(1)) + levels) + " ", text, flags=re.M)
+def normalise(text: str) -> str:
+    text = (text or "").replace("\r\n", "\n")
+    return text if not text or text.endswith("\n") else text + "\n"
+
+
+def first_sentence(text: str, limit: int = 220) -> str:
+    plain = " ".join(re.sub(r"[*_`#>]", "", text or "").split())
+    m = re.match(r"(.+?[.!?])(\s|$)", plain)
+    sentence = m.group(1) if m else plain
+    return sentence if len(sentence) <= limit else sentence[: limit - 1] + "…"
 
 
 def is_session_pr(pr: dict) -> bool:
-    """A session's pull request is titled `[S12] …`, 12 being its own number; just after the claim, `[draft] session by …`.
-
-    Other pull requests may start with a session too: the plan proposal drafted in S1 is `[S1] Plan proposal: …`.
-    """
+    """A session's pull request is titled `[S12] …`, 12 being its own number; just after the claim, `[draft] session by …`."""
     return pr["title"].startswith((f"[S{pr['num']}]", "[draft] session"))
-
-
-def split_text(text: str) -> tuple[str, str]:
-    """A card's statement (the first paragraph) and body (the rest), from what a person typed in one box."""
-    first, _, rest = (text or "").replace("\r\n", "\n").strip().partition("\n\n")
-    return " ".join(first.split()), rest.strip()
 
 
 # ----- the method copy -----
@@ -106,14 +106,14 @@ def split_text(text: str) -> tuple[str, str]:
 def method_scripts(root: Path) -> Path:
     """The scripts of the workspace's method copy, or the fallback ones for a toy workspace."""
     for folder in (root / ".physics-intern" / "scripts", REPO_SCRIPTS):
-        if (folder / "cards.py").is_file():
+        if (folder / "cards.py").is_file() and (folder / "human.py").is_file():
             return folder
-    raise SpaceError("The workspace has no method copy (.physics-intern/scripts/cards.py), so the Space "
-                     "cannot interpret its files.")
+    raise SpaceError("The workspace has no method copy (.physics-intern/scripts/) that this Space can read. "
+                     "It may use an earlier format of the method.")
 
 
 def load_method(scripts: Path) -> SimpleNamespace:
-    """Import cards, regen, check and promote from `scripts`, leaving other imports untouched.
+    """Import the method's modules from `scripts`, leaving other imports untouched.
 
     The scripts import each other by plain name (`from cards import ...`), so they
     are imported with `scripts` first on sys.path. Afterwards sys.path and
@@ -126,7 +126,7 @@ def load_method(scripts: Path) -> SimpleNamespace:
     sys.dont_write_bytecode = True  # do not write __pycache__ into the workspace
     try:
         importlib.invalidate_caches()
-        return SimpleNamespace(**{name: importlib.import_module(name) for name in ("cards", "regen", "check", "promote")})
+        return SimpleNamespace(**{name: importlib.import_module(name) for name in METHOD_MODULES})
     finally:
         sys.path[:] = saved_path
         sys.dont_write_bytecode = saved_bytecode
@@ -138,8 +138,16 @@ def load_method(scripts: Path) -> SimpleNamespace:
 # ----- where the workspace lives -----
 
 
+def run_git(cwd: Path, *args: str, env: dict | None = None) -> str:
+    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                          env={**os.environ, **(env or {}), "GIT_TERMINAL_PROMPT": "0"})
+    if proc.returncode != 0:
+        raise SpaceError(f"git {' '.join(args[:2])} failed: {(proc.stderr or proc.stdout).strip()[:500]}")
+    return proc.stdout.strip()
+
+
 class LocalStore:
-    """A workspace folder on this machine, for development and tests. Writes are plain files."""
+    """A workspace folder on this machine. Writes are plain files, committed later by session.py start."""
 
     def __init__(self, root: Path | str):
         self.root = Path(root).expanduser().resolve()
@@ -156,58 +164,58 @@ class LocalStore:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
 
-    def propose(self, path: str, content: str, title: str, description: str) -> tuple[int, str]:
-        raise SpaceError("This Space reads a local folder, which has no pull requests, so only a lead can save "
-                         "the lead's files here.")
-
-    def merge(self, number: int, comment: str) -> None:
-        raise SpaceError("This Space reads a local folder, which has no pull requests.")
-
-    close = merge
-
-    def proposal(self, number: int) -> dict:
-        raise SpaceError("This Space reads a local folder, which has no pull requests.")
-
     def pull_requests(self) -> list[dict]:
         return []
 
-    def recent_commits(self, n: int) -> list[dict]:
-        if not (self.root / ".git").exists():
-            return []
-        proc = subprocess.run(["git", "log", f"-n{n}", "--format=%cI%x1f%an%x1f%s"], cwd=self.root,
-                              capture_output=True, text=True)
-        rows = []
-        for line in proc.stdout.splitlines():
-            date, author, title = (line.split("\x1f") + ["", ""])[:3]
-            rows.append({"date": date[:16].replace("T", " "), "authors": [author], "title": title})
-        return rows
-
-    def chat_log_target(self, hub: dict) -> str:
-        return os.environ.get("PHYSICS_INTERN_CHAT_LOG") or str(Path(tempfile.gettempdir()) / "physics-intern-chat-debug.jsonl")
-
-    def log_chat(self, record: dict, hub: dict) -> None:
-        with open(self.chat_log_target(hub), "a", encoding="utf-8") as log:
-            log.write(json.dumps(record, ensure_ascii=False) + "\n")
-
 
 class HubStore:
-    """The workspace as a private dataset repository on the Hub, read and written with the Space's token."""
+    """The workspace as a private dataset repository on the Hub: read from a git clone, written through the API."""
 
-    def __init__(self, repo_id: str, token: str, api: HfApi | None = None):
+    def __init__(self, repo_id: str, token: str, api: HfApi | None = None, remote: str | None = None,
+                 cache: Path | None = None):
         self.repo_id, self.token = repo_id, token
         self.api = api or HfApi(token=token)
         self.label = repo_id
+        self.remote = remote or f"{HUB}/datasets/{repo_id}"
+        self.cache = Path(cache or Path(tempfile.gettempdir()) / "physics-intern-space") / repo_id.replace("/", "--")
+        self._env: dict | None = None
+
+    def git_env(self) -> dict:
+        """Git sends the token in a header for each command; it is never written to a config file."""
+        if self._env is None:
+            if not self.remote.startswith("http"):
+                self._env = {}
+            else:
+                auth = base64.b64encode(f"hf:{self.token}".encode()).decode()
+                self._env = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"http.{HUB}/.extraHeader",
+                             "GIT_CONFIG_VALUE_0": f"Authorization: Basic {auth}"}
+        return self._env
 
     def snapshot(self) -> tuple[Path, str]:
-        """Download main as it is now. Each commit gets its own folder in the Hub cache."""
+        """main as it is now, checked out in its own worktree (one folder per commit, the last few kept)."""
         try:
-            revision = self.api.repo_info(self.repo_id, repo_type=DATASET).sha
-            path = snapshot_download(self.repo_id, repo_type=DATASET, revision=revision, token=self.token)
-        except Exception as exc:
-            raise SpaceError(f"The Space could not read the workspace {self.repo_id} from the Hub "
-                             f"({type(exc).__name__}: {exc}). Check that the Space secret HF_TOKEN is a token "
-                             "that can read and write this repository.") from exc
-        return Path(path), revision
+            clone = self.cache / "clone"
+            if not (clone / "HEAD").is_file():
+                self.cache.mkdir(parents=True, exist_ok=True)
+                run_git(self.cache, "clone", "-q", "--bare", self.remote, str(clone), env=self.git_env())
+            run_git(clone, "fetch", "-q", "--prune", "origin", "+refs/heads/main:refs/heads/main", env=self.git_env())
+            sha = run_git(clone, "rev-parse", "main")
+            tree = self.cache / sha[:12]
+            if not (tree / ".git").exists():
+                run_git(clone, "worktree", "prune")
+                run_git(clone, "worktree", "add", "-q", "--detach", str(tree), sha)
+            self._prune(clone, keep=tree)
+        except SpaceError as exc:
+            raise SpaceError(f"The Space could not read the workspace {self.repo_id} from the Hub ({exc}). Check "
+                             "that the Space secret HF_TOKEN is a token that can read and write this repository.") from exc
+        return tree, sha
+
+    def _prune(self, clone: Path, keep: Path) -> None:
+        trees = sorted((p for p in self.cache.iterdir() if p.is_dir() and p.name != "clone" and p != keep),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in trees[KEEP_WORKTREES - 1:]:
+            subprocess.run(["git", "worktree", "remove", "--force", str(old)], cwd=clone, capture_output=True)
+            shutil.rmtree(old, ignore_errors=True)
 
     def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
         operations = [CommitOperationAdd(path_in_repo=rel, path_or_fileobj=content.encode("utf-8"))
@@ -215,72 +223,12 @@ class HubStore:
         self.api.create_commit(self.repo_id, operations, commit_message=message, repo_type=DATASET,
                                parent_commit=parent)
 
-    def propose(self, path: str, content: str, title: str, description: str) -> tuple[int, str]:
-        info = self.api.create_commit(self.repo_id, [CommitOperationAdd(path, content.encode("utf-8"))],
-                                      commit_message=title, commit_description=description,
-                                      repo_type=DATASET, create_pr=True)
-        return info.pr_num, info.pr_url
-
-    def merge(self, number: int, comment: str) -> None:
-        self.api.merge_pull_request(self.repo_id, number, repo_type=DATASET, comment=comment)
-
-    def close(self, number: int, comment: str) -> None:
-        self.api.change_discussion_status(self.repo_id, number, "closed", comment=comment, repo_type=DATASET)
-
-    def proposal(self, number: int) -> dict:
-        """The description of a pull request, and the files it changes as they are in it (None if deleted or binary).
-
-        The Hub does not always return a pull request's diff, so the changed files are found by comparing
-        the files of the pull request with those of the commit of main it starts from.
-        """
-        details = self.api.get_discussion_details(self.repo_id, number, repo_type=DATASET)
-        comments = [e for e in details.events if e.type == "comment"]
-        head = f"refs/pr/{number}"
-        on_main = {c.commit_id for c in self.api.list_repo_commits(self.repo_id, repo_type=DATASET)}
-        base = next(c.commit_id for c in self.api.list_repo_commits(self.repo_id, repo_type=DATASET, revision=head)
-                    if c.commit_id in on_main)
-
-        def blobs(revision: str) -> dict[str, str]:
-            tree = self.api.list_repo_tree(self.repo_id, repo_type=DATASET, revision=revision, recursive=True)
-            return {f.path: f.blob_id for f in tree if getattr(f, "blob_id", None)}
-
-        before, after = blobs(base), blobs(head)
-        files = []
-        for rel in sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p)):
-            try:
-                local = self.api.hf_hub_download(self.repo_id, rel, repo_type=DATASET, revision=head)
-                text = Path(local).read_text(encoding="utf-8")
-            except Exception:
-                text = None
-            files.append({"path": rel, "text": text})
-        return {"description": (comments[0].content or "").strip() if comments else "", "files": files}
-
     def pull_requests(self) -> list[dict]:
         rows = []
         for d in self.api.get_repo_discussions(self.repo_id, repo_type=DATASET, discussion_type="pull_request"):
             rows.append({"num": d.num, "title": d.title, "status": d.status, "author": d.author,
                          "date": d.created_at.strftime("%Y-%m-%d") if d.created_at else "", "url": d.url})
         return sorted(rows, key=lambda r: -r["num"])
-
-    def recent_commits(self, n: int) -> list[dict]:
-        commits = self.api.list_repo_commits(self.repo_id, repo_type=DATASET)[:n]
-        return [{"date": c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else "",
-                 "authors": list(c.authors or []), "title": c.title} for c in commits]
-
-    def chat_log_target(self, hub: dict) -> str | None:
-        return hub.get("chat_debug") or None
-
-    def log_chat(self, record: dict, hub: dict) -> None:
-        """Add one exchange as a new file of the chat_debug dataset, without making the reader wait."""
-        repo = self.chat_log_target(hub)
-        if not repo:
-            return
-        stamp = record["date"].replace(":", "").replace("-", "")
-        name = f"exchanges/{record['date'][:10]}/{stamp}-{record['user']}-{uuid.uuid4().hex[:8]}.json"
-        future = self.api.create_commit(repo, [CommitOperationAdd(name, json.dumps(record, ensure_ascii=False, indent=1).encode())],
-                                        commit_message=f"Chat exchange ({record['user']})", repo_type=DATASET,
-                                        run_as_future=True)
-        future.add_done_callback(lambda f: f.exception() and print(f"chat debug log failed: {f.exception()}", file=sys.stderr))
 
 
 # ----- the backend -----
@@ -292,43 +240,39 @@ class Snapshot:
 
     root: Path
     revision: str | None  # commit of main (Hub), None for a local folder
-    m: SimpleNamespace  # cards, regen, check and promote from the workspace's method copy
+    m: SimpleNamespace  # the method's modules, from the workspace's own copy
     ws: object  # cards.Workspace
     loaded_at: float
 
 
 class Backend:
-    """Computed views of one workspace for the pages, and every write the Space makes."""
+    """The data of the pages, and every write the Space makes."""
 
     def __init__(self, store: LocalStore | HubStore | None = None, *, local_user: str | None = None,
-                 chat_debug: bool = False, error: str | None = None):
+                 error: str | None = None):
         self.store = store
         self.local_user = local_user
-        self.chat_debug = chat_debug
         self.snap: Snapshot | None = None
         self.error = error  # why the workspace cannot be shown, if it cannot
         self.pull_requests: list[dict] = []
-        self.commits: list[dict] = []
-        self.commits_of: str | None = None  # the main commit that self.commits was listed at
         self.notes: list[str] = []  # things that failed without blocking the pages
         self._lock = threading.RLock()
+        self._renders: dict[str, latex.Rendered] = {}
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> Backend:
         env = os.environ if env is None else env
-        debug = env.get("CHAT_DEBUG", "0").strip() == "1"
         if env.get("PHYSICS_INTERN_LOCAL"):
-            return cls(LocalStore(env["PHYSICS_INTERN_LOCAL"]), local_user=env.get("PHYSICS_INTERN_LOCAL_USER") or None,
-                       chat_debug=debug)
+            return cls(LocalStore(env["PHYSICS_INTERN_LOCAL"]), local_user=env.get("PHYSICS_INTERN_LOCAL_USER") or None)
         repo = env.get("PHYSICS_INTERN_WORKSPACE", "").strip()
         token = env.get("HF_TOKEN", "").strip()
         if not repo:
-            return cls(chat_debug=debug, error="This Space does not know which workspace to show: the Space "
-                       "variable PHYSICS_INTERN_WORKSPACE (org/name) is not set.")
+            return cls(error="This Space does not know which workspace to show: the Space variable "
+                             "PHYSICS_INTERN_WORKSPACE (org/name) is not set.")
         if not token:
-            return cls(chat_debug=debug, error=f"This Space cannot read the workspace {repo}: the Space secret "
-                       f"HF_TOKEN is not set. A lead adds it in the Space settings (a token that can read and write {repo}).")
-        return cls(HubStore(repo, token), chat_debug=debug)
+            return cls(error=f"This Space cannot read the workspace {repo}: the Space secret HF_TOKEN is not set. "
+                             f"Add it in the Space settings (a token that can read and write {repo}).")
+        return cls(HubStore(repo, token))
 
     @property
     def local(self) -> bool:
@@ -358,12 +302,12 @@ class Backend:
             raise SpaceError(f"The workspace could not be loaded ({type(exc).__name__}: {exc}).") from exc
 
     def refresh(self) -> None:
-        """Load the latest workspace, pull requests and recent commits. Shows problems instead of raising."""
+        """Load the latest workspace and pull requests. Shows problems instead of raising."""
         if self.store is None:
             return
         with self._lock:
             try:
-                snap = self._fresh()
+                self._fresh()
             except SpaceError as exc:
                 self.error = str(exc)
                 return
@@ -372,23 +316,13 @@ class Backend:
                 self.pull_requests = self.store.pull_requests()
             except Exception as exc:
                 self.notes.append(f"the pull requests could not be listed ({type(exc).__name__})")
-            # Listing commits reads the whole history on the Hub, so do it only when main has moved.
-            if snap.revision is None or snap.revision != self.commits_of:
-                try:
-                    self.commits, self.commits_of = self.store.recent_commits(15), snap.revision
-                except Exception as exc:
-                    self.notes.append(f"the recent commits could not be listed ({type(exc).__name__})")
 
     def refresh_if_stale(self, max_age: float = MAX_AGE) -> None:
         if self.snap is None or time.time() - self.snap.loaded_at > max_age:
             self.refresh()
 
     def current(self) -> Snapshot:
-        """The loaded workspace, or a SpaceError saying why there is none.
-
-        It loads the workspace the first time. After a failed load it does not
-        try again by itself; a page load or the Refresh button does.
-        """
+        """The loaded workspace, or a SpaceError saying why there is none."""
         if self.snap is None and not self.error:
             self.refresh()
         if self.snap is None:
@@ -400,7 +334,7 @@ class Backend:
         path = self.current().root / rel
         try:
             return path.read_text(encoding="utf-8")
-        except FileNotFoundError:
+        except (FileNotFoundError, IsADirectoryError):
             return ""
         except UnicodeDecodeError:
             return "(binary file, not shown)"
@@ -413,24 +347,9 @@ class Backend:
         except ValueError:
             return text.strip()
 
-    # --- small helpers for the pages ---
+    # --- the frame of every page ---
 
-    def is_lead(self, user: str | None) -> bool:
-        try:
-            return bool(user) and user in self.current().ws.leads
-        except SpaceError:
-            return False
-
-    def chat_model(self) -> str | None:
-        return (self.current().ws.project.get("models") or {}).get("chat")
-
-    def chat_log_target(self) -> str | None:
-        if self.store is None:
-            return None
-        hub = self.snap.ws.hub if self.snap else {}
-        return self.store.chat_log_target(hub)
-
-    def status_markdown(self) -> str:
+    def status_line(self) -> str:
         if self.snap is None:
             return f"**{self.error}**" if self.error else "Loading…"
         ws = self.snap.ws
@@ -446,20 +365,8 @@ class Backend:
         return line
 
     def project_name(self) -> str:
-        """The project's short name: the workspace repository's name, or the folder's."""
         label = self.store.label if self.store is not None else "PhysicsIntern"
         return label.rstrip("/").rsplit("/", 1)[-1]
-
-    def chat_banner(self) -> str:
-        if not self.chat_debug:
-            return ""
-        if self.snap is None:
-            return "**Debug mode: chat conversations are logged**, outside the workspace."
-        target = self.chat_log_target()
-        if target:
-            return (f"**Debug mode: chat conversations are logged** (to `{target}`), with your user name, so that "
-                    "the lead can tune the explainer. They are never written to the workspace.")
-        return "**Debug mode is on**, but project.toml names no chat_debug dataset, so nothing is stored."
 
     def hub_url(self, kind: str, *parts: str) -> str | None:
         """A page on the Hub for one of the project's repositories (None in local mode)."""
@@ -468,130 +375,173 @@ class Backend:
             return None
         return "/".join([f"{HUB}/datasets/{repo}", *parts])
 
-    # --- the Status page ---
+    def open_count(self) -> int:
+        try:
+            return sum(1 for d in self.debriefs() if d["open"])
+        except SpaceError:
+            return 0
 
-    def lead_text(self, path: str) -> str | None:
-        """A lead's file, with its headings under the page's own, or None while it holds only its template."""
-        text = self.read(path)
-        return demote_headings(text.strip()) if _has_text(text) else None
+    # --- Latest ---
 
-    def counts(self) -> dict[str, int]:
-        ws = self.current().ws
-        claims = [ws.status(c.id) for c in ws.sorted_cards("claim")]
-        return {"established claims": claims.count("established"), "working claims": claims.count("working"),
-                "open questions": sum(ws.status(c.id) == "open" for c in ws.sorted_cards("question")),
-                "cards to re-check": sum(1 for c in ws.cards if self._recheck(c)),
-                "dead ends": len(ws.sorted_cards("dead-end")), "papers": len(ws.papers)}
-
-    def sessions(self) -> list:
-        """The sessions with a brief or a report, newest first."""
-        return sorted(self.current().ws.sessions.values(), key=lambda s: -s.number)
-
-    def attention(self) -> dict:
-        """What waits for a person: open proposals, the decisions the latest report asks for, proposed promotions."""
+    def debriefs(self) -> list[dict]:
+        """Every debrief, newest first, with its state: open until a later session has read it."""
         snap = self.current()
-        ws = snap.ws
-        reported = [s for s in self.sessions() if s.report is not None]
-        decisions = reported[0].report_sections.get("Needs a human decision", "") if reported else ""
-        proposed = snap.m.regen.proposed_promotions(ws)
-        return {"proposals": self.proposal_prs(),
-                "decisions": (reported[0].id, decisions) if _says(decisions) else None,
-                "promotions": [(self.row(card_id), proposed[card_id])
-                               for card_id in sorted(proposed, key=snap.m.cards.natural_key)
-                               if ws.status(card_id) == "working"]}
-
-    # --- cards ---
-
-    def _recheck(self, card_id: str) -> list[str]:
-        """What a card needs a re-check for; nothing once the card itself is refuted or revised."""
-        ws = self.current().ws
-        return [] if ws.status(card_id) in ("refuted", "revised") else ws.needs_recheck(card_id)
-
-    def row(self, card_id: str) -> dict:
-        """What a list shows of a card."""
-        snap = self.current()
-        ws, regen = snap.ws, snap.m.regen
-        card = ws.cards.get(card_id)
-        if card is None:
-            return {"id": card_id, "kind": None, "status": "missing", "status_text": "missing", "recheck": [],
-                    "statement": "", "evidence": None, "author": None}
-        human = card.produced_by.get("kind") == "human"
-        return {"id": card.id, "kind": card.kind, "status": ws.status(card.id),
-                "status_text": regen.status_text(ws, card.id),
-                "recheck": [(c, ws.status(c)) for c in self._recheck(card.id)], "statement": card.statement,
-                "evidence": regen.evidence_parts(ws, card.id) if card.kind == "claim" else None,
-                "author": card.produced_by.get("user") if human else None}
-
-    def results(self) -> dict:
-        """The Results page: the cards in the groups it shows, the papers and the survey summaries."""
-        snap = self.current()
-        ws = snap.ws
-
-        def rows(kind: str, *statuses: str) -> list[dict]:
-            return [self.row(c.id) for c in ws.sorted_cards(kind) if not statuses or ws.status(c.id) in statuses]
-
-        surveys = sorted((snap.root / "literature").glob("survey-*.md"), key=lambda p: snap.m.cards.natural_key(p.name))
-        return {"claims": rows("claim", "established") + rows("claim", "working"),
-                "past_claims": rows("claim", "revised", "refuted"),
-                "questions": rows("question", "open"), "answered": rows("question", "answered"),
-                "dead_ends": rows("dead-end"),
-                "papers": [ws.papers[p] for p in sorted(ws.papers, key=snap.m.cards.natural_key)],
-                "surveys": [p.relative_to(snap.root).as_posix() for p in surveys]}
-
-    def related(self, card_id: str) -> list[tuple[str, list[str]]]:
-        """The cards linked to a card, by relation, both ways."""
-        ws = self.current().ws
-        card = ws.cards.get(card_id)
-        if card is None:
-            return []
-        dependents = [c.id for c in ws.sorted_cards() if card_id in c.depends_on]
-        rows = [("Depends on", card.depends_on), ("Cards that depend on it", dependents),
-                ("Supersedes", card.supersedes), ("Revised by", ws.revisers(card_id)),
-                ("Refutes", card.refutes), ("Refuted by", ws.refuters(card_id)),
-                ("Answers", card.answers), ("Answered by", ws.answerers(card_id))]
-        return [(label, ids) for label, ids in rows if ids]
-
-    def card(self, card_id: str) -> dict:
-        """Everything the card page shows."""
-        snap = self.current()
-        ws, regen = snap.ws, snap.m.regen
-        card = ws.cards.get(card_id)
-        if card is None:
-            raise SpaceError(f"There is no card {card_id} in this workspace.")
-        promotions = [{"by": p.by.get("user") or f"an agent ({p.by.get('model', '?')})", "date": p.date[:10],
-                       "counted": ws.promotion_is_valid(p), "reason": p.reason} for p in ws.promotions_of(card_id)]
-        working_claim = card.kind == "claim" and ws.status(card_id) == "working"
-        return {"card": card, "row": self.row(card_id), "origin": origin_text(card),
-                "trace": self.hub_url("traces", "tree/main", card.session) if card.session else None,
-                "related": [(label, [self.row(i) for i in ids]) for label, ids in self.related(card_id)],
-                "evidence": self.evidence_items(card_id), "promotions": promotions,
-                "proposed": regen.proposed_promotions(ws).get(card_id, []) if working_claim else []}
-
-    def evidence_items(self, card_id: str | None) -> list[dict]:
-        """Each piece of evidence of a card, with its summary, full material and reviews."""
-        snap = self.current()
-        ws, regen = snap.ws, snap.m.regen
-        if not card_id or card_id not in ws.cards:
-            return []
-        items = []
-        for ev in ws.evidence(card_id):
-            if ev.verification is not None:
-                r = ev.verification
-                items.append({"title": f"Human verification {regen.review_label(r)}: {r.verdict}",
-                              "summary": self.body(r.path) or "(no text)", "files": [], "reviews": []})
+        ws, human = snap.ws, snap.m.human
+        readers = human.read_by(ws.sessions.values())
+        rows = []
+        for session in sorted(ws.sessions.values(), key=lambda s: -s.number):
+            if session.debrief is None:
                 continue
-            art = ws.artefacts[ev.artefact]
-            title = f"{art.id} ({art.kind})"
-            if ev.attached_by:
-                title += f", attached to this card by the review {ev.attached_by}"
-            files = [{"path": p, "text": clip(self.read(p)), "language": CODE_LANGUAGES.get(Path(p).suffix)}
-                     for p in art.full]
-            reviews = [{"title": f"Review {regen.review_label(r)}: {r.verdict}", "body": self.body(r.path) or "(no text)"}
-                       for r in ev.reviews]
-            items.append({"title": title, "summary": self.body(art.path), "files": files, "reviews": reviews})
-        return items
+            reader = readers.get(session.id)
+            rel = f"{session.path}/debrief.md"
+            rows.append({"id": session.id, "path": rel, "text": self.read(rel), "d": session.debrief,
+                         "open": reader is None, "read_by": reader[0] if reader else None,
+                         "read_on": reader[1] if reader else None, "summary": first_sentence(session.debrief.summary),
+                         "goal": session.goal, "note": session.has_note})
+        return rows
 
-    # --- papers, sessions, files ---
+    def running(self) -> list[dict]:
+        """Sessions running now: open session pull requests (Hub), or the active session of a local folder."""
+        if self.local:
+            path = self.current().root / ".active-session"
+            if path.is_file():
+                import json
+
+                info = json.loads(path.read_text(encoding="utf-8"))
+                return [{"id": info.get("id"), "title": f"{info.get('id')} started {info.get('started', '')[:16]}",
+                         "url": None}]
+            return []
+        return [{"id": f"S{pr['num']}", "title": pr["title"], "url": pr["url"]}
+                for pr in self.pull_requests if is_session_pr(pr) and pr["status"] in ("draft", "open")]
+
+    def next_session_receives(self) -> str:
+        """What a session started now would receive, as session.py start prints it."""
+        snap = self.current()
+        human = snap.m.human
+        _, since = human.previous_start(snap.ws.sessions.values())
+        return human.format_received(human.received(snap.ws, human.History(snap.root, since)), max_patch_lines=0)
+
+    # --- Project ---
+
+    def project(self) -> dict:
+        snap = self.current()
+        doc = snap.ws.project_doc
+        return {"project": self.read("project.md"), "conventions": self.read("conventions.md"),
+                "title": doc.title if doc and not doc.is_template else None}
+
+    def title(self) -> str | None:
+        try:
+            doc = self.current().ws.project_doc
+        except SpaceError:
+            return None
+        return doc.title if doc and not doc.is_template else None
+
+    # --- LaTeX: the draft and the notes ---
+
+    def bib(self) -> dict:
+        snap = self.current()
+        return latex.parse_bib(snap.m.regen.render_bib(snap.ws))
+
+    def card_href(self, card_id: str) -> str | None:
+        return f"/card/{card_id}" if card_id in self.current().ws.cards else None
+
+    def paper_href(self, paper_id: str) -> str | None:
+        return f"/paper/{paper_id}" if paper_id in self.current().ws.papers else None
+
+    def card_note(self, card_id: str) -> str | None:
+        """A warning on a card named in the draft: refuted, revised, missing, or to re-check."""
+        ws = self.current().ws
+        status = ws.status(card_id)
+        if status == "refuted":
+            return f"{card_id} was refuted by {', '.join(ws.refuters(card_id))}."
+        if status == "revised":
+            return f"{card_id} was revised by {', '.join(ws.revisers(card_id))}."
+        if status == "missing":
+            return f"There is no card {card_id}."
+        if ws.needs_recheck(card_id):
+            return f"{card_id} needs a re-check: it depends on {', '.join(ws.needs_recheck(card_id))}."
+        return None
+
+    def render_tex(self, tex: str, flags: bool = False) -> latex.Rendered:
+        """A LaTeX text as HTML, with card links, flags on cards in doubt (for the draft), and references."""
+        snap = self.current()
+        key = hashlib.sha256(f"{snap.revision}|{snap.loaded_at}|{flags}|{tex}".encode()).hexdigest()
+        if key not in self._renders:
+            if len(self._renders) > 64:
+                self._renders.clear()
+            self._renders[key] = latex.render(tex, bib=self.bib(), card_href=self.card_href,
+                                              card_note=self.card_note if flags else None, paper_href=self.paper_href)
+        return self._renders[key]
+
+    def draft(self) -> dict:
+        ws = self.current().ws
+        tex = self.read("draft.tex")
+        return {"tex": tex, "html": self.render_tex(tex, flags=True), "flags": ws.draft_flags(),
+                "results": sum(1 for b in ws.draft if b.kind == "result"),
+                "conjectures": sum(1 for b in ws.draft if b.kind == "conjecture")}
+
+    def sessions(self) -> list[dict]:
+        """One row per session, newest first, with the title and abstract of its note."""
+        snap = self.current()
+        readers = snap.m.human.read_by(snap.ws.sessions.values())
+        running = {r["id"] for r in self.running()}
+        rows = []
+        for session in sorted(snap.ws.sessions.values(), key=lambda s: -s.number):
+            rendered = self.render_tex(self.read(f"{session.path}/note.tex")) if session.has_note else None
+            if session.id in running:
+                state = "running"
+            elif session.debrief is None:
+                state = "no debrief"
+            else:
+                state = f"read by {readers[session.id][0]}" if session.id in readers else "debrief open"
+            rows.append({"id": session.id, "goal": session.goal, "state": state, "has_note": session.has_note,
+                         "title": rendered.title if rendered else "",
+                         "abstract": first_sentence(re.sub(r"<[^>]+>", "", rendered.abstract), 300) if rendered else ""})
+        return rows
+
+    def note(self, session_id: str) -> dict:
+        ws = self.current().ws
+        session = ws.sessions.get(session_id)
+        if session is None or not session.has_note:
+            raise SpaceError(f"Session {session_id} has no note.")
+        tex = self.read(f"{session.path}/note.tex")
+        return {"session": session, "tex": tex, "html": self.render_tex(tex), "path": f"{session.path}/note.tex"}
+
+    def pdf(self, rel: str) -> tuple[bytes, str]:
+        """The PDF of the draft or of a note, compiled now. Raises a SpaceError with the LaTeX errors."""
+        snap = self.current()
+        if rel != "draft.tex" and not re.match(r"^sessions/S\d+/note\.tex$", rel):
+            raise SpaceError(f"{rel} is not the draft or a note.")
+        tex = self.read(rel)
+        if not tex:
+            raise SpaceError(f"There is no {rel}.")
+        data, log = snap.m.pdf.build_pdf(tex, snap.m.regen.render_bib(snap.ws), Path(rel).stem)
+        if data is None:
+            raise SpaceError(f"{rel} did not compile to PDF:\n\n```\n{log}\n```")
+        name = "draft.pdf" if rel == "draft.tex" else f"note-{rel.split('/')[1]}.pdf"
+        return data, name
+
+    # --- Literature ---
+
+    def literature(self) -> dict:
+        snap = self.current()
+        ws, human = snap.ws, snap.m.human
+        overview = self.read("literature/overview.md")
+        topics = [t.strip() for t in re.findall(r"^## (.+)$", overview, flags=re.M)]
+        groups: dict[str, list[dict]] = {t: [] for t in topics}
+        for paper_id in sorted(ws.papers, key=snap.m.cards.natural_key):
+            paper = ws.papers[paper_id]
+            authors = paper.meta.get("authors") or []
+            first = str(authors[0]) if isinstance(authors, list) and authors else str(authors or "")
+            byline = (first.split(",")[0] if "," in first else first) + (" et al." if isinstance(authors, list)
+                                                                          and len(authors) > 1 else "")
+            mine = ws.ratings.get(paper_id)
+            row = {"id": paper_id, "title": paper.title or paper_id, "by": byline, "year": paper.year,
+                   "why": paper.why, "mine": mine, "agent": paper.rating, "rating": mine or paper.rating or ""}
+            groups.setdefault(paper.topic if paper.topic in groups else "Other papers", []).append(row)
+        return {"overview": overview, "groups": [(t, rows) for t, rows in groups.items() if rows],
+                "count": len(ws.papers), "ratings": human.RATINGS,
+                "seeds": self.read("literature/seeds.md")}
 
     def paper(self, paper_id: str) -> dict:
         ws = self.current().ws
@@ -600,29 +550,74 @@ class Backend:
             raise SpaceError(f"There is no paper card {paper_id}.")
         authors = paper.meta.get("authors") or []
         return {"paper": paper, "authors": ", ".join(map(str, authors)) if isinstance(authors, list) else str(authors),
-                "arxiv": paper.meta.get("arxiv"), "doi": paper.meta.get("doi"), "body": self.body(paper.path)}
+                "arxiv": paper.meta.get("arxiv"), "doi": paper.meta.get("doi"), "body": self.body(paper.path),
+                "mine": ws.ratings.get(paper_id), "ratings": self.current().m.human.RATINGS}
+
+    # --- the session record ---
+
+    def row(self, card_id: str) -> dict:
+        """What a list shows of a card."""
+        snap = self.current()
+        ws, regen = snap.ws, snap.m.regen
+        card = ws.cards.get(card_id)
+        if card is None:
+            return {"id": card_id, "kind": None, "status": "missing", "status_text": "missing", "recheck": [],
+                    "statement": "", "evidence": None, "draft": None}
+        recheck = [] if ws.status(card_id) in ("refuted", "revised") else ws.needs_recheck(card_id)
+        return {"id": card.id, "kind": card.kind, "status": ws.status(card.id),
+                "status_text": regen.status_text(ws, card.id), "recheck": [(c, ws.status(c)) for c in recheck],
+                "statement": card.statement, "draft": ws.in_draft(card.id),
+                "evidence": regen.evidence_parts(ws, card.id) if card.kind == "claim" else None}
+
+    def card(self, card_id: str) -> dict:
+        snap = self.current()
+        ws, regen = snap.ws, snap.m.regen
+        card = ws.cards.get(card_id)
+        if card is None:
+            raise SpaceError(f"There is no card {card_id} in this workspace.")
+        dependents = [c.id for c in ws.sorted_cards() if card_id in c.depends_on]
+        related = [("Depends on", card.depends_on), ("Cards that depend on it", dependents),
+                   ("Supersedes", card.supersedes), ("Revised by", ws.revisers(card_id)),
+                   ("Refutes", card.refutes), ("Refuted by", ws.refuters(card_id))]
+        evidence = []
+        for ev in ws.evidence(card_id):
+            art = ws.artefacts[ev.artefact]
+            title = f"{art.id} ({art.kind})" + (f", attached by the review {ev.attached_by}" if ev.attached_by else "")
+            files = [{"path": p, "text": clip(self.read(p))} for p in art.full]
+            reviews = [{"title": f"Review {regen.review_label(r)}: {r.verdict}", "body": self.body(r.path) or "(no text)"}
+                       for r in ev.reviews]
+            evidence.append({"title": title, "summary": self.body(art.path), "files": files, "reviews": reviews})
+        produced = card.produced_by
+        origin = (f"from {produced.get('user', '?')}" if produced.get("kind") == "human" else
+                  f"agent ({produced.get('model', '?')}), operator {produced.get('operator', '?')}")
+        return {"card": card, "row": self.row(card_id), "origin": origin + (f", session {card.session}" if card.session else ""),
+                "related": [(label, [self.row(i) for i in ids]) for label, ids in related if ids],
+                "evidence": evidence, "trace": self.hub_url("traces", "tree/main", card.session) if card.session else None}
 
     def session(self, session_id: str) -> dict:
-        ws = self.current().ws
+        snap = self.current()
+        ws = snap.ws
         session = ws.sessions.get(session_id)
         if session is None:
             raise SpaceError(f"There is no session {session_id} in this workspace.")
-        sections = {h: t for h, t in session.report_sections.items() if _says(t)}
-        return {"session": session, "brief": self.body(f"{session.path}/brief.md"), "sections": sections,
-                "log": f"{session.path}/log.md" if session.has_log else None,
-                "pr": self.hub_url("workspace", "discussions", str(session.number)),
+        received = self.body(f"{session.path}/received.md").strip().strip("`").removeprefix("text").strip()
+        cards = [self.row(c.id) for c in ws.sorted_cards() if c.session == session_id]
+        artefacts = [a for a in sorted(ws.artefacts.values(), key=lambda a: snap.m.cards.natural_key(a.id))
+                     if snap.m.cards.session_of(a.id) == session_id]
+        critiques = sorted(p.relative_to(snap.root).as_posix() for p in (snap.root / "critiques").glob(f"CR-{session_id}-*.md"))
+        return {"session": session, "brief": self.body(f"{session.path}/brief.md"), "received": received,
+                "log": f"{session.path}/log.md" if session.has_log else None, "cards": cards, "artefacts": artefacts,
+                "critiques": critiques, "pr": self.hub_url("workspace", "discussions", str(session.number)),
                 "trace": self.hub_url("traces", "tree/main", session.id)}
 
     def file_path(self, rel: str) -> Path | None:
-        """A file of the workspace by its path in it, or None if there is none."""
         parts = Path(rel or "").parts
-        if not parts or rel.startswith("/") or ".." in parts:
+        if not parts or rel.startswith("/") or ".." in parts or parts[0] in (".git",):
             return None
         path = self.current().root / rel
         return path if path.is_file() else None
 
     def file(self, rel: str) -> dict:
-        """A workspace file for the file page: its header and body for Markdown, its text otherwise."""
         if self.file_path(rel) is None:
             raise SpaceError(f"There is no file {rel} in the workspace.")
         text = clip(self.read(rel))
@@ -634,294 +629,104 @@ class Backend:
             header, body = text[4:end], text[end + 5:]
         return {"path": rel, "header": header, "body": body, "text": None}
 
-    # --- pull requests ---
-
-    def open_sessions(self) -> list[dict]:
-        return [pr for pr in self.pull_requests if is_session_pr(pr) and pr["status"] in ("draft", "open")]
-
-    def proposal_prs(self) -> list[dict]:
-        return [pr for pr in self.pull_requests if not is_session_pr(pr) and pr["status"] in ("draft", "open")]
-
-    def proposal(self, number) -> dict:
-        """A proposal pull request, with its description and the files it changes as they are in it."""
-        try:
-            number = int(number)
-        except (TypeError, ValueError):
-            raise SpaceError(f"{number!r} is not a pull request number.") from None
-        self.current()
-        pr = next((p for p in self.pull_requests if p["num"] == number and not is_session_pr(p)), None)
-        if pr is None:
-            raise SpaceError(f"#{number} is not a proposal of this workspace (session pull requests have their "
-                             "session's page).")
-        try:
-            details = self.store.proposal(number)
-        except SpaceError:
-            raise
-        except Exception as exc:
-            raise SpaceError(f"The Hub did not return pull request #{number} ({type(exc).__name__}: {exc}).") from exc
-        return {**pr, **details}
-
-    # --- Edit ---
-
-    def lead_file(self, path: str) -> str:
-        if path not in LEAD_FILES:
-            raise SpaceError(f"{path} is not one of the lead's files ({', '.join(LEAD_FILES)}).")
-        return self.read(path)
-
     # ----- writes -----
 
     def _require(self, user: str | None, action: str) -> None:
         if not user:
             raise SpaceError(f"Sign in with your Hugging Face account to {action}.")
 
-    def _check_new_file(self, snap: Snapshot, rel: str, content: str) -> list[str]:
-        """Errors that the workspace's own check reports for the file `rel` once it is added."""
-        with tempfile.TemporaryDirectory() as tmp:
-            copy = Path(tmp) / "workspace"
-            shutil.copytree(snap.root, copy, ignore=shutil.ignore_patterns(
-                ".git", ".physics-intern", "sources", ".cache", "__pycache__"))
-            (copy / rel).parent.mkdir(parents=True, exist_ok=True)
-            (copy / rel).write_text(content, encoding="utf-8")
-            report = snap.m.check.run_checks(snap.m.cards.Workspace(copy))
-        return [p.message for p in report.errors if p.path == rel]
-
-    def _commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
+    def _commit(self, snap: Snapshot, files: dict[str, str], message: str) -> None:
         try:
-            self.store.commit(files, message, parent)
+            self.store.commit(files, message, snap.revision)
         except SpaceError:
             raise
         except Exception as exc:
-            raise SpaceError(f"The Hub refused the commit ({type(exc).__name__}: {exc}).") from exc
+            raise SpaceError(f"The Hub refused the commit ({type(exc).__name__}: {exc}). If main moved meanwhile, "
+                             "reload the page and save again.") from exc
         self.refresh()
 
-    def _write_record(self, snap: Snapshot, rel: str, content: str, message: str) -> None:
-        """Check a new file with the workspace's own checks, then commit it and refresh."""
-        if (snap.root / rel).exists():
-            raise SpaceError(f"{rel} already exists; wait a second and try again.")
-        errors = self._check_new_file(snap, rel, content)
-        if errors:
-            raise SpaceError("The workspace's checks refused it: " + "; ".join(errors) + ".")
-        self._commit({rel: content}, message)
+    def _unchanged_since(self, rel: str, base: str | None) -> str:
+        """The file's current text, after checking that it is still the text the editor started from."""
+        current = self.read(rel)
+        if base is not None and normalise(current).strip() != normalise(base).strip():
+            raise SpaceError(f"{rel} changed since you opened it (a session may have ended). Copy your text, reload "
+                             "the page, and apply your change again.")
+        return current
 
-    def react(self, user: str | None, target: str, value: str, comment: str = "") -> str:
-        """Record a reaction on a card or a paper. One counts per person: the latest."""
-        self._require(user, "react")
-        with self._lock:
-            snap = self._fresh()
-            ws, cards = snap.ws, snap.m.cards
-            if target in ws.papers:
-                allowed = cards.PAPER_REACTIONS
-            elif target in ws.cards:
-                allowed = cards.CLAIM_REACTIONS
-            else:
-                raise SpaceError(f"There is no card or paper card {target!r}.")
-            if value not in allowed:
-                raise SpaceError(f"A reaction on {target} is one of: {', '.join(allowed)}.")
-            now = now_utc()
-            rel = f"feedback/reaction-{target}-{user}-{cards.utc_stamp(now)}.md"
-            meta = {"kind": "reaction", "target": target, "value": value, "by": {"kind": "human", "user": user},
-                    "date": iso(now)}
-            comment = " ".join((comment or "").split())
-            self._write_record(snap, rel, cards.dump_front_matter(meta, f"{comment}\n" if comment else ""),
-                               f"Reaction {value} on {target} ({user}, from the Space)")
-        return f"Recorded your reaction **{value}** on {target}."
+    def editable(self, rel: str) -> bool:
+        return rel in EDITABLE or bool(DEBRIEF_RE.match(rel))
 
-    def write_card(self, user: str | None, kind: str, statement: str, body: str = "", depends_on=(),
-                   answers=(), supersedes=()) -> str:
-        """Write a question card or a claim card under the user's name. Nobody types YAML."""
-        self._require(user, "write a card")
-        if kind not in ("question", "claim"):
-            raise SpaceError("A card written in the Space is a question or a claim.")
-        statement = " ".join((statement or "").split())
-        if not statement:
-            raise SpaceError("Write a statement: one sentence that says what the card claims or asks.")
-        with self._lock:
-            snap = self._fresh()
-            cards = snap.m.cards
-            now = now_utc()
-            card_id = f"{cards.CARD_KINDS[kind]}-{user}-{cards.utc_stamp(now)}"
-            meta = {"id": card_id, "kind": kind, "statement": statement, "depends_on": _ids(depends_on),
-                    "produced_by": {"kind": "human", "user": user}, "session": None,
-                    "supersedes": _ids(supersedes) if kind == "claim" else [], "refutes": [],
-                    "answers": _ids(answers) if kind == "claim" else []}
-            body = (body or "").strip()
-            self._write_record(snap, f"claims/{card_id}.md", cards.dump_front_matter(meta, f"{body}\n" if body else ""),
-                               f"{kind.capitalize()} card {card_id} ({user}, from the Space)")
-        if kind == "question":
-            what = "The next session will see it among the open questions."
-        elif answers:
-            what = f"It answers {', '.join(_ids(answers))}."
-        else:
-            what = "It starts with no evidence."
-        return f"Wrote **{card_id}**. {what}"
-
-    def ask(self, user: str | None, text: str, about: str | None = None) -> str:
-        """Write to the agents: a question card under the user's name, linked to the card or paper at hand."""
-        statement, body = split_text(text)
-        if not statement:
-            raise SpaceError("Write something first.")
-        ws = self.current().ws
-        if about and about in ws.papers:
-            body = f"About {about}.\n\n{body}".strip()
-        depends_on = [about] if about and about in ws.cards else []
-        return self.write_card(user, "question", statement, body, depends_on=depends_on)
-
-    def answer(self, user: str | None, question_id: str, text: str) -> str:
-        """Answer an open question: a claim card under the user's name that names it in `answers`."""
-        statement, body = split_text(text)
-        if not statement:
-            raise SpaceError("Write the answer first.")
-        return self.write_card(user, "claim", statement, body, answers=[question_id])
-
-    def verify(self, user: str | None, card_id: str, verdict: str, body: str, target: str | None = None) -> str:
-        """Record a human verification of a claim. It counts as evidence, unlike a reaction."""
-        self._require(user, "verify a claim")
-        body = (body or "").strip()
-        if not body:
-            raise SpaceError("Say what you checked: which steps, limits or numbers, and how.")
-        with self._lock:
-            snap = self._fresh()
-            ws, cards = snap.ws, snap.m.cards
-            card = ws.cards.get(card_id)
-            if card is None or card.kind != "claim":
-                raise SpaceError(f"{card_id} is not a claim card; only claims are verified.")
-            if verdict not in cards.VERDICTS:
-                raise SpaceError(f"The verdict is one of: {', '.join(cards.VERDICTS)}.")
-            target = target or None
-            if target and target not in [ev.artefact for ev in ws.evidence(card_id)]:
-                raise SpaceError(f"{target} is not among the evidence of {card_id}.")
-            now = now_utc()
-            stamp = cards.utc_stamp(now)
-            meta = {"id": f"R-{user}-{stamp}", "kind": "review", "target": target, "supports": [card_id],
-                    "claim": card.statement, "verdict": verdict, "by": {"kind": "human", "user": user},
-                    "date": iso(now)}
-            self._write_record(snap, f"feedback/review-{card_id}-{user}-{stamp}.md",
-                               cards.dump_front_matter(meta, body + "\n"),
-                               f"Verification of {card_id}: {verdict} ({user}, from the Space)")
-        return f"Recorded your verification of {card_id} (**{verdict}**). It now counts in the card's evidence."
-
-    def promote(self, user: str | None, card_id: str, reason: str = "") -> str:
-        """Record a lead's promotion of a claim to established, if the workspace's rule allows it."""
-        self._require(user, "promote a claim")
-        by = {"kind": "human", "user": user}
-        with self._lock:
-            for attempt in (1, 2):
-                snap = self._fresh()
-                ws, m = snap.ws, snap.m
-                reasons = list(m.cards.promotion_problems(ws, card_id, by))
-                if ws.mode != "shared" and user not in ws.leads:  # promotion_problems checks leads in shared mode only
-                    reasons.insert(0, f"{user} is not in [people] leads of project.toml")
-                if reasons:
-                    raise SpaceError(f"Promotion of {card_id} refused: " + "; ".join(reasons) + ".")
-                rel, content = m.promote.promotion_record(card_id, by, None, reason or "")
-                try:
-                    # Committed against the commit it was checked on; if main moved, check again.
-                    self.store.commit({rel: content}, f"Promote {card_id} ({user})", parent=snap.revision)
-                    break
-                except SpaceError:
-                    raise
-                except Exception as exc:
-                    if attempt == 2:
-                        raise SpaceError(f"The Hub refused the promotion commit ({type(exc).__name__}: {exc}).") from exc
-            self.refresh()
-        return f"Promoted **{card_id}** to established ({rel})."
-
-    def save_lead_file(self, user: str | None, path: str, content: str, base: str | None = None) -> str:
-        """Save a lead's file: a lead commits to main; anyone else opens a pull request.
-
-        `base` is the text the editor started from; if main changed since, the
-        save is refused rather than overwriting someone else's edit.
-        """
+    def save_file(self, user: str | None, rel: str, content: str, base: str | None = None) -> str:
+        """Save one of the researcher's files as they typed it."""
         self._require(user, "save")
-        if path not in LEAD_FILES:
-            raise SpaceError(f"{path} is not one of the lead's files ({', '.join(LEAD_FILES)}).")
-        content = (content or "").replace("\r\n", "\n")
-        if content and not content.endswith("\n"):
-            content += "\n"
+        if not self.editable(rel):
+            raise SpaceError(f"{rel} is not one of the files you edit here.")
+        content = normalise(content)
         with self._lock:
             snap = self._fresh()
-            current = self.read(path)
-            if base is not None and current.strip() != base.replace("\r\n", "\n").strip():
-                raise SpaceError(f"{path} changed on main since you opened it. Copy your text, press Reload, "
-                                 "and apply your change again.")
+            current = self._unchanged_since(rel, base)
             if content.strip() == current.strip():
-                raise SpaceError("Nothing to save: the text is the same as on main.")
-            if user in snap.ws.leads:
-                self._commit({path: content}, f"Edit {path} ({user}, from the Space)")
-                return f"Saved {path} on main."
-            try:
-                number, url = self.store.propose(path, content, f"Proposal: {path} (by {user})",
-                                                 f"Proposed by {user} from the Space. A lead merges, edits or "
-                                                 "closes this pull request.")
-            except SpaceError:
-                raise
-            except Exception as exc:
-                raise SpaceError(f"The Hub refused to open the pull request ({type(exc).__name__}: {exc}).") from exc
-            self.refresh()
-        return (f"You are not a lead, so your change is a proposal: pull request [#{number}]({url}). "
-                "A lead merges, edits or closes it.")
+                raise SpaceError("Nothing to save: the text is the same.")
+            if rel == "draft.tex":
+                self._check_draft(snap, current, content)
+            self._commit(snap, {rel: content}, f"Edit {rel} ({user}, from the Space)")
+        return f"Saved {rel}."
 
-    def merge_proposal(self, user: str | None, number) -> str:
-        """Merge an open proposal pull request (leads only)."""
-        return self._settle(user, number, "merge")
+    def _check_draft(self, snap: Snapshot, old: str, new: str) -> None:
+        """Refuse a draft that adds a result the workspace's check refuses (or names a card that does not exist)."""
+        draft_problems = snap.m.check.draft_problems
+        before = {(card, kind) for card, kind, _ in draft_problems(snap.ws, old)}
+        added = [msg for card, kind, msg in draft_problems(snap.ws, new) if (card, kind) not in before]
+        if added:
+            raise SpaceError("The draft was not saved: " + "; ".join(added) + ". A result needs a claim with a "
+                             "confirming review; put the others in a conjecture environment, or say in a debrief "
+                             "that you checked the work by hand.")
 
-    def close_proposal(self, user: str | None, number) -> str:
-        """Close an open proposal pull request without merging it (leads only)."""
-        return self._settle(user, number, "close")
-
-    def _settle(self, user: str | None, number, action: str) -> str:
-        self._require(user, f"{action} a proposal")
+    def save_debrief(self, user: str | None, session_id: str, answers: dict[int, str], ticked: set[int],
+                     note: str, base: str | None = None) -> str:
+        """Write the researcher's answers, ticks and note into a debrief. The next session applies what is ticked."""
+        self._require(user, "answer")
+        rel = f"sessions/{session_id}/debrief.md"
         with self._lock:
             snap = self._fresh()
-            if user not in snap.ws.leads:
-                raise SpaceError(f"Only a lead can {action} a proposal, and {user} is not in [people] leads of project.toml.")
-            try:
-                number = int(number)
-            except (TypeError, ValueError):
-                raise SpaceError(f"Choose the proposal to {action}.") from None
-            self.pull_requests = self.store.pull_requests()
-            if number not in {pr["num"] for pr in self.proposal_prs()}:
-                raise SpaceError(f"#{number} is not an open proposal (session pull requests are merged by their session).")
-            done = {"merge": "Merged", "close": "Closed"}[action]
-            try:
-                getattr(self.store, action)(number, f"{done} from the Space by {user}.")
-            except SpaceError:
-                raise
-            except Exception as exc:
-                raise SpaceError(f"The Hub refused to {action} #{number} ({type(exc).__name__}: {exc}).") from exc
-            self.refresh()
-        return f"{done} pull request #{number}."
+            human = snap.m.human
+            if not DEBRIEF_RE.match(rel) or not (snap.root / rel).is_file():
+                raise SpaceError(f"There is no debrief for {session_id}.")
+            text = self._unchanged_since(rel, base)
+            parsed = human.parse_debrief(text)
+            new = text
+            for q in parsed.questions:
+                answer = (answers.get(q.number) or "").replace("\r\n", "\n").strip()
+                if answer != q.answer:
+                    new = human.set_answer(new, q.number, answer)
+            new = human.set_ticks(new, {i: i in ticked for i in range(len(parsed.ticks))})
+            note = (note or "").replace("\r\n", "\n").strip()
+            if note != parsed.note:
+                new = human.set_note(new, note)
+            new = normalise(new)
+            if new == normalise(text):
+                return "Nothing changed."
+            self._commit(snap, {rel: new}, f"Answer the {session_id} debrief ({user}, from the Space)")
+        return f"Saved your answers to the {session_id} debrief. The next session reads them."
 
-    def log_chat(self, record: dict) -> None:
-        """Debug mode only: keep one chat exchange outside the workspace."""
-        if self.chat_debug and self.store is not None:
-            self.store.log_chat(record, self.snap.ws.hub if self.snap else {})
-
-
-# ----- formatting helpers -----
-
-
-def _has_text(markdown: str) -> bool:
-    """Whether a lead's file says anything beyond its heading and the template's comment."""
-    text = re.sub(r"<!--.*?-->", "", markdown, flags=re.S)
-    return any(line.strip() and not line.startswith("#") for line in text.splitlines())
-
-
-def _ids(values) -> list[str]:
-    return [str(v).strip() for v in (values or []) if v and str(v).strip()]
-
-
-def origin_text(card) -> str:
-    produced = card.produced_by
-    if produced.get("kind") == "human":
-        origin = f"written by {produced.get('user', '?')}"
-    elif produced:
-        origin = f"agent ({produced.get('model', '?')}), operator {produced.get('operator', '?')}"
-    else:
-        origin = "author not recorded"
-    return origin + (f", session {card.session}" if card.session else "")
-
-
-def _says(text: str) -> bool:
-    """Whether a report section says something: not empty, and not `(none)`."""
-    return (text or "").strip().lower().strip("-*() .") not in ("none", "")
+    def rate(self, user: str | None, paper_id: str, rating: str) -> str:
+        """Set (or clear, with '') the researcher's rating of a paper, in literature/ratings.yaml."""
+        self._require(user, "rate papers")
+        rating = (rating or "").strip().lower()
+        with self._lock:
+            snap = self._fresh()
+            human = snap.m.human
+            if paper_id not in snap.ws.papers:
+                raise SpaceError(f"There is no paper card {paper_id}.")
+            if rating and rating not in human.RATINGS:
+                raise SpaceError(f"A rating is one of: {', '.join(human.RATINGS)}.")
+            ratings = dict(snap.ws.ratings)
+            if ratings.get(paper_id, "") == rating:
+                return "Nothing changed."
+            if rating:
+                ratings[paper_id] = rating
+            else:
+                ratings.pop(paper_id, None)
+            self._commit(snap, {human.RATINGS_FILE: human.dump_ratings(ratings)},
+                         f"Rate {paper_id} {rating or 'unrated'} ({user}, from the Space)")
+        return f"Rated {paper_id} **{rating}**." if rating else f"Removed your rating of {paper_id}."

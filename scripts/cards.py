@@ -1,16 +1,20 @@
 """Read a PhysicsIntern workspace and compute what follows from its files.
 
-A workspace stores results as small Markdown files with a YAML front matter:
-cards in `claims/`, artefact summaries and reviews in `derivations/` and
-`computations/`, reactions, human reviews and promotion records in
-`feedback/`, paper cards in `literature/`, and one folder per session in
-`sessions/`. Files are never edited after they are created; everything that
-happens to a card later is a new file that names it.
+The record of a workspace is small Markdown files with a YAML front matter:
+cards in `claims/` (claims and dead ends), artefact summaries and reviews in
+`derivations/` and `computations/`, paper cards in `literature/`, critiques,
+and one folder per session in `sessions/`. A card never changes once its
+session has ended; everything that happens to it later is a new file that
+names it.
+
+The human view (project.md, conventions.md, draft.tex, the debriefs, the
+ratings) is parsed by human.py. A claim is *established* when a `result`
+environment of draft.tex names it, so status depends on both.
 
 This module loads those files and computes, for each card, its status, its
 evidence and whether it needs a re-check. Nothing it computes is stored. It is
-imported by regen.py, check.py, session.py, promote.py and the Space, so it
-must stay free of side effects. Requires PyYAML.
+imported by regen.py, check.py, session.py and the Space, so it must stay free
+of side effects. Requires PyYAML.
 """
 
 from __future__ import annotations
@@ -18,32 +22,39 @@ from __future__ import annotations
 import datetime as _dt
 import re
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from human import (  # noqa: F401  (re-exported for the scripts and the Space)
+    HUMAN_FILES,
+    RATINGS,
+    RATINGS_FILE,
+    RESEARCHER_FILES,
+    Debrief,
+    DraftBlock,
+    Project,
+    parse_debrief,
+    parse_draft,
+    parse_project,
+    parse_ratings,
+)
+
 # ----- identifiers -----
 
-CARD_KINDS = {"claim": "CL", "question": "Q", "dead-end": "DE"}
+CARD_KINDS = {"claim": "CL", "dead-end": "DE"}
 PREFIX_TO_KIND = {prefix: kind for kind, prefix in CARD_KINDS.items()}
 
-# Items created inside a session: CL-S12-2, D-S12-3, C-S12-1, CR-S12-1, ...
-SESSION_ID_RE = re.compile(r"^(CL|Q|DE|D|C|CR)-S(\d+)-(\d+)$")
-# Items created outside a session (from the Space): CL-alice-20261005T141233
-USER_ID_RE = re.compile(r"^(CL|Q|DE|R)-([A-Za-z0-9][A-Za-z0-9._-]*)-(\d{8}T\d{6})$")
-# Agent reviews sit next to their target: D-S3-2_R-S7-1
+# Items created inside a session: CL-S12-2, DE-S12-1, D-S12-3, C-S12-1, CR-S12-1
+SESSION_ID_RE = re.compile(r"^(CL|DE|D|C|CR)-S(\d+)-(\d+)$")
+# Reviews sit next to their target: D-S3-2_R-S7-1 (by an agent, or a human verification written by S7)
 REVIEW_ID_RE = re.compile(r"^((?:D|C)-S\d+-\d+)_R-S(\d+)-(\d+)$")
 PAPER_ID_RE = re.compile(r"^P-[A-Za-z0-9._-]+$")
 SESSION_DIR_RE = re.compile(r"^S(\d+)$")
 
 VERDICTS = ("confirmed", "refuted", "inconclusive")
-CLAIM_REACTIONS = ("convinced", "doubtful", "wrong")
-PAPER_REACTIONS = ("key", "useful", "irrelevant")
-
-# Files the lead scientist owns. Sessions never touch them in shared mode.
-LEAD_FILES = ("problem.md", "plan.md", "conventions.md", "literature/seeds.md")
 
 
 def natural_key(text: str) -> list:
@@ -58,7 +69,6 @@ def session_of(item_id: str) -> str | None:
 
 
 def utc_stamp(now: _dt.datetime | None = None) -> str:
-    """Timestamp used in IDs and file names of items written outside a session."""
     now = now or _dt.datetime.now(_dt.timezone.utc)
     return now.strftime("%Y%m%dT%H%M%S")
 
@@ -113,7 +123,7 @@ def id_list(value: Any) -> list[str]:
 
 
 def dump_front_matter(meta: dict, body: str = "") -> str:
-    """Serialise a record the way scripts and the Space write it."""
+    """Serialise a record the way scripts write it."""
     header = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True, width=1000).strip()
     return f"---\n{header}\n---\n{body}"
 
@@ -143,7 +153,6 @@ class Card:
     depends_on: list[str]
     supersedes: list[str]
     refutes: list[str]
-    answers: list[str]
     produced_by: dict
     session: str | None
     meta: dict
@@ -163,7 +172,7 @@ class Artefact:
 
 @dataclass
 class Review:
-    """A review of an artefact, by an agent, or a human verification."""
+    """A review of an artefact: blind, by an agent, or a human verification recorded by a session."""
 
     id: str
     path: str
@@ -182,32 +191,25 @@ class Review:
 
 
 @dataclass
-class Reaction:
-    path: str
-    target: str
-    value: str
-    user: str
-    date: str
-    comment: str
-
-
-@dataclass
-class Promotion:
-    path: str
-    target: str
-    by: dict
-    date: str
-    session: str | None
-    reason: str
-
-
-@dataclass
 class Paper:
     id: str
     path: str
     title: str
     year: Any
     meta: dict
+
+    @property
+    def why(self) -> str:
+        return str(self.meta.get("why") or "").strip()
+
+    @property
+    def topic(self) -> str:
+        return str(self.meta.get("topic") or "").strip()
+
+    @property
+    def rating(self) -> str:
+        """The agent's estimate of how much the paper matters here (the researcher's is in ratings.yaml)."""
+        return str(self.meta.get("rating") or "").strip().lower()
 
 
 @dataclass
@@ -216,8 +218,9 @@ class Session:
     number: int
     path: str
     brief: dict | None = None
-    report: dict | None = None
-    report_sections: dict[str, str] = field(default_factory=dict)
+    debrief: Debrief | None = None
+    received: dict | None = None  # front matter of received.md, written by session.py start
+    has_note: bool = False
     has_log: bool = False
 
     @property
@@ -227,21 +230,14 @@ class Session:
 
 @dataclass
 class Evidence:
-    """One piece of support for a card.
+    """One piece of support for a claim: an artefact, with the reviews of it that concern the claim."""
 
-    Either an artefact (with the reviews of it that concern the card) or a
-    human verification that names the card directly.
-    """
-
-    artefact: str | None
+    artefact: str
     reviews: list[Review]
-    attached_by: str | None = None  # review that attached the artefact to the card
-    verification: Review | None = None
+    attached_by: str | None = None  # review that attached the artefact to the claim
 
     @property
     def confirmed(self) -> bool:
-        if self.verification is not None:
-            return self.verification.verdict == "confirmed"
         return any(r.verdict == "confirmed" for r in self.reviews)
 
 
@@ -264,15 +260,15 @@ class Workspace:
         self.root = Path(root)
         self.problems: list[Problem] = []
         self.project: dict = {}
+        self.project_doc: Project | None = None
         self.cards: dict[str, Card] = {}
         self.artefacts: dict[str, Artefact] = {}
         self.reviews: dict[str, Review] = {}
-        self.reactions: list[Reaction] = []
-        self.promotions: list[Promotion] = []
         self.papers: dict[str, Paper] = {}
-        self.surveys: list[str] = []
+        self.ratings: dict[str, str] = {}
         self.critiques: dict[str, dict] = {}
         self.sessions: dict[str, Session] = {}
+        self.draft: list[DraftBlock] = []
         self._load()
         self._recheck_cache: dict[str, list[str]] = {}
 
@@ -305,6 +301,14 @@ class Workspace:
             self._problem("error", self._rel(path), str(exc))
             return None
 
+    def text(self, rel: str) -> str:
+        """A workspace file's text, or '' if it does not exist."""
+        path = self.root / rel
+        try:
+            return path.read_text(encoding="utf-8") if path.is_file() else ""
+        except UnicodeDecodeError:
+            return ""
+
     def _load(self) -> None:
         project = self.root / "project.toml"
         if project.is_file():
@@ -312,10 +316,13 @@ class Workspace:
                 self.project = tomllib.loads(project.read_text(encoding="utf-8"))
             except tomllib.TOMLDecodeError as exc:
                 self._problem("error", "project.toml", f"invalid TOML: {exc}")
+        if (self.root / "project.md").is_file():
+            self.project_doc = parse_project(self.text("project.md"))
+        self.draft = parse_draft(self.text("draft.tex"))
+        self.ratings = parse_ratings(self.text(RATINGS_FILE))
         self._load_cards()
         self._load_artefacts("derivations", "derivation")
         self._load_artefacts("computations", "computation")
-        self._load_feedback()
         self._load_literature()
         self._load_critiques()
         self._load_sessions()
@@ -336,7 +343,6 @@ class Workspace:
                 depends_on=id_list(meta.get("depends_on")),
                 supersedes=id_list(meta.get("supersedes")),
                 refutes=id_list(meta.get("refutes")),
-                answers=id_list(meta.get("answers")),
                 produced_by=meta.get("produced_by") if isinstance(meta.get("produced_by"), dict) else {},
                 session=(str(meta["session"]) if meta.get("session") else None),
                 meta=meta,
@@ -395,44 +401,8 @@ class Workspace:
             meta=meta,
         )
 
-    def _load_feedback(self) -> None:
-        for path in sorted((self.root / "feedback").glob("*.md")):
-            parsed = self._read(path)
-            if parsed is None:
-                continue
-            meta, body = parsed
-            kind = meta.get("kind")
-            by = meta.get("by") if isinstance(meta.get("by"), dict) else {}
-            if kind == "review":
-                self._load_review(path)
-            elif kind == "reaction":
-                self.reactions.append(
-                    Reaction(
-                        path=self._rel(path),
-                        target=str(meta.get("target") or ""),
-                        value=str(meta.get("value") or ""),
-                        user=str(by.get("user") or ""),
-                        date=str(meta.get("date") or ""),
-                        comment=body.strip().splitlines()[0] if body.strip() else "",
-                    )
-                )
-            elif kind == "promotion":
-                self.promotions.append(
-                    Promotion(
-                        path=self._rel(path),
-                        target=str(meta.get("target") or ""),
-                        by=by,
-                        date=str(meta.get("date") or ""),
-                        session=(str(meta["session"]) if meta.get("session") else None),
-                        reason=body.strip(),
-                    )
-                )
-            else:
-                self._problem("error", self._rel(path), f"unknown feedback kind {kind!r}")
-
     def _load_literature(self) -> None:
-        lit = self.root / "literature"
-        for path in sorted(lit.glob("P-*.md")):
+        for path in sorted((self.root / "literature").glob("P-*.md")):
             parsed = self._read(path)
             if parsed is None:
                 continue
@@ -445,7 +415,6 @@ class Workspace:
                 year=meta.get("year"),
                 meta=meta,
             )
-        self.surveys = sorted((p.stem for p in lit.glob("survey-S*.md")), key=natural_key)
 
     def _load_critiques(self) -> None:
         for path in sorted((self.root / "critiques").glob("CR-*.md")):
@@ -464,15 +433,14 @@ class Workspace:
             if not folder.is_dir() or not m:
                 continue
             session = Session(id=folder.name, number=int(m.group(1)), path=self._rel(folder))
-            if (folder / "brief.md").is_file():
-                parsed = self._read(folder / "brief.md")
-                if parsed is not None:
-                    session.brief = parsed[0]
-            if (folder / "report.md").is_file():
-                parsed = self._read(folder / "report.md")
-                if parsed is not None:
-                    session.report = parsed[0]
-                    session.report_sections = markdown_sections(parsed[1])
+            for name, attr in (("brief.md", "brief"), ("received.md", "received")):
+                if (folder / name).is_file():
+                    parsed = self._read(folder / name)
+                    if parsed is not None:
+                        setattr(session, attr, parsed[0])
+            if (folder / "debrief.md").is_file():
+                session.debrief = parse_debrief((folder / "debrief.md").read_text(encoding="utf-8"))
+            session.has_note = (folder / "note.tex").is_file()
             session.has_log = (folder / "log.md").is_file()
             self.sessions[session.id] = session
 
@@ -490,41 +458,29 @@ class Workspace:
             key=natural_key,
         )
 
-    def answerers(self, card_id: str) -> list[str]:
-        return sorted(
-            (c.id for c in self.cards.values() if card_id in c.answers),
-            key=natural_key,
-        )
-
-    def promotion_is_valid(self, promotion: Promotion) -> bool:
-        """A promotion counts if its author may promote (leads only, in shared mode)."""
-        if self.mode == "shared":
-            return promotion.by.get("kind") == "human" and promotion.by.get("user") in self.leads
-        return True
-
-    def promotions_of(self, card_id: str) -> list[Promotion]:
-        return [p for p in self.promotions if p.target == card_id]
+    def in_draft(self, card_id: str) -> str | None:
+        """'result' if a result environment of draft.tex names the card, else 'conjecture' if one does, else None."""
+        kinds = {block.kind for block in self.draft if card_id in block.cards}
+        return "result" if "result" in kinds else ("conjecture" if "conjecture" in kinds else None)
 
     def status(self, card_id: str) -> str:
         """Computed status of a card.
 
-        Claims: `working` by default, `established` after a valid promotion,
-        `refuted` when a dead-end card refutes them, `revised` when a claim card
-        supersedes them. Refuted and revised win over established. Questions:
-        `open` until a card answers them, then `answered`. Dead ends: `dead-end`.
+        Claims: `working` by default, `established` when a result environment
+        of draft.tex names them, `refuted` when a dead-end card refutes them,
+        `revised` when a claim card supersedes them. Refuted and revised win
+        over established. Dead ends: `dead-end`.
         """
         card = self.cards.get(card_id)
         if card is None:
             return "missing"
-        if card.kind == "question":
-            return "answered" if self.answerers(card_id) else "open"
         if card.kind == "dead-end":
             return "dead-end"
         if self.refuters(card_id):
             return "refuted"
         if self.revisers(card_id):
             return "revised"
-        if any(self.promotion_is_valid(p) for p in self.promotions_of(card_id)):
+        if self.in_draft(card_id) == "result":
             return "established"
         return "working"
 
@@ -558,14 +514,14 @@ class Workspace:
         )
 
     def evidence(self, card_id: str) -> list[Evidence]:
-        """Everything that supports a card, with the reviews that bear on it.
+        """Everything that supports a claim, with the reviews that bear on it.
 
-        An artefact supports a card when its summary names the card in
-        `supports`, or when a review of the artefact names the card in
-        `supports` (this is how existing work is attached to a later card).
-        A review concerns the card when it names the card in `supports`, or
-        names nothing and the artefact itself names the card. Human reviews
-        without an artefact target are direct verifications.
+        An artefact supports a claim when its summary names the claim in
+        `supports`, or when a review of the artefact names the claim in
+        `supports` (this is how existing work is attached to a later claim).
+        A review concerns the claim when it names the claim in `supports`, or
+        names nothing and the artefact itself names the claim. A human
+        verification is a review like the others, with `by.kind: human`.
         """
         items: dict[str, Evidence] = {}
         for art in self.artefacts.values():
@@ -581,25 +537,32 @@ class Workspace:
                 for r in self.reviews_of(art_id)
                 if card_id in r.supports or (not r.supports and card_id in art_supports)
             ]
-        result = [items[k] for k in sorted(items, key=natural_key)]
-        for review in sorted(self.reviews.values(), key=lambda r: natural_key(r.id)):
-            direct = review.target is None or review.target == card_id
-            if review.by_human and direct and card_id in review.supports:
-                result.append(Evidence(artefact=None, reviews=[], verification=review))
-        return result
-
-    def current_reactions(self, target: str) -> list[Reaction]:
-        """One reaction per person: the latest one each person left on `target`."""
-        latest: dict[str, Reaction] = {}
-        for reaction in sorted(
-            (r for r in self.reactions if r.target == target), key=lambda r: (r.date, r.path)
-        ):
-            latest[reaction.user] = reaction
-        return [latest[u] for u in sorted(latest)]
+        return [items[k] for k in sorted(items, key=natural_key)]
 
     def sorted_cards(self, kind: str | None = None) -> list[Card]:
         cards = [c for c in self.cards.values() if kind is None or c.kind == kind]
         return sorted(cards, key=lambda c: natural_key(c.id))
+
+    def draft_flags(self) -> list[str]:
+        """Problems with the cards the draft names: what the next debrief should propose to change."""
+        flags = []
+        for block in self.draft:
+            for card_id in block.cards:
+                status = self.status(card_id)
+                if status == "refuted":
+                    flags.append(f"{card_id} ({block.kind} at line {block.line}) is refuted by "
+                                 + ", ".join(self.refuters(card_id)))
+                elif status == "revised":
+                    flags.append(f"{card_id} ({block.kind} at line {block.line}) is revised by "
+                                 + ", ".join(self.revisers(card_id)))
+                elif status == "missing":
+                    flags.append(f"{card_id} ({block.kind} at line {block.line}) has no card in claims/")
+                elif self.needs_recheck(card_id):
+                    flags.append(f"{card_id} ({block.kind} at line {block.line}) needs a re-check: it depends on "
+                                 + ", ".join(self.needs_recheck(card_id)))
+                elif block.kind == "result" and not any(e.confirmed for e in self.evidence(card_id)):
+                    flags.append(f"{card_id} (result at line {block.line}) has no confirmed evidence")
+        return flags
 
 
 def markdown_sections(body: str) -> dict[str, str]:
@@ -619,32 +582,24 @@ def markdown_sections(body: str) -> dict[str, str]:
     return sections
 
 
-def promotion_problems(ws: Workspace, card_id: str, by: dict) -> list[str]:
-    """Reasons a promotion of `card_id` by `by` would be refused (empty if allowed).
+def result_problems(ws: Workspace, card_id: str) -> list[str]:
+    """Reasons a `result` environment of the draft may not name `card_id` (empty if it may).
 
-    Only what a script can verify: the author may promote, the card is a claim
-    that is neither refuted nor revised, and it has a supporting artefact with a
-    confirming review or a human verification. Whether the evidence is robust
-    enough is a judgment left to the person promoting.
+    The card must be a claim, neither refuted nor revised, with at least one
+    supporting artefact that has a confirming review (by an agent, or a human
+    verification). Whether the evidence is robust enough is the researcher's
+    judgment, expressed by ticking the line that copies the result.
     """
-    reasons = []
-    if ws.mode == "shared":
-        if by.get("kind") != "human":
-            reasons.append("in shared mode only a lead can promote, and agents cannot")
-        elif by.get("user") not in ws.leads:
-            reasons.append(f"{by.get('user') or 'unknown user'} is not in [people] leads of project.toml")
     card = ws.cards.get(card_id)
     if card is None:
-        reasons.append(f"no card {card_id} in claims/")
-        return reasons
+        return [f"there is no card {card_id} in claims/"]
     if card.kind != "claim":
-        reasons.append(f"{card_id} is a {card.kind} card; only claims can be promoted")
-        return reasons
+        return [f"{card_id} is a {card.kind} card; only claims can be results"]
+    reasons = []
     status = ws.status(card_id)
     if status in ("refuted", "revised"):
         reasons.append(f"{card_id} is {status}")
     if not any(item.confirmed for item in ws.evidence(card_id)):
-        reasons.append(
-            f"{card_id} has neither a supporting artefact with a confirming review nor a human verification"
-        )
+        reasons.append(f"{card_id} has no supporting artefact with a confirming review (by an agent, or a human "
+                       "verification)")
     return reasons

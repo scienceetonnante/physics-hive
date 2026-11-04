@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% from "macros.html" import ask_form %}
+{% from "macros.html" import rating_menu %}
 {% block title %}{{ paper.id }}{% endblock %}
 {% block content %}
-<p class="crumbs"><a href="/results">Results</a> › literature › <span class="id">{{ paper.id }}</span></p>
-<div class="grid">
-<main>
-  <section class="panel">
-    <h1>{{ (paper.title or paper.id) | md_inline }}</h1>
-    <p class="meta" style="margin-top:-6px">
+<div class="narrow">
+  <p class="record-note"><a href="/literature">← Literature</a> · the agent's digest</p>
+  <div class="sheet">
+    <div class="filebar">
+      <div class="fleft"><span class="fname">{{ paper.id }}</span></div>
+      {{ rating_menu(paper.id, mine, paper.rating if not mine else None, ratings, user, csrf, "/paper/" ~ paper.id) }}
+    </div>
+    <h1 class="project-title">{{ (paper.title or paper.id) | md_inline }}</h1>
+    <p class="fmeta" style="margin-top:-8px">
       {{ authors }}{% if paper.year %} · {{ paper.year }}{% endif %}
       {% if arxiv %} · <a href="https://arxiv.org/abs/{{ arxiv }}">arXiv:{{ arxiv }}</a>{% endif %}
-      {% if doi %} · doi:{{ doi }}{% endif %}
+      {% if doi %} · <a href="https://doi.org/{{ doi }}">doi:{{ doi }}</a>{% endif %}
     </p>
-    <div class="prose">{{ body | md }}</div>
-  </section>
-</main>
-<aside>
-  {{ ask_form(paper.id, user, local, sign_in, csrf, error, draft, draft_for) }}
-</aside>
+    {% if paper.why %}<p class="pwhy"><b>Why it matters here.</b> {{ paper.why | md_inline }}</p>{% endif %}
+    <div class="md">{{ body | md }}</div>
+  </div>
 </div>
 {% endblock %}

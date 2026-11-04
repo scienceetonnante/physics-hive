@@ -1,55 +1,49 @@
 # Acceptance tests of the build plan
 
-The build plan of `design/DESIGN-shared-spaces.md` (section 13) ends each phase with an acceptance test. This file says, for each one, how it is checked: by the automated suite, by the live Hub test, or by a run that needs real agents and accounts, with the steps for that run.
+The build plan of `design/DESIGN-shared-spaces.md` (section 17) ends each phase of the revision with an acceptance test. This file says, for each one, how it is checked: by the automated suite, by the live Hub test, or by a run that needs real agents and accounts, with the steps for that run.
 
-Automated suite: `uv run --no-project --with pytest --with httpx --with-requirements space/requirements.txt --with "mcp>=1.12,<2" pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories under your account).
+Automated suite: `uv run --no-project --with pytest --with httpx --with-requirements space/requirements.txt --with "mcp>=1.12,<2" pytest -q tests/`. Live Hub test: `uv run tests/hub_e2e.py` (needs `hf auth login`; creates and then deletes private scratch repositories and a Space under your account).
 
-## Phase 1 — workspace format and session driver (local)
+The tests of version 0.3.0 (re-check propagation, deterministic views, parallel sessions on the Hub, blind review, the reviewer benchmark) still hold and are still in the suite; they are not repeated here.
 
-| Test | How it is checked |
-|---|---|
-| Refuting one claim marks all its dependents as *needs re-check* in `INDEX.md` | Automated: `test_cards.py::test_refutation_marks_all_dependents`. |
-| Deleting and regenerating the views gives identical files | Automated: `test_cards.py::test_regeneration_is_deterministic`. |
-| A workspace rendered for two harnesses opens in both without re-rendering, and OpenCode shows each skill once | Rendering is automated (`test_local_flow.py`: `AGENTS.md` holds both sections, both harnesses' files exist, adding a third keeps them). OpenCode's skill list was checked with `opencode debug skill` on a workspace rendered for Claude Code, Codex and OpenCode: each skill once, identical bodies. **On your side:** open the same workspace in two harnesses and run `/session-run` in each. |
-| A full local `/autoresearch` run completes on the new format, promotes claims and writes `answer.md` | **On your side** (needs a model run). See below. |
-| A `/session-run` whose brief is not a plan item (re-check a claim after a planted refutation) completes, stops on its own, and writes a report | **On your side**. See below. |
-
-**Running the two agent tests.**
-
-1. `./init-physics-intern.sh --mode local --harness claude,opencode --dir /tmp/toy --yes`, then write a small problem with a known answer in `/tmp/toy/problem.md` (for instance the period of a pendulum to second order in the amplitude, or one of the validated benchmark problems in `problems/validated/`), and commit it.
-2. Launch a harness in `/tmp/toy` and run `/autoresearch`. Expect: a session folder `sessions/S1/` with a brief, a log with numbered dispatches and a `## Decisions taken without the operator` section, cards in `claims/`, LaTeX derivations with summaries, computations, reviews named `<artefact>_R-S1-<k>.md`, promotion records in `feedback/` (by an agent), `answer.md`, and `uv run .physics-intern/scripts/check.py` passing.
-3. Plant a refutation by hand: write `claims/DE-<you>-20261005T120000.md`, a dead-end card with `id` matching the file name, `refutes: [<an established claim>]`, `produced_by: {kind: human, user: <you>}` and `session: null` (copy the rest of the header from another card), commit it, and run `uv run .physics-intern/scripts/regen.py`: the claim shows as refuted and its dependents as *needs re-check*.
-4. Run `/session-run` and give as goal: "re-check the cards flagged needs re-check". Expect a brief you confirm, autonomous work, a stop on one of the four conditions, a report with the required sections, and `session.py end` passing.
-5. Audit both sessions with the `investigate-run` skill.
-
-## Phase 2 — sessions and the Hub
+## Phase A — the human files, in local mode
 
 | Test | How it is checked |
 |---|---|
-| Hub behaviours (merge squashes; a rebased branch can be force-pushed to `refs/pr/<n>`) | Checked on scratch repositories before writing `session.py end`; recorded in DOCUMENTATION.md. |
-| Two operators with two harnesses join one space and run sessions with overlapping briefs in parallel (both add evidence to the same claim); both pull requests merge without conflict and `INDEX.md` lists both pieces of evidence | Live: `tests/hub_e2e.py` (two checkouts on one machine, agents' work simulated by the script). **On your side:** the same with real agents, on two machines. |
-| A promotion recorded by the lead with the script shows the claim as established; one by a non-lead is refused | Live: `tests/hub_e2e.py` (the non-lead is simulated by changing `leads`). **On your side:** with a second account. |
-| Every claim leads to the trace that produced it | Cards record their session; `traces/S<n>/meta.json` and `trace.jsonl` are uploaded at the end of each session (checked live, with an empty trace since no harness ran). **On your side:** after a real session, check that `trace.jsonl` holds the conversation. |
+| Three local sessions where the researcher acts only by editing debriefs and `project.md` in a text editor; each decision is applied by the session after it | Automated, with the agents' work simulated: `test_local_flow.py::test_three_local_sessions_driven_by_debriefs`. It checks the start output of each session (answers, ticked and unticked lines, the note, the researcher's edits with line counts, the first next step, the previous handoff), that a debrief already read is not delivered again, that a question answered in the terminal is recorded as the researcher's, and *Changed by this session* in each debrief. **On your side:** the same with a real agent (below). |
+| A result copied into the draft shows as established in `INDEX.md` | Automated: `test_local_flow.py` (after S2) and `test_cards.py::test_established_means_a_result_of_the_draft`. |
+| A result without a confirming review is refused and offered as a conjecture | `check` refuses it: `test_local_flow.py` (S2), `test_cards.py::test_check_on_the_draft_blames_only_the_session`, and in the Space `test_space_backend.py::test_saving_the_researchers_files`. That the session then offers it as a conjecture in its debrief is the prompt's job (`/session-run` §2, AGENTS.md §8): **on your side**. |
 
-## Phase 3 — review
+**Running phase A with a real agent.**
 
-| Test | How it is checked |
-|---|---|
-| No reviewer brief contains authorship information | By construction: `/review` passes the claim's statement, never the card's path, model or operator. The `investigate-run` audit checks every reviewer dispatch for leaks. |
-| The benchmark reports catch and false-alarm rates for at least two models | **On your side:** `uv run bench/reviewer/run.py` (see `bench/reviewer/README.md`; real runs call models). The pipeline is tested in dry-run mode by `tests/test_reviewer_bench.py`. |
+1. `./init-physics-intern.sh --mode local --harness claude --dir /tmp/toy --yes`. In `/tmp/toy/project.md`, write a title and a goal for a small problem with a known answer (the period of a pendulum to second order in the amplitude, or one of `problems/validated/`). Do not commit.
+2. `claude` in `/tmp/toy`, then `/session-run`. Expect: your edits committed as yours, a brief you confirm, autonomous work, `sessions/S1/note.tex` (compile it with `uv run .physics-intern/scripts/pdf.py S1`), and a one-screen `sessions/S1/debrief.md` with a few questions, tick lines and an empty note box; `check` passing at the end.
+3. Answer the debrief in your editor: one answer, two ticks (one copying a reviewed result into the draft, one adding a next step), one note. Leave one question empty. Also edit `project.md`.
+4. `/session-run` again. Expect: the start output lists exactly what you wrote; the coordinator asks your empty question and waits; it applies the ticks in one commit `[S2] apply the lines ticked in the S1 debrief`; the claim shows as `established` in `INDEX.md`; the debrief of S2 lists the changes under *Changed by this session*.
+5. Tick a line that copies an unreviewed claim as a result. Expect S3 to copy nothing and offer it as a conjecture in its debrief.
+6. Audit the three sessions with `investigate-run`.
 
-## Phase 4 — the Space
-
-| Test | How it is checked |
-|---|---|
-| A browser-only reviewer reads a result, reacts, writes a question card and a claim card; a member verifies a claim and a lead promotes it; the reaction, the question and the new card appear in the next session's brief; the promoted claim shows as established | The backend (every write, the promotion rule, card views, chat tools) is tested in local mode by `tests/test_space_backend.py`. Deployment was checked live: `init --mode create` deploys the Space, which builds and reaches the RUNNING stage on the Hub and serves its page. Sign-in, the writes from a browser and the chat were not exercised. **On your side:** create a shared space (the Space is deployed by `init --mode create`), sign in as a reviewer and as a lead, do each action, then run `session.py start` and check the waiting list. |
-
-## Phase 5 — literature
+## Phase B — the Space
 
 | Test | How it is checked |
 |---|---|
-| From five seed papers, `/survey` produces triage-ready cards, and triage decisions visibly change the next survey | The tools are tested live by hand and offline by `tests/test_literature.py`. **On your side:** put five arXiv identifiers in `literature/seeds.md`, run a session whose brief is the literature, triage the paper cards in the Space, and run a second survey. |
+| The five pages, editing in place with commits to `main`, the LaTeX rendering, the PDF, the rating menu | Automated in local mode: `test_space_backend.py` (every page and form through a test client, the debrief form, the editors with the draft check, ratings), and the Hub store against a local git repository with a fake API (clone, worktrees, history, commits on the page's parent commit). The converter: `test_latex.py`, on a real note and a sample draft. The PDF: `test_human.py::test_the_templates_compile_to_pdf` compiles the draft and note templates (skipped where `latexmk` is missing; the Space image installs it). Live: `tests/hub_e2e.py` answers a debrief through the Space's backend on the real Hub, and checks that the next session receives the answer and the tick. |
+| The helmholtz problem rerun from scratch, with the researcher answering only in the Space; every answer and tick appears in the next session's start output, and the researcher never opens a record page unless they choose to | **On your side** (below). |
 
-## Phase 6 — calibration run
+**Running phase B.**
 
-With the lead scientist, on a problem whose answer they know from unpublished notes. Entirely on your side.
+1. `./init-physics-intern.sh --mode create --org <your org> --name helmholtz-3`. Wait for the Space to build (it installs git and a small TeX Live), sign in, and write the title and goal of `project.md` on the *Project* page, and the seeds on the *Literature* page.
+2. In the workspace folder, `/session-run`. When it ends, read the note on *Sessions*, answer the debrief on *Latest*, and check that *What the next session will receive* matches what you did.
+3. `/session-run` again and compare its start output with that block. Check the *Draft* page and its PDF once a result is copied.
+4. Note every time you needed a record page, and why.
+
+## Phase C — literature
+
+| Test | How it is checked |
+|---|---|
+| `overview.md`, the `why`, `topic` and `rating` fields, `ratings.yaml`, `references.bib` | Automated: the card skeleton and its order of fields (`test_literature.py::test_card_follows_the_surveyor_format`), search over the overview, `references.bib` and its stable keys (`test_cards.py`), ratings written by the Space and received by the next session (`test_space_backend.py::test_rating_papers`), the Literature page grouping papers by the overview's topics. |
+| After rating a few papers, the next survey's choices visibly follow the ratings | **On your side:** put five arXiv identifiers in `literature/seeds.md`, run a session whose brief is the literature, rate a few papers high and one *not relevant* in the Space, run a second survey, and compare which papers it expanded from and added. |
+
+## Then
+
+A calibration run with a problem whose answer you know from unpublished notes; later the Ask page and colleagues. Entirely on your side.

@@ -76,6 +76,22 @@ def changes_since(root: Path, base: str) -> list[tuple[str, str]]:
     return changes
 
 
+def session_paths(root: Path, base: str, session: str) -> set[str]:
+    """Files changed by the session itself since `base`: its `[S<n>]` commits and uncommitted changes.
+
+    In local mode the researcher may commit edits on the same branch while a session runs; those are
+    theirs, not the session's.
+    """
+    out = git(root, "log", "--no-renames", "--name-only", "--format=\x1e%s", f"{base}..HEAD", check=False).stdout
+    paths: set[str] = set()
+    for chunk in out.split("\x1e")[1:]:
+        subject, _, names = chunk.partition("\n")
+        if subject.startswith(f"[{session}]"):
+            paths |= {n.strip() for n in names.splitlines() if n.strip()}
+    paths |= set(dirty_paths(root))
+    return paths
+
+
 def load_active(root: Path) -> dict | None:
     path = root / ACTIVE_SESSION
     if not path.is_file():
