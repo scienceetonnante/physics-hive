@@ -127,6 +127,18 @@ def test_changed_by_session(toy):
     assert "- `draft.tex` (+1 −0 lines): as you ticked in S2." in text
     assert "- `conventions.md` (+2 −0 lines): compute(C-S3-1): fix the time convention." in text
     assert "+- Walkers have generator Δ." in text and "```diff" in text
+    # What the session wrote in the draft in its own words is shown as a diff; what it copied as ticked is not.
+    assert "own wording" not in text
+    (toy.root / "draft.tex").write_text((toy.root / "draft.tex").read_text() + "Yang shows this~\\cite{yang2015}.\n")
+    toy.commit("[S3] draft: cite Yang 2015, as the next step asks")
+    text = changed_by_session(History(toy.root, None), "S3", base)
+    assert "- `draft.tex` (+2 −0 lines): as you ticked in S2; draft: cite Yang 2015, as the next step asks." in text
+    assert "The session's own wording in the draft:" in text
+    assert "+Yang shows this~\\cite{yang2015}." in text and "+% copied" not in text
+    (toy.root / "draft.tex").write_text((toy.root / "draft.tex").read_text() + "".join(f"Line {i}.\n" for i in range(70)))
+    toy.commit("[S3] draft: write the introduction, as the next step asks")
+    text = changed_by_session(History(toy.root, None), "S3", base)
+    assert "+Line 58." in text and "+Line 59." not in text and "… 11 more changed lines: read them in draft.tex." in text
 
 
 def test_the_templates_compile_to_pdf():

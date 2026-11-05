@@ -32,7 +32,8 @@ The Space applies nothing by itself. The research files live in the workspace da
 
 Configuration (set by `init-physics-intern` when it creates the space): the variable
 `PHYSICS_INTERN_WORKSPACE` (org/name of the workspace dataset) and the secret `HF_TOKEN` (a token that can
-read and write the workspace).
+read and write the workspace: the one in `PHYSICS_INTERN_SPACE_TOKEN` on the creator's machine, else the
+creator's login token).
 
 For development, run the app on a local workspace folder:
 `PHYSICS_INTERN_LOCAL=/path/to/workspace PHYSICS_INTERN_LOCAL_USER=<name> uvicorn app:app --reload`.

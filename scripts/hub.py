@@ -12,12 +12,16 @@ commit.
 
 Git talks to the Hub with the token of `hf auth login`, passed in an HTTP
 header for each command; it is never written to the repository's config.
+The Space gets its own copy of a token, the secret HF_TOKEN: the one in the
+environment variable PHYSICS_INTERN_SPACE_TOKEN if it is set, else the
+creator's login token.
 """
 
 from __future__ import annotations
 
 import base64
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -29,6 +33,7 @@ from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars
 from common import ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
 
 DATASET = "dataset"
+SPACE_TOKEN_ENV = "PHYSICS_INTERN_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
 
 disable_progress_bars()  # the scripts' output is read by agents; keep it to what they need
 
@@ -98,6 +103,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     elif org not in {o["name"] for o in me.get("orgs", [])}:
         raise ScriptError(f"you are not a member of the organisation {org!r}; private repositories under a "
                           "personal account cannot be shared, so the project needs an organisation")
+    secret = space_secret(space_token)
     repos = {
         "workspace": f"{org}/{name}",
         "traces": f"{org}/{name}-traces",
@@ -130,7 +136,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     regen(target)
     say(f"Pushed the first commit to {repo_url(repos['workspace'])}")
 
-    deploy_space(target, repos, space_token)
+    deploy_space(target, repos, secret)
     say("")
     say(f"Shared space created: {repos['workspace']} (method {version}). You are its researcher ([people] leads in project.toml).")
     say(f"  Workspace: {repo_url(repos['workspace'])}")
@@ -140,8 +146,29 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     say(f"  (or, in Claude Code or Codex, the init-physics-intern plugin command with the repository {repos['workspace']})")
 
 
-def deploy_space(target: Path, repos: dict, space_token: str) -> None:
-    """Create the private Space and upload the app from the method copy."""
+def space_secret(choice: str) -> dict | None:
+    """The token the new Space will hold: from SPACE_TOKEN_ENV ("env"), the login token ("mine"), or none.
+
+    Checked before anything is created, so that a bad token stops create early.
+    """
+    if choice == "none":
+        return None
+    if choice == "mine":
+        return {"token": get_token(), "label": "your login token", "env": False}
+    token = os.environ.get(SPACE_TOKEN_ENV, "").strip()
+    if not token:
+        raise ScriptError(f"{SPACE_TOKEN_ENV} is not set")
+    try:
+        owner = HfApi(token=token).whoami()
+    except HfHubHTTPError as exc:
+        raise ScriptError(f"the Hub refused the token in {SPACE_TOKEN_ENV} ({exc}); replace it or unset it") from exc
+    name = owner.get("auth", {}).get("accessToken", {}).get("displayName")
+    label = f"the token {name!r} of {owner['name']}" if name else f"a token of {owner['name']}"
+    return {"token": token, "label": f"{label}, from {SPACE_TOKEN_ENV}", "env": True}
+
+
+def deploy_space(target: Path, repos: dict, secret: dict | None) -> None:
+    """Create the private Space, upload the app from the method copy, and store its token."""
     app = target / ".physics-intern" / "space"
     hf = api()
     if not (app / "app.py").is_file():
@@ -153,16 +180,22 @@ def deploy_space(target: Path, repos: dict, space_token: str) -> None:
     hf.add_space_variable(repos["space"], "PHYSICS_INTERN_WORKSPACE", repos["workspace"])
     hf.add_space_variable(repos["space"], "CHAT_DEBUG", "0")
     say(f"Created private Space {repos['space']}")
-    if space_token == "mine":
-        hf.add_space_secret(repos["space"], "HF_TOKEN", get_token(),
-                            description="Token the Space uses to read the workspace and save the researcher's edits")
-        say("The Space saves your answers and edits with your token (Space secret HF_TOKEN). You can replace it, in the")
-        say(f"Space settings, with a fine-grained token that can write only to {repos['workspace']} and")
-        say(f"{repos['chat_debug']}.")
-    else:
-        say("Add a Space secret HF_TOKEN in the Space settings: a token that can write to the workspace")
-        say(f"repository (and to {repos['chat_debug']}, if you turn on the chat's debug mode). Until then the")
-        say("Space cannot read the workspace.")
+    if secret is None:
+        say("Add a Space secret HF_TOKEN in the Space settings: a token that can read and write the workspace")
+        say(f"repository {repos['workspace']}. Until then the Space cannot read the workspace.")
+        return
+    hf.add_space_secret(repos["space"], "HF_TOKEN", secret["token"],
+                        description="Token the Space uses to read the workspace and save the researcher's edits")
+    say(f"The Space secret HF_TOKEN holds {secret['label']}. The Space reads the workspace and saves edits with it.")
+    if not secret["env"]:
+        say(f"To give new Spaces a dedicated token instead of yours, set {SPACE_TOKEN_ENV} before creating them.")
+        return
+    try:
+        HfApi(token=secret["token"]).repo_info(repos["workspace"], repo_type=DATASET)
+    except HfHubHTTPError:
+        warn(f"warning: the token in {SPACE_TOKEN_ENV} cannot read {repos['workspace']}, so the Space cannot show it. "
+             f"Give that token read and write access to the repositories of {repos['workspace'].split('/')[0]}, or "
+             "replace the Space secret HF_TOKEN in the Space settings.")
 
 
 def join(target: Path, repo: str, harnesses: list[str], render, regen, check_new_dir) -> None:

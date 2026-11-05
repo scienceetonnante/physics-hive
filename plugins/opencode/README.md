@@ -39,6 +39,7 @@ Then:
 - `project.toml`, `project.md`, `conventions.md`, `draft.tex`, `literature/seeds.md`, and the folders for cards, artefacts and sessions.
 - The harness files rendered from the method copy (`AGENTS.md`, `.opencode/`, `opencode.json`, and those of any other harness you chose), which are git-ignored and personal to each checkout.
 - For a shared space: the private workspace, traces, sources and chat-debug datasets and the Space, in your organisation.
+  The Space gets a copy of your login token as its secret `HF_TOKEN`, or the token in `PHYSICS_INTERN_SPACE_TOKEN` if that variable is set when you start the harness. A dedicated token needs only read and write access to the repositories of your organisation, and *Make calls to Inference Providers* for the Space's future assistant.
 
 ## Notes
 

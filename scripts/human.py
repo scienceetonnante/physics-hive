@@ -363,6 +363,11 @@ def is_session_commit(subject: str) -> bool:
     return bool(re.match(r"^\[S\d+\]", subject))
 
 
+def is_method_commit(subject: str) -> bool:
+    """Commits made by init: the workspace's first commit (with the templates) and upgrades of the method copy."""
+    return subject.startswith(("Initialize PhysicsIntern workspace", "Upgrade the method copy"))
+
+
 class History:
     """Read-only access to the git history of a workspace checkout (or of the Space's clone)."""
 
@@ -536,7 +541,7 @@ def received(ws, history: History) -> Received:
 
     if history.available():
         for commit in history.commits(HUMAN_FILES):
-            if is_session_commit(commit.subject):
+            if is_session_commit(commit.subject) or is_method_commit(commit.subject):
                 continue
             for path, (added, removed) in commit.files.items():
                 a, r = news.edits.get(path, (0, 0))
@@ -627,8 +632,15 @@ def handoff(log_text: str) -> str:
 # ----- what a session changed in the human files -----
 
 
+MAX_DRAFT_DIFF_LINES = 60
+
+
 def changed_by_session(history: History, session: str, base: str) -> str:
-    """The text of 'Changed by this session' for a debrief, from the session's own commits since `base`."""
+    """The text of 'Changed by this session' for a debrief, from the session's own commits since `base`.
+
+    It shows as a diff every change to conventions.md, and the changes to draft.tex that the session
+    worded itself (those not made by an apply commit, which only copies what the researcher ticked).
+    """
     commits = [c for c in history.commits(HUMAN_FILES, since=base) if c.subject.startswith(f"[{session}]")]
     lines = []
     for path in HUMAN_FILES:
@@ -638,16 +650,23 @@ def changed_by_session(history: History, session: str, base: str) -> str:
             continue
         added = sum(c.files[path][0] for c in touching)
         removed = sum(c.files[path][1] for c in touching)
-        reasons = []
+        reasons, own = [], []
         for c in touching:
             m = re.match(rf"^\[{re.escape(session)}\]\s*apply the lines ticked in the (S\d+) debrief", c.subject, re.I)
             reason = f"as you ticked in {m.group(1)}" if m else re.sub(r"^\[S\d+\]\s*", "", c.subject)
             if reason not in reasons:
                 reasons.append(reason)
+            if not m:
+                own.append(c)
         lines.append(f"- `{path}` (+{added} −{removed} lines): " + "; ".join(reasons) + ".")
-        if path == "conventions.md":
-            diff = [row for c in touching for row in history.patch(c.sha, path).splitlines()
-                    if row.startswith(("+", "-")) and not row.startswith(("+++", "---"))]
-            if diff:
-                lines += ["", "```diff", *diff, "```", ""]
+        shown = touching if path == "conventions.md" else own if path == "draft.tex" else []
+        diff = [row for c in shown for row in history.patch(c.sha, path).splitlines()
+                if row.startswith(("+", "-")) and not row.startswith(("+++", "---"))]
+        if path == "draft.tex" and len(diff) > MAX_DRAFT_DIFF_LINES:
+            more = len(diff) - MAX_DRAFT_DIFF_LINES
+            diff = diff[:MAX_DRAFT_DIFF_LINES] + [f"… {more} more changed lines: read them in draft.tex."]
+        if diff:
+            if path == "draft.tex":
+                lines += ["", "The session's own wording in the draft:"]
+            lines += ["", "```diff", *diff, "```", ""]
     return "\n".join(lines).strip()

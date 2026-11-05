@@ -17,7 +17,12 @@ harness or refresh them) from the workspace's own copy of the method. With
 Usage:
   uv run scripts/init.py [--mode local|create|join] [--harness claude,codex,opencode,pi]
                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
-                         [--chat-model ID] [--yes] [--list-orgs] [--list-harnesses] [--upgrade]
+                         [--chat-model ID] [--space-token env|mine|none] [--yes]
+                         [--list-orgs] [--list-harnesses] [--upgrade]
+
+The Space of a new shared space holds a copy of a token, its secret HF_TOKEN. By
+default it is the token in the environment variable PHYSICS_INTERN_SPACE_TOKEN
+if that is set, else your login token (`hf auth login`).
 """
 
 from __future__ import annotations
@@ -333,8 +338,9 @@ def main() -> int:
     parser.add_argument("--name", help="create: project name")
     parser.add_argument("--repo", help="join: the workspace repository, org/name")
     parser.add_argument("--chat-model", default=None, help=f"model of the Space's explainer chat (default {DEFAULT_CHAT_MODEL})")
-    parser.add_argument("--space-token", choices=["mine", "none"], default=None,
-                        help="create: give the Space your token (mine) or set it yourself later (none)")
+    parser.add_argument("--space-token", choices=["env", "mine", "none"], default=None,
+                        help="create: the token the Space holds: the one in PHYSICS_INTERN_SPACE_TOKEN (env, the "
+                             "default when it is set), your login token (mine), or none, set later in the Space settings")
     parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
     parser.add_argument("--list-orgs", action="store_true", help="print the organisations you belong to and exit")
     parser.add_argument("--list-harnesses", action="store_true", help="print the harnesses and whether each is installed")
@@ -405,7 +411,7 @@ def main() -> int:
         regen(target)
         say(f"PhysicsIntern workspace created at {target} (local mode, method {method_version()}).")
     else:
-        from hub import create_shared, list_orgs
+        from hub import SPACE_TOKEN_ENV, create_shared, list_orgs
 
         org = args.org
         if org is None and asking:
@@ -416,8 +422,13 @@ def main() -> int:
         name = args.name or (ask("Project name", target.name) if asking else None)
         if not org or not name:
             raise ScriptError("create needs --org and --name")
-        space_token = args.space_token or ("mine" if not asking else
-                                           ("mine" if ask("Give the Space your Hugging Face token so it can save your answers and edits? (y/n)", "y").lower().startswith("y") else "none"))
+        space_token = args.space_token
+        if space_token is None and os.environ.get(SPACE_TOKEN_ENV, "").strip():
+            space_token = "env"
+        elif space_token is None:
+            space_token = "mine" if not asking else (
+                "mine" if ask("Give the Space your Hugging Face token so it can save your answers and edits? (y/n)",
+                              "y").lower().startswith("y") else "none")
         create_shared(target, org, name, harnesses, chat_model, space_token,
                       create_local=create_local, first_commit=first_commit, regen=regen, version=method_version())
     say_next_steps(harnesses, mode)

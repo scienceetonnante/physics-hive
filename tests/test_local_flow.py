@@ -108,6 +108,9 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert r.returncode == 0, r.stderr + r.stdout
     assert "Committed your edits of project.md as yours." in r.stdout
     assert "Session S1 started" in r.stdout and "From you since the project began" in r.stdout
+    # The templates committed by init are not the researcher's edits; only the title and the goal are.
+    assert "project.md       +3 −1 lines" in r.stdout and "conventions.md   unchanged" in r.stdout
+    assert "draft.tex        unchanged" in r.stdout and "Initialize PhysicsIntern" not in r.stdout
     assert "already active" in run(scripts / "session.py", "start", cwd=ws).stderr
 
     def next_id(*what):

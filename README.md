@@ -51,7 +51,7 @@ Run it again inside a workspace to add a harness or refresh the rendered files (
 |---|---|---|
 | `project.md` | The question in one line as its title, then *Goal*, *Approach*, *Next steps*, *Done*, *Definition of done*, and the question in full | You. Agents only apply a line you ticked, and move the step their session finished to *Done*. |
 | `conventions.md` | Notation, units, sign conventions | You and the agents; every change an agent makes appears as a diff in its debrief. |
-| `draft.tex` | The best current state of the research, as a draft paper | You. Agents copy into it only what you tick, or edit it when a next step asks them to. |
+| `draft.tex` | The best current state of the research, as a draft paper | You. Agents copy into it only what you tick, or edit it when a next step asks them to; such edits appear as a diff in their debrief. |
 | `sessions/S<n>/note.tex` | What session S<n> found, in two to four pages of LaTeX | A fresh writer agent. |
 | `sessions/S<n>/debrief.md` | What session S<n> asks of you: a summary, *Changed by this session*, questions, tick lines, a note box | The session, then you. |
 | `literature/overview.md`, `seeds.md`, `ratings.yaml` | The field in a few paragraphs; your seed papers; your rating of papers | Surveys write the overview; you write the seeds and the ratings. |
@@ -70,6 +70,13 @@ Run it again inside a workspace to add a harness or refresh the rendered files (
 ```
 
 This creates the local workspace, the private dataset repositories `our-lab/x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/x-correction-space`, and pushes the first commit.
+
+**The Space's token.** The Space reads the workspace and saves your edits with its own copy of a token, the Space secret `HF_TOKEN`. By default `create` copies your login token there. To give new Spaces a dedicated token instead, set `PHYSICS_INTERN_SPACE_TOKEN` in your shell profile (for example `export PHYSICS_INTERN_SPACE_TOKEN=hf_...` in `~/.zshrc`) before running `create`, or before starting the harness that runs the init command. Do not put it in a `.env` file inside the workspace: the workspace is pushed to the Hub. Make it a fine-grained token (Hugging Face → Settings → Access Tokens) with only these permissions:
+
+- in the section for the organisation that owns your projects: read and write access to the contents of all its repositories;
+- *Make calls to Inference Providers*, for the Space's assistant once it exists.
+
+If you rotate it, update the secret `HF_TOKEN` in each Space's settings; the variable only applies to Spaces created after it is set.
 
 **Join** (once per checkout, for a second machine or a second operator):
 

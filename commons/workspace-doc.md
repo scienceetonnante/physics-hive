@@ -46,7 +46,7 @@ INDEX.md              generated view: one line per card, artefact, paper and ses
 |---|---|---|
 | `project.md` | the researcher | apply a line the researcher ticked; move the step your session finished to *Done* |
 | `conventions.md` | the researcher and agents | edit it when the work fixes a convention (the debrief shows every change as a diff) |
-| `draft.tex` | the researcher | apply a line the researcher ticked; edit it when a next step asks for it ("tidy the draft") |
+| `draft.tex` | the researcher | apply a line the researcher ticked; edit it when a next step asks for it ("tidy the draft"; the debrief shows these edits as a diff) |
 | `sessions/S<n>/note.tex` | a fresh writer sub-agent | dispatch the writer; never write it yourself |
 | `sessions/S<n>/debrief.md` | you, then the researcher | write it at the end of your session; never edit the researcher's answers, nor another session's debrief |
 | `literature/seeds.md`, `literature/ratings.yaml` | the researcher | read them only |
@@ -154,7 +154,7 @@ A session ends with three pieces of writing, each for a different reader.
 - **`sessions/S<n>/note.tex`**, for the researcher: what the session found, in two to four pages of plain LaTeX, written by a fresh writer sub-agent from the session's artefacts and log (`/session-run` says how). Each result in it names its claim card with `\card{CL-S<n>-<k>}`. A short session writes a short note.
 - **`sessions/S<n>/debrief.md`**, for the researcher to answer, written by you, one screen long, in the shape of `.physics-intern/commons/templates/debrief.md`:
   1. a summary of three to six sentences, and the path of the note;
-  2. *Changed by this session*, which `session.py end` fills in from git;
+  2. *Changed by this session*, which `session.py end` fills in from git, with the diffs of `conventions.md` and of what you wrote in `draft.tex` beyond the ticked copies;
   3. **questions**, only those you cannot settle yourself, each followed by an empty `> **Answer:**` line. For an assumption you made, say that no answer means agreement. A question from an earlier debrief that is still unanswered and still matters is asked again here, so that the researcher never needs to go back to old debriefs;
   4. **tick lines** (`- [ ] …`), each a concrete change to `project.md`, `conventions.md` or `draft.tex`, written so that the next session can apply it without further judgment: set the approach, add a next step, add a definition of done, copy a result of the note into the draft as a result (or as a conjecture), fix a result of the draft that is now refuted. Say in the line how robust the evidence of a result is;
   5. the note box, `#### Anything else for the next session` followed by an empty `> **Note:**` line.
