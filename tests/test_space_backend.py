@@ -70,14 +70,11 @@ def project(toy):
 # ----- reading -----
 
 
-def test_latest_shows_open_debriefs_and_what_the_next_session_receives(toy):
+def test_latest_shows_open_debriefs(toy):
     project(toy)
     b = local(toy)
     [d] = b.debriefs()
     assert d["id"] == "S1" and d["open"] and d["summary"] == "Summary of what the session found."
-    text = b.next_session_receives()
-    assert "From you since S1 started" in text and "Debrief S1 (sessions/S1/debrief.md)" in text
-    assert "No answer yet." in text and "First next step in project.md:\n  Derive X." in text
     # Once S2 has started and read it, it is closed, and the line says so.
     toy.received("S2", git(toy.root, "rev-parse", "HEAD"), "2026-10-22T09:00:00Z",
                  {"S1": {"note": ""}})
@@ -162,10 +159,6 @@ def test_answering_a_debrief(toy):
     # A form opened before that save is refused rather than overwriting it.
     with pytest.raises(sb.SpaceError, match="changed since you opened it"):
         b.save_debrief("alice", "S1", {1: "Other."}, set(), "", d["text"])
-    # What the next session will receive follows.
-    text = b.next_session_receives()
-    assert "Answer: Walks only first." in text and "✓ Set the approach in the project" in text
-    assert "Your note: Start on the disk." in text
 
 
 def test_saving_the_researchers_files(toy):
@@ -199,7 +192,6 @@ def test_rating_papers(toy):
     with pytest.raises(sb.SpaceError, match="no paper card"):
         b.rate("alice", "P-0000.00000", "low")
     b.rate("alice", "P-1512.07725", "not relevant")
-    assert "P-1512.07725: not rated → not relevant" in b.next_session_receives()
     b.rate("alice", "P-1512.07725", "")
     assert "P-1512.07725" not in (toy.root / "literature/ratings.yaml").read_text()
 
@@ -240,7 +232,6 @@ def test_the_hub_store_reads_a_clone_and_commits_through_the_api(toy, tmp_path):
     b.refresh()
     root, revision = b.snap.root, b.snap.revision
     assert revision == git(toy.root, "rev-parse", "HEAD") and (root / "project.md").is_file()
-    assert "Debrief S1" in b.next_session_receives()  # the history is there
     assert [r["id"] for r in b.running()] == ["S4"]
 
     [d] = b.debriefs()
@@ -286,7 +277,10 @@ def test_the_pages_and_the_forms(client):
     assert c.get("/edit/claims/CL-S1-1.md").status_code == 404
 
     page = c.get("/").text
-    assert "Must the method use walks only?" in page and "What the next session will receive" in page
+    assert "Must the method use walks only?" in page and "What the next session will receive" not in page
+    assert "sessions/*/debrief.md" not in page and 'class="brand"' not in page and 'target="_top"' not in page
+    assert "Latest session debrief</h1>" in page and '<span class="chip open">active</span>' in page
+    assert "Toy question?" not in page  # the question is on the Project page, not here
     assert '<span class="count">1</span>' in page
     token = csrf_of(page)
     base = (toy.root / "sessions/S1/debrief.md").read_text()
@@ -311,3 +305,18 @@ def test_the_pages_and_the_forms(client):
     bad = draft.replace("\\end{document}", result("CL-S1-2") + "\\end{document}")
     r = c.post("/edit/draft.tex", data={"text": bad, "base": draft, "csrf": token})
     assert "was not saved" in r.text and (toy.root / "draft.tex").read_text() == draft
+
+
+def test_discarding_an_edit_goes_back(client):
+    c, _ = client
+    for url, back in (("/edit/project.md", "/project"), ("/edit/sessions/S1/debrief.md", "/#S1"),
+                      ("/edit/literature/seeds.md", "/literature"), ("/draft/edit", "/draft")):
+        assert f'<a href="{back}" class="small">Discard my changes</a>' in c.get(url).text, url
+
+
+def test_signing_in_from_a_new_tab(client):
+    c, _ = client
+    assert c.get("/whoami").json() == {"user": "alice"}
+    page = c.get("/signed-in", params={"back": "/project"}).text
+    assert "You are signed in as alice." in page and '<a href="/project">Work in this tab</a>' in page
+    assert '<a href="/">Work in this tab</a>' in c.get("/signed-in", params={"back": "//elsewhere.com"}).text

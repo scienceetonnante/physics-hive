@@ -3,7 +3,7 @@
 Five pages, each showing files (design, section 14):
 
 - Latest: the debriefs, newest first (open ones in full, as forms: answers,
-  ticks, the note; closed ones folded), and what the next session will receive;
+  ticks, the note; closed ones folded);
 - Project: project.md and conventions.md, each with an editor;
 - Draft: draft.tex rendered like an arXiv HTML paper, an editor with a preview
   beside it, and the PDF;
@@ -134,7 +134,7 @@ backend = Backend.from_env()
 
 def fresh(request: Request) -> None:
     """Load the workspace again when a page is viewed more than two minutes after the last load."""
-    if request.method == "GET" and not request.url.path.startswith("/oauth/"):
+    if request.method == "GET" and not request.url.path.startswith(("/oauth/", "/whoami")):
         backend.refresh_if_stale()
 
 
@@ -193,8 +193,7 @@ def show_problem(request: Request, exc: SpaceError) -> HTMLResponse:
 
 
 def latest_page(request: Request, **extra) -> HTMLResponse:
-    return page(request, "latest.html", debriefs=backend.debriefs(), running=backend.running(),
-                receives=backend.next_session_receives(), title=backend.title(), **extra)
+    return page(request, "latest.html", debriefs=backend.debriefs(), running=backend.running(), **extra)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -275,10 +274,31 @@ def file(request: Request, rel: str):
     return page(request, "file.html", **backend.file(rel))
 
 
+def local_path(url: str) -> str:
+    """A path on this Space, never another site."""
+    return url if url.startswith("/") and not url.startswith("//") else "/"
+
+
 @app.get("/refresh")
 def refresh(request: Request, back: str = "/"):
     backend.refresh()
-    return RedirectResponse(back if back.startswith("/") and not back.startswith("//") else "/", status_code=303)
+    return RedirectResponse(local_path(back), status_code=303)
+
+
+# ----- sign-in from the Hub's page -----
+# On huggingface.co the Space is shown in a frame; sign-in opens a new tab (base.html). The Hub's sign-in page
+# cuts the link between the two tabs, so the new tab lands on /signed-in, and the first tab asks /whoami until
+# the sign-in shows, then reloads.
+
+
+@app.get("/whoami")
+def whoami(request: Request):
+    return {"user": signed_in(request)}
+
+
+@app.get("/signed-in", response_class=HTMLResponse)
+def signed_in_page(request: Request, back: str = "/"):
+    return page(request, "signed_in.html", back=local_path(back))
 
 
 # ----- writes -----
@@ -291,7 +311,8 @@ def back_of(rel: str) -> str:
         return "/literature"
     if rel == "draft.tex":
         return "/draft"
-    return "/"
+    m = re.match(r"^sessions/(S\d+)/debrief\.md$", rel)
+    return f"/#{m.group(1)}" if m else "/"
 
 
 @app.get("/edit/{rel:path}", response_class=HTMLResponse)
@@ -333,5 +354,4 @@ async def answer(request: Request, session_id: str):
 def rate(request: Request, paper_id: str = Form(""), rating: str = Form(""), back: str = Form("/literature"),
          csrf: str = Form("")):
     message = backend.rate(check_form(request, csrf), paper_id, rating)
-    target = back if back.startswith("/") and not back.startswith("//") else "/literature"
-    return done(request, message, target)
+    return done(request, message, local_path(back) if back else "/literature")

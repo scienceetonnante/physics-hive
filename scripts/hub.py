@@ -2,7 +2,12 @@
 
 A shared space is a private dataset repository holding the research files
 (the workspace), three more private dataset repositories (traces, sources,
-chat_debug) and a private Space, all owned by one organisation. A session is a
+chat_debug) and a private Space, all owned by one organisation. The
+repositories of project <name> are named physics-hive-<name> (the workspace and
+the Space, which the Hub keeps apart) and physics-hive-<name>-traces, -sources
+and -chat-debug. The Space's card on the Hub is titled "[Physics Hive] <name>"
+and shows the question of project.md, which `open_session` updates when the
+researcher changes it. A session is a
 pull request on the workspace repository: the scripts open it as a draft (its
 number is the session number), push the session branch to `refs/pr/<n>`, mark
 it ready and merge it. The Hub squashes a pull request into one commit when it
@@ -22,6 +27,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -34,6 +40,9 @@ from common import ScriptError, git, git_out, now_iso, rendered_version, rerende
 
 DATASET = "dataset"
 SPACE_TOKEN_ENV = "PHYSICS_INTERN_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
+REPO_PREFIX = "physics-hive-"  # the repositories of project <name> are <org>/physics-hive-<name>[-traces, ...]
+CARD_TITLE = "[Physics Hive] {name}"
+CARD_DESCRIPTION_LIMIT = 60  # the Hub refuses a longer short_description
 
 disable_progress_bars()  # the scripts' output is read by agents; keep it to what they need
 
@@ -51,6 +60,12 @@ def whoami() -> dict:
     try:
         return api().whoami()
     except HfHubHTTPError as exc:
+        if os.environ.get("HF_TOKEN"):
+            # huggingface_hub uses HF_TOKEN before the login token, so `hf auth login` alone changes nothing.
+            raise ScriptError(
+                f"the Hub refused the token in the environment variable HF_TOKEN ({exc}). It takes precedence over "
+                "`hf auth login`: replace it with a valid token where your shell sets it, or remove it, then "
+                "restart your harness so that it reads the new environment") from exc
         raise ScriptError(f"could not identify you on the Hub ({exc}); run `hf auth login`") from exc
 
 
@@ -58,8 +73,10 @@ def username() -> str:
     return whoami()["name"]
 
 
-def list_orgs() -> list[str]:
-    return sorted(org["name"] for org in whoami().get("orgs", []))
+def owners() -> list[str]:
+    """Who can own a new project: the organisations you belong to, then your own account."""
+    me = whoami()
+    return sorted(org["name"] for org in me.get("orgs", [])) + [me["name"]]
 
 
 def repo_url(repo_id: str) -> str:
@@ -104,13 +121,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
         raise ScriptError(f"you are not a member of the organisation {org!r}; private repositories under a "
                           "personal account cannot be shared, so the project needs an organisation")
     secret = space_secret(space_token)
-    repos = {
-        "workspace": f"{org}/{name}",
-        "traces": f"{org}/{name}-traces",
-        "sources": f"{org}/{name}-sources",
-        "chat_debug": f"{org}/{name}-chat-debug",
-        "space": f"{org}/{name}-space",
-    }
+    repos = repo_names(org, name)
     hf = api()
     for key, repo_id in repos.items():
         kind = "space" if key == "space" else DATASET
@@ -141,9 +152,24 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     say(f"Shared space created: {repos['workspace']} (method {version}). You are its researcher ([people] leads in project.toml).")
     say(f"  Workspace: {repo_url(repos['workspace'])}")
     say(f"  Space:     {hf_constants.ENDPOINT}/spaces/{repos['space']}")
+    host = space_host(repos["space"])
+    if host:
+        say(f"             {host} (the Space alone, outside the Hub's page: sign-in stays in the same tab)")
     say("To work from another checkout or machine (or, later, to add a colleague), join with:")
     say(f"  init-physics-intern.sh --mode join --repo {repos['workspace']}")
     say(f"  (or, in Claude Code or Codex, the init-physics-intern plugin command with the repository {repos['workspace']})")
+
+
+def repo_names(org: str, name: str) -> dict:
+    """The repositories of project `name`: the workspace and the Space share one name (the Hub keeps them apart)."""
+    base = f"{org}/{REPO_PREFIX}{name.removeprefix(REPO_PREFIX)}"
+    return {"workspace": base, "traces": f"{base}-traces", "sources": f"{base}-sources",
+            "chat_debug": f"{base}-chat-debug", "space": base}
+
+
+def project_name(repo_id: str) -> str:
+    """The project's name from its workspace repository: org/physics-hive-x gives x."""
+    return repo_id.split("/")[-1].removeprefix(REPO_PREFIX)
 
 
 def space_secret(choice: str) -> dict | None:
@@ -175,8 +201,7 @@ def deploy_space(target: Path, repos: dict, secret: dict | None) -> None:
         warn("The method copy has no Space app (.physics-intern/space/); skipping the Space.")
         return
     hf.create_repo(repos["space"], repo_type="space", space_sdk="docker", private=True)
-    hf.upload_folder(repo_id=repos["space"], repo_type="space", folder_path=app,
-                     commit_message="Deploy the PhysicsIntern Space", ignore_patterns=["__pycache__/*", "*.pyc"])
+    upload_space_app(app, repos, project_question(target), "Deploy the PhysicsIntern Space")
     hf.add_space_variable(repos["space"], "PHYSICS_INTERN_WORKSPACE", repos["workspace"])
     hf.add_space_variable(repos["space"], "CHAT_DEBUG", "0")
     say(f"Created private Space {repos['space']}")
@@ -196,6 +221,78 @@ def deploy_space(target: Path, repos: dict, secret: dict | None) -> None:
         warn(f"warning: the token in {SPACE_TOKEN_ENV} cannot read {repos['workspace']}, so the Space cannot show it. "
              f"Give that token read and write access to the repositories of {repos['workspace'].split('/')[0]}, or "
              "replace the Space secret HF_TOKEN in the Space settings.")
+
+
+def project_question(root: Path) -> str | None:
+    """The question of project.md (its title), or None while it is not written."""
+    from human import parse_project
+
+    path = root / "project.md"
+    doc = parse_project(path.read_text(encoding="utf-8")) if path.is_file() else None
+    return doc.title if doc and not doc.is_template else None
+
+
+def card_line(text: str, limit: int = CARD_DESCRIPTION_LIMIT) -> str:
+    """The text on one line of at most `limit` characters, cut between words."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    if " " in cut:
+        cut = cut[: cut.rfind(" ")]
+    return cut.rstrip(" ,;:") + "…"
+
+
+def space_card(readme: str, name: str, question: str | None) -> str:
+    """The Space's README.md with its card: the title names the project, the description is its question.
+
+    Without a question, an existing description is kept.
+    """
+    m = re.match(r"---\n(.*?)\n---\n", readme, re.S)
+    if not m:
+        raise ScriptError("the Space's README.md has no metadata block")
+    fields = {"title": CARD_TITLE.format(name=name)}
+    if question:
+        fields["short_description"] = card_line(question)
+    lines = [line for line in m.group(1).splitlines() if line.split(":", 1)[0].strip() not in fields]
+    lines[:0] = [f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in fields.items()]
+    return "---\n" + "\n".join(lines) + "\n---\n" + readme[m.end():]
+
+
+def upload_space_app(app: Path, repos: dict, question: str | None, message: str) -> None:
+    """Upload the Space app from a method copy, with the project's card in its README.md, in one commit."""
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp) / "space"
+        shutil.copytree(app, folder, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        readme = folder / "README.md"
+        name = project_name(repos["workspace"])
+        readme.write_text(space_card(readme.read_text(encoding="utf-8"), name, question), encoding="utf-8")
+        api().upload_folder(repo_id=repos["space"], repo_type="space", folder_path=folder, commit_message=message)
+
+
+def space_host(space: str) -> str | None:
+    """The Space's own address (https://<org>-<name>.hf.space), or None if the Hub does not give it."""
+    try:
+        return getattr(api().space_info(space), "host", None)
+    except (HfHubHTTPError, OSError):
+        return None
+
+
+def update_space_card(repos: dict, question: str | None) -> None:
+    """Show the question on the Space's card if it changed. A commit to the Space restarts it, so only then."""
+    space = repos.get("space")
+    if not space or not question:
+        return
+    hf = api()
+    try:
+        readme = Path(hf.hf_hub_download(space, "README.md", repo_type="space")).read_text(encoding="utf-8")
+        card = space_card(readme, project_name(repos["workspace"]), question)
+        if card != readme:
+            hf.upload_file(path_or_fileobj=card.encode("utf-8"), path_in_repo="README.md", repo_id=space,
+                           repo_type="space", commit_message="Show the project's question on the Space card")
+            say(f"The card of the Space {space} now shows the question of project.md.")
+    except (HfHubHTTPError, OSError, ScriptError) as exc:
+        warn(f"warning: could not update the card of the Space {space} ({exc}); the session goes on.")
 
 
 def join(target: Path, repo: str, harnesses: list[str], render, regen, check_new_dir) -> None:
@@ -256,6 +353,7 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
     git(root, "checkout", "-q", "-B", branch, "origin/main")
     base = git_out(root, "rev-parse", "origin/main")
     sync_sources_down(root, repos)
+    update_space_card(repos, project_question(root))
     return {"id": session, "number": number, "pr": number, "pr_url": pr_url(repos["workspace"], number),
             "branch": branch, "base": base, "operator": user}
 

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "macros.html" import sign_in_first %}
+{% block title %}Signed in{% endblock %}
+{% block content %}
+<div class="narrow">
+  <div class="sheet md">
+    {% if user %}
+    <p><b>You are signed in as {{ user }}.</b></p>
+    <p>You can close this tab: the tab you came from shows you signed in within a few seconds. If it still shows
+      <em>Sign in</em>, your browser keeps the sign-in out of pages shown inside huggingface.co; work in this tab.</p>
+    <div class="actions">
+      <button type="button" class="primary" id="close-tab">Close this tab</button>
+      <a href="{{ back }}">Work in this tab</a>
+    </div>
+    {% else %}
+    <p><b>The sign-in did not complete.</b></p>
+    {{ sign_in_first(local, sign_in, "try again") }}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    var button = document.getElementById("close-tab");
+    if (!button) return;
+    button.addEventListener("click", function () {
+      window.close();
+      // Some browsers refuse to let a page close its own tab.
+      setTimeout(function () { button.outerHTML = "<span class=\"muted\">Close this tab from your browser.</span>"; }, 300);
+    });
+  })();
+</script>
+{% endblock %}

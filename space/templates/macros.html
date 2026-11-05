@@ -2,7 +2,7 @@
 {% if local %}
 <p class="muted small">Set PHYSICS_INTERN_LOCAL_USER to {{ what }} from this local copy.</p>
 {% else %}
-<p class="muted small"><a href="{{ sign_in }}" target="_top">Sign in with Hugging Face</a> to {{ what }}.</p>
+<p class="muted small"><a class="sign-in" href="{{ sign_in }}">Sign in with Hugging Face</a> to {{ what }}.</p>
 {% endif %}
 {%- endmacro %}
 

@@ -54,7 +54,7 @@ loop:    take the first next step of project.md
            /derive or /compute → integrate → /review → integrate
            on a refutation: second /review; if it agrees → Refutation gate → dead-end card
            when a claim has robust evidence (AGENTS.md §3) → Draft gate → copy it into draft.tex as a result
-           when a step is finished, move it to Done in project.md
+           when a step is finished, remove it from project.md
            count every integrated return in changes_since_critique, and results copied into
            the draft and refutations in substantive_changes_since_critique
          run /critique when (substantive ≥ 1 and changes ≥ 2) or changes ≥ 6; reset both

@@ -14,7 +14,7 @@ A workspace is either **local** (one machine, a git repository) or a **shared sp
 - **git** and **[uv](https://docs.astral.sh/uv/)** (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`). The scripts run through uv with their dependencies declared inline; nothing else needs installing by hand.
 - At least one harness: **[Claude Code](https://claude.com/claude-code)** (`claude`), **[Codex CLI](https://github.com/openai/codex)** (`codex`), **[OpenCode](https://opencode.ai)** (`opencode`) or **[Pi](https://pi.dev)** (`pi`).
 - Optional, to compile the draft and the notes to PDF on your machine: a TeX distribution with `latexmk` (TeX Live or MacTeX). The Space compiles them itself.
-- For a shared space: a Hugging Face account, membership of the organisation that will own the project, and `hf auth login`. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project).
+- For a shared space: a Hugging Face account, membership of the organisation that will own the project, and `hf auth login`. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project). To try shared mode alone, choose your own account as the owner.
 - Optional: `SEMANTIC_SCHOLAR_API_KEY`, which raises the rate limit of the citation lookups for papers outside INSPIRE.
 
 
@@ -49,7 +49,7 @@ Run it again inside a workspace to add a harness or refresh the rendered files (
 
 | File | What it is | Who changes it |
 |---|---|---|
-| `project.md` | The question in one line as its title, then *Goal*, *Approach*, *Next steps*, *Done*, *Definition of done*, and the question in full | You. Agents only apply a line you ticked, and move the step their session finished to *Done*. |
+| `project.md` | The question in one line as its title, then *Goal*, *Approach* and *Next steps* | You. Agents only apply a line you ticked, and remove the step their session finished. |
 | `conventions.md` | Notation, units, sign conventions | You and the agents; every change an agent makes appears as a diff in its debrief. |
 | `draft.tex` | The best current state of the research, as a draft paper | You. Agents copy into it only what you tick, or edit it when a next step asks them to; such edits appear as a diff in their debrief. |
 | `sessions/S<n>/note.tex` | What session S<n> found, in two to four pages of LaTeX | A fresh writer agent. |
@@ -69,7 +69,7 @@ Run it again inside a workspace to add a harness or refresh the rendered files (
 ./init-physics-intern.sh --mode create --org our-lab --name x-correction
 ```
 
-This creates the local workspace, the private dataset repositories `our-lab/x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/x-correction-space`, and pushes the first commit.
+This creates the local workspace, the private dataset repositories `our-lab/physics-hive-x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/physics-hive-x-correction` (the Hub keeps datasets and Spaces apart, so they share the name), and pushes the first commit. On the Hub the Space's card reads "[Physics Hive] x-correction" and shows the question of `project.md` once you have written it (each session start updates it). `create` also prints the Space's own address (`https://our-lab-physics-hive-x-correction.hf.space`): opened there rather than on huggingface.co, the Space signs you in within the same tab.
 
 **The Space's token.** The Space reads the workspace and saves your edits with its own copy of a token, the Space secret `HF_TOKEN`. By default `create` copies your login token there. To give new Spaces a dedicated token instead, put `PHYSICS_INTERN_SPACE_TOKEN=hf_...` in the `.env` at the root of your clone of this repository (git-ignored; read only when you run `./init-physics-intern.sh` from that clone), or set it in your shell profile (`export PHYSICS_INTERN_SPACE_TOKEN=hf_...` in `~/.zshrc`), which also works for the plugin command. Do not put it in a `.env` file inside the workspace: the workspace is pushed to the Hub. Make it a fine-grained token (Hugging Face → Settings → Access Tokens) with only these permissions:
 
@@ -81,14 +81,14 @@ If you rotate it, update the secret `HF_TOKEN` in each Space's settings; the var
 **Join** (once per checkout, for a second machine or a second operator):
 
 ```bash
-./init-physics-intern.sh --mode join --repo our-lab/x-correction
+./init-physics-intern.sh --mode join --repo our-lab/physics-hive-x-correction
 ```
 
 This clones the workspace and renders the harness files you selected from the workspace's own copy of the method, so that every checkout and the Space run exactly the same prompts and scripts. Harness files are personal: they are git-ignored, and only research content and the method copy are shared.
 
 **What happens in a session.** `/session-run` claims a session by opening a draft pull request; its number is the session number (`S12`). It puts your checkout on the branch `session/S12`, prints what you sent since the previous session started, applies your ticked lines, and proposes a brief. You confirm it. The session then works on its own within its budget (20 dispatches by default) and stops when the goal is reached, the budget is spent, four dispatches in a row add nothing, or the work shows that `project.md` should change. At the end, it writes the note and the debrief, and `session.py end` adds *Changed by this session* to the debrief from git, checks the workspace, pushes the branch, uploads the trace, and merges the pull request. A merge adds to the record and endorses nothing: what you endorse is what is in the draft.
 
-**The Space** shows your files, one kind per page, each with an editor. *Latest* (the first page) shows the debriefs, newest first: the open ones in full, as forms where you answer, tick and write a note; the ones a session has read, folded to one line; and what the next session will receive. *Project* shows `project.md` and `conventions.md`. *Draft* shows `draft.tex` rendered like an arXiv HTML paper (contents, numbered sections and equations, results, footnotes, references), with an editor beside a preview, and the PDF. *Sessions* lists the sessions; each opens its note, rendered the same way. *Literature* shows the overview, then the papers by topic with their one-line reason, and a menu to rate each one. Saving commits to `main` with the Space's token and names you in the commit. The Space applies nothing: ticked lines are applied by the next session. The session record (cards, artefacts, reviews, logs) has its own pages, reached from the notes, the draft and the Sessions page.
+**The Space** shows your files, one kind per page, each with an editor. *Latest* (the first page) shows the debriefs, newest first: the open ones in full, as forms where you answer, tick and write a note; the ones a session has read, folded to one line. *Project* shows `project.md` and `conventions.md`. *Draft* shows `draft.tex` rendered like an arXiv HTML paper (contents, numbered sections and equations, results, footnotes, references), with an editor beside a preview, and the PDF. *Sessions* lists the sessions; each opens its note, rendered the same way. *Literature* shows the overview, then the papers by topic with their one-line reason, and a menu to rate each one. Saving commits to `main` with the Space's token and names you in the commit. The Space applies nothing: ticked lines are applied by the next session. The session record (cards, artefacts, reviews, logs) has its own pages, reached from the notes, the draft and the Sessions page.
 
 To push your own edits from a terminal, use `uv run .physics-intern/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
 
@@ -117,7 +117,7 @@ A workspace rendered for several harnesses opens in any of them without running 
 ## What a workspace looks like
 
 ```
-project.md            the question, goal, approach, next steps, done steps, definition of done (yours)
+project.md            the question, goal, approach, next steps (yours)
 conventions.md        notation, units, signs
 draft.tex             the draft paper (yours); references.bib is generated from the paper cards
 project.toml          method version, Hub repositories, people

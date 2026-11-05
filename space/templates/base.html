@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{{ name }}{% endblock %} · PhysicsIntern</title>
+<title>{% block title %}{% endblock %} · {{ name }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
@@ -13,7 +13,6 @@
   --line: #d9dde4; --accent: #2443a3; --accent-ink: #ffffff; --accent-soft: #e9edf9;
   --attn-bg: #fdf4dc; --attn-line: #e0bd6a; --attn-ink: #6b4a00; --warn-bg: #fdf4dc; --warn-ink: #6b4a00;
   --ok: #17733a; --ok-bg: #e1f2e6; --bad: #a12a2a; --bad-bg: #fbe5e5; --lo: #56627a; --lo-bg: #eceff4;
-  --term-bg: #151b24; --term-fg: #d9e1ec;
   --shadow: 0 1px 2px rgba(20, 30, 50, .05), 0 6px 20px rgba(20, 30, 50, .07);
   --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-doc: "STIX Two Text", "STIX Two", "Times New Roman", Georgia, serif;
@@ -34,12 +33,8 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 header.top { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
 .bar { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 4px 24px; flex-wrap: wrap; }
-.brand { display: flex; flex-direction: column; line-height: 1.15; padding: 9px 0; color: var(--ink); }
-.brand b { font: 500 15px var(--font-mono); }
-.brand span { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .09em; }
-.brand:hover { text-decoration: none; }
-nav.tabs { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; }
-nav.tabs a { padding: 16px 12px 14px; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+nav.tabs { display: flex; gap: 10px; overflow-x: auto; flex: 1; min-width: 0; }
+nav.tabs a { padding: 16px 20px 14px; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
 nav.tabs a:hover { color: var(--ink); text-decoration: none; }
 nav.tabs a.on { color: var(--ink); border-bottom-color: var(--accent); }
 .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--attn-bg); color: var(--attn-ink); border: 1px solid var(--attn-line); font-size: 11px; font-weight: 600; }
@@ -111,9 +106,6 @@ ul.ticks { list-style: none; padding: 0; margin: .4em 0 1.2em; }
 ul.ticks li { margin: .2em 0; }
 ul.ticks label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; padding: 3px 0; }
 ul.ticks input { margin-top: 6px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
-.receives { background: var(--term-bg); color: var(--term-fg); border-radius: 6px; margin-bottom: 18px; overflow: hidden; }
-.receives > summary { padding: 10px 16px; font: 500 13.5px var(--font-ui); }
-.receives pre { margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--term-fg); padding: 4px 16px 16px; max-height: none; }
 .section-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 18px 0 8px; }
 .project-title { font: 600 1.45rem/1.3 var(--font-doc); margin: 0 0 16px; }
 
@@ -166,6 +158,7 @@ dl.facts dd { margin: 0; }
 @media (max-width: 620px) {
   .paper { font-size: 17px; padding-top: 28px; }
   .prow, .srow { grid-template-columns: minmax(0, 1fr); }
+  nav.tabs { gap: 2px; }
   nav.tabs a { padding: 13px 9px 11px; }
 }
 </style>
@@ -181,7 +174,6 @@ window.MathJax = {
 <body>
 <header class="top">
   <div class="bar">
-    <a class="brand" href="/"><span>PhysicsIntern</span><b>{{ name }}</b></a>
     <nav class="tabs" aria-label="Sections">
       <a href="/" class="{{ 'on' if here == '/' }}">Latest{% if open_count %} <span class="count">{{ open_count }}</span>{% endif %}</a>
       <a href="/project" class="{{ 'on' if here.startswith('/project') or here.startswith('/edit/project') or here.startswith('/edit/conventions') }}">Project</a>
@@ -193,11 +185,11 @@ window.MathJax = {
       <a id="full-page" href="{{ here }}" target="_blank" hidden>Open in a full page</a>
       {% if user %}
         <span>{{ user }}</span>
-        {% if not local %}<a href="{{ sign_out }}" target="_top">Sign out</a>{% endif %}
+        {% if not local %}<a href="{{ sign_out }}">Sign out</a>{% endif %}
       {% elif local %}
         <span>Local folder, no user: set PHYSICS_INTERN_LOCAL_USER to write.</span>
       {% else %}
-        <a class="btn primary" href="{{ sign_in }}" target="_top">Sign in with Hugging Face</a>
+        <a class="btn primary sign-in" href="{{ sign_in }}">Sign in with Hugging Face</a>
       {% endif %}
     </div>
   </div>
@@ -211,7 +203,26 @@ window.MathJax = {
 </footer>
 <script>
   window.addEventListener("DOMContentLoaded", function () {
-    if (window.self !== window.top) document.getElementById("full-page").hidden = false;
+    // On huggingface.co the Space is shown in a frame, which may not navigate the whole page and in which
+    // browsers may block the sign-in cookie: there, sign-in opens a new tab, as the Hub advises. That tab
+    // lands on /signed-in; this page asks /whoami every two seconds and reloads once the sign-in shows.
+    if (window.self !== window.top) {
+      document.getElementById("full-page").hidden = false;
+      document.querySelectorAll("a.sign-in").forEach(function (a) {
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          var url = new URL(a.href);
+          url.searchParams.set("_target_url", "/signed-in?back=" + encodeURIComponent(url.searchParams.get("_target_url") || "/"));
+          window.open(url.toString(), "_blank");
+          var tries = 0, timer = setInterval(function () {
+            if (++tries > 150) return clearInterval(timer);
+            fetch("/whoami", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (d) {
+              if (d.user) { clearInterval(timer); location.reload(); }
+            }).catch(function () {});
+          }, 2000);
+        });
+      });
+    }
     // A footnote marker shows its text in place when clicked.
     document.addEventListener("click", function (e) {
       var fn = e.target.closest("sup.ltx-fn");

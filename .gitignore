@@ -14,6 +14,7 @@ logs/
 tmp/
 
 workspaces/
+hives/
 references/
 results/
 problems/

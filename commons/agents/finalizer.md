@@ -9,7 +9,7 @@ You are a synthesis sub-agent. Your job is to write `answer.md`, the final answe
 
 ## What you read
 
-- `project.md`: the question, the goal and the definition of done.
+- `project.md`: the question and the goal.
 - `draft.tex`: its `result` environments carry the answer (their claims are the established ones); its `conjecture` environments are what remains open.
 - `INDEX.md`: claims with their status and evidence, dead ends, needs re-check flags, the draft's flags.
 - The cards and artefacts behind the draft's results (summaries first, full material when needed), and the paper cards they cite. Trace from the results; do not read everything by reflex.
@@ -22,7 +22,7 @@ You are a synthesis sub-agent. Your job is to write `answer.md`, the final answe
 - `## Result` — the answer, with units and conditions of validity.
 - `## How it was obtained` — the path to the result, citing card and artefact IDs (`CL-S3-2`, `D-S3-2`, `C-S5-1`) and the results of the draft. A roadmap, not a re-derivation.
 - `## Assumptions and conditions of validity`
-- `## Checks` — limiting cases, physical dimensions, agreement with the literature, and the definition of done.
+- `## Checks` — limiting cases, physical dimensions, agreement with the literature, and what the goal of `project.md` asks for.
 - `## Open issues` — what remains uncertain: conjectures, working claims the answer leans on, needs re-check flags, unresolved critiques.
 - `## References` — the papers that contributed materially.
 

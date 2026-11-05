@@ -189,16 +189,15 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     write(ws / "sessions/S2/brief.md", {"session": "S2", "goal": "Derive X to second order", "budget": 20}, "## Goal\n")
     assert run(scripts / "session.py", "brief", cwd=ws).returncode == 0
     (ws / "project.md").write_text((ws / "project.md").read_text().replace(
-        "1. Derive X to second order.\n2. Compute X numerically.\n", "1. Compute X numerically.\n").replace(
-        "## Done\n", "## Done\n\n- Derive X to second order (S2).\n"))
-    commit(ws, "[S2] project.md: move the finished step to Done")
+        "1. Derive X to second order.\n2. Compute X numerically.\n", "1. Compute X numerically.\n"))
+    commit(ws, "[S2] project.md: remove the finished step")
     deb2 = debrief("S2", ["Is the disk a fair first domain?"],
                    ["Copy Conjecture 1 of note S1 (CL-S1-2) into the draft, as a conjecture."])
     r = end_session(ws, scripts, "S2", "\\documentclass{article}\\begin{document}Nothing new.\\end{document}\n", deb2)
     assert r.returncode == 0, r.stderr + r.stdout
     changed = parse_debrief((ws / "sessions/S2/debrief.md").read_text()).changed
     assert "- `draft.tex` (+" in changed and "as you ticked in S1" in changed
-    assert "- `project.md` (+" in changed and "project.md: move the finished step to Done" in changed
+    assert "- `project.md` (+" in changed and "project.md: remove the finished step" in changed
     index = (ws / "INDEX.md").read_text()
     assert "**CL-S1-1** · established" in index and "**CL-S1-2** · working" in index
     assert "debrief read by S2" in index

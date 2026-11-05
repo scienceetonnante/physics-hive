@@ -3,7 +3,9 @@
 {% block title %}Latest{% endblock %}
 {% block content %}
 <div class="narrow">
-  {% if title %}<h1 class="project-title">{{ title | md_inline }}</h1>{% endif %}
+  {% set open = debriefs | selectattr("open") | list %}
+  {% set closed = debriefs | rejectattr("open") | list %}
+  {% if debriefs %}<h1 class="project-title">Latest session debrief{{ 's' if open | length > 1 }}</h1>{% endif %}
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
   {% for r in running %}
   <div class="warn">{% if r.url %}<a href="{{ r.url }}">{{ r.title | md_inline }}</a>{% else %}Session {{ r.title }}{% endif %} is running now. Its note and debrief will appear here when it ends.</div>
@@ -16,23 +18,14 @@
   </div>
   {% endif %}
 
-  {% set open = debriefs | selectattr("open") | list %}
-  {% set closed = debriefs | rejectattr("open") | list %}
-  {% if open %}<div class="filebar"><div class="fleft"><span class="fname">sessions/*/debrief.md</span><span class="fmeta">Answer the questions, tick what you accept, add a note. The next session applies what you ticked.</span></div></div>{% endif %}
+  {% if open %}<p class="fmeta">Answer the questions, tick what you accept, add a note. The next session applies what you ticked.</p>{% endif %}
   {% for d in open %}
   <article class="deb" id="{{ d.id }}">
-    <div class="deb-head"><span class="sid">{{ d.id }}</span><b>{{ (d.goal or d.summary) | md_inline }}</b><span class="chip open">open</span></div>
+    <div class="deb-head"><span class="sid">{{ d.id }}</span><b>{{ (d.goal or d.summary) | md_inline }}</b><span class="chip open">active</span></div>
     {% if error and error_for == d.id %}<div class="error" style="margin:12px 24px 0">{{ error }}</div>{% endif %}
     {{ debrief_form(d, user, local, sign_in, csrf) }}
   </article>
   {% endfor %}
-
-  {% if debriefs %}
-  <details class="receives" {{ 'open' if open }}>
-    <summary>What the next session will receive</summary>
-    <pre>{{ receives }}</pre>
-  </details>
-  {% endif %}
 
   {% for d in closed %}
   <details class="deb closed" id="{{ d.id }}" {{ 'open' if error_for == d.id }}>

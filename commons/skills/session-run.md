@@ -63,9 +63,9 @@ When the work shows that the approach or the next steps should change, note it i
 
 ## 6. Stop
 
-Stop at the first stop condition. Before stopping for lack of progress, record the obstacle as a dead-end card if there is one. If the work shows that `project.md` should change, stop and say so in the debrief, with the change as a tick line; do not edit it beyond moving finished steps.
+Stop at the first stop condition. Before stopping for lack of progress, record the obstacle as a dead-end card if there is one. If the work shows that `project.md` should change, stop and say so in the debrief, with the change as a tick line; do not edit it beyond removing finished steps.
 
-If the session finished a next step of `project.md`, move it to *Done* (one line, ending with the session, for example `(S12)`), in its own commit: `[S<n>] project.md: move the finished step to Done`.
+If the session finished a next step of `project.md`, remove it from *Next steps*, in its own commit: `[S<n>] project.md: remove the finished step`. The debrief lists this change.
 
 ## 7. Note, debrief, handoff
 

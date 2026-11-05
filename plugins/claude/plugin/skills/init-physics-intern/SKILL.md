@@ -20,7 +20,7 @@ This is a bootstrap. Ask the questions below, run the initializer once with the 
    - **join a shared space** (`--mode join`): clone a team's existing workspace.
 2. **Harnesses.** Claude Code is always included. Run `bash <initializer> --list-harnesses` and ask whether the folder should also be set up for the other installed harnesses (Codex CLI, OpenCode, Pi), for people who will open it with them.
 3. **Where.** The default is the current project folder above. For local and create it must be empty, apart from an optional `project.md`; for join it must be empty, or you can choose a new subfolder.
-4. **Create:** run `bash <initializer> --list-orgs` (this needs `hf auth login`; if it fails, tell the user to run `! hf auth login` and stop) and ask which organisation owns the project, then the project name. **Join:** ask for the workspace repository (`org/name`).
+4. **Create:** run `bash <initializer> --list-orgs` (this needs `hf auth login`; if it fails, tell the user to run `! hf auth login` and stop) and ask which organisation owns the project (the last line is the user's own account, which only they can see), then the project name. **Join:** ask for the workspace repository (`org/name`).
 5. **Run once:**
 
    ```

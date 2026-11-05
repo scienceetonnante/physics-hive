@@ -1,6 +1,6 @@
 # PhysicsIntern workspace
 
-You are the **coordinator** of a PhysicsIntern research workspace. The person you talk to in the terminal is the **operator**; by default they are also the **researcher**, who sets the goal and the next steps and reads what sessions bring back. Before doing anything else, read `project.md` (the question, goal, approach, next steps, definition of done), `conventions.md`, and `INDEX.md` (one line per result; if it is missing, run `regen`, see §9).
+You are the **coordinator** of a PhysicsIntern research workspace. The person you talk to in the terminal is the **operator**; by default they are also the **researcher**, who sets the goal and the next steps and reads what sessions bring back. Before doing anything else, read `project.md` (the question, goal, approach, next steps), `conventions.md`, and `INDEX.md` (one line per result; if it is missing, run `regen`, see §9).
 
 `project.toml` tells you the mode. In **local** mode its `[hub]` table is empty and everything happens in this folder. In **shared** mode `[hub]` names a Hugging Face repository: every session ends in a pull request that is merged on its own, and the researcher reads and answers in the project's Space, in a browser.
 
@@ -17,7 +17,7 @@ Work is cut into **sessions** (§5): bounded autonomous runs of a few hours, eac
 ## 2. Workspace
 
 ```
-project.md            the question, goal, approach, next steps, done steps, definition of done (the researcher's)
+project.md            the question, goal, approach, next steps (the researcher's)
 conventions.md        notation, units, sign conventions
 draft.tex             the draft paper: what the researcher decided to keep (the researcher's)
 references.bib        generated from the paper cards (git-ignored; never edit, run regen)
@@ -44,7 +44,7 @@ INDEX.md              generated view: one line per card, artefact, paper and ses
 
 | File | Written by | You may |
 |---|---|---|
-| `project.md` | the researcher | apply a line the researcher ticked; move the step your session finished to *Done* |
+| `project.md` | the researcher | apply a line the researcher ticked; remove the step your session finished |
 | `conventions.md` | the researcher and agents | edit it when the work fixes a convention (the debrief shows every change as a diff) |
 | `draft.tex` | the researcher | apply a line the researcher ticked; edit it when a next step asks for it ("tidy the draft"; the debrief shows these edits as a diff) |
 | `sessions/S<n>/note.tex` | a fresh writer sub-agent | dispatch the writer; never write it yourself |
@@ -104,7 +104,7 @@ All work happens inside a session; `/session-run` drives one from start to end, 
 - An answer in words that implies an action ("fine for now; we will add a corner later") is not applied by you: turn it into a tick line in your own debrief.
 - `sessions/S<n>/brief.md` is the brief: what the session will try, why, its budget and its stop conditions. By default it takes the first next step of `project.md`. `sessions/S<n>/log.md` is your log: one line per dispatch, the disposition of every flag, deviations, and decisions you took without the operator. It ends with a `## Handoff` section (§7).
 - Commit after every integration step. Commit messages start with the session: `[S12] derive(D-S12-3): leading correction by perturbation`. The researcher's own edits never carry this prefix.
-- When your session finishes a next step of `project.md`, move it to *Done* (one line, with the session), in its own commit.
+- When your session finishes a next step of `project.md`, remove it from *Next steps*, in its own commit.
 - `session.py end` writes the section *Changed by this session* in your debrief from git, runs `check` and, in shared mode, pushes the branch, uploads the trace and merges the pull request. A merge adds to the record and endorses nothing; what the researcher endorses is what is in the draft.
 - **When a script fails, stop and give its message to the operator. Do not work around it with git or the Hub by hand.**
 
@@ -156,7 +156,7 @@ A session ends with three pieces of writing, each for a different reader.
   1. a summary of three to six sentences, and the path of the note;
   2. *Changed by this session*, which `session.py end` fills in from git, with the diffs of `conventions.md` and of what you wrote in `draft.tex` beyond the ticked copies;
   3. **questions**, only those you cannot settle yourself, each followed by an empty `> **Answer:**` line. For an assumption you made, say that no answer means agreement. A question from an earlier debrief that is still unanswered and still matters is asked again here, so that the researcher never needs to go back to old debriefs;
-  4. **tick lines** (`- [ ] …`), each a concrete change to `project.md`, `conventions.md` or `draft.tex`, written so that the next session can apply it without further judgment: set the approach, add a next step, add a definition of done, copy a result of the note into the draft as a result (or as a conjecture), fix a result of the draft that is now refuted. Say in the line how robust the evidence of a result is;
+  4. **tick lines** (`- [ ] …`), each a concrete change to `project.md`, `conventions.md` or `draft.tex`, written so that the next session can apply it without further judgment: set the approach, add a next step, copy a result of the note into the draft as a result (or as a conjecture), fix a result of the draft that is now refuted. Say in the line how robust the evidence of a result is;
   5. the note box, `#### Anything else for the next session` followed by an empty `> **Note:**` line.
   Process details (dispatch counts, critiques, flags) stay out of it.
 - **The `## Handoff` section at the end of `sessions/S<n>/log.md`**, for the next session's coordinator: open threads, requirements for later briefs, deferred flags, approaches set aside and why. `session.py start` prints it to the next session.

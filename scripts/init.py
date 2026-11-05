@@ -347,7 +347,8 @@ def main() -> int:
     parser.add_argument("--harness", "--harnesses", dest="harness", help="comma-separated: " + ", ".join(HARNESSES))
     parser.add_argument("--host", help=argparse.SUPPRESS)  # earlier name of --harness
     parser.add_argument("--dir", help="target folder (default: the current folder)")
-    parser.add_argument("--org", help="create: Hugging Face organisation that will own the repositories")
+    parser.add_argument("--org", help="create: Hugging Face organisation, or your own account, that will own the "
+                        "repositories")
     parser.add_argument("--name", help="create: project name")
     parser.add_argument("--repo", help="join: the workspace repository, org/name")
     parser.add_argument("--chat-model", default=None, help=f"model of the Space's explainer chat (default {DEFAULT_CHAT_MODEL})")
@@ -355,7 +356,8 @@ def main() -> int:
                         help="create: the token the Space holds: the one in PHYSICS_INTERN_SPACE_TOKEN (env, the "
                              "default when it is set), your login token (mine), or none, set later in the Space settings")
     parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
-    parser.add_argument("--list-orgs", action="store_true", help="print the organisations you belong to and exit")
+    parser.add_argument("--list-orgs", action="store_true",
+                        help="print the organisations you belong to, then your own account, and exit")
     parser.add_argument("--list-harnesses", action="store_true", help="print the harnesses and whether each is installed")
     parser.add_argument("--upgrade", action="store_true", help="replace the workspace's method copy with this one")
     args = parser.parse_args()
@@ -365,10 +367,10 @@ def main() -> int:
             say(f"{name}: {label} ({'installed' if shutil.which(cmd) else 'not found on this machine'})")
         return 0
     if args.list_orgs:
-        from hub import list_orgs
+        from hub import owners
 
-        for org in list_orgs():
-            say(org)
+        for owner in owners():
+            say(owner)
         return 0
 
     asking = interactive() and not args.yes
@@ -404,12 +406,12 @@ def main() -> int:
 
     chat_model = args.chat_model or DEFAULT_CHAT_MODEL
     if mode == "join":
-        from hub import join
+        from hub import join, project_name
 
         repo = args.repo or (ask("Workspace repository to join (org/name)", "") if asking else "")
         if not repo:
             raise ScriptError("join needs the workspace repository: --repo org/name")
-        default_dir = "." if not any(Path(".").iterdir()) else repo.split("/")[-1]
+        default_dir = "." if not any(Path(".").iterdir()) else project_name(repo)
         target = Path(dir_value or (ask("Folder to clone into", default_dir) if asking else default_dir))
         target = target.expanduser().resolve()
         join(target, repo, harnesses, render, regen, check_new_dir)
@@ -424,14 +426,14 @@ def main() -> int:
         regen(target)
         say(f"PhysicsIntern workspace created at {target} (local mode, method {method_version()}).")
     else:
-        from hub import SPACE_TOKEN_ENV, create_shared, list_orgs
+        from hub import SPACE_TOKEN_ENV, create_shared, owners
 
         org = args.org
         if org is None and asking:
-            orgs = list_orgs()
-            if not orgs:
-                raise ScriptError("you belong to no Hugging Face organisation; create one, or ask to join your team's")
-            org = ask_choice("Which organisation will own the project?", [(o, o) for o in orgs], orgs[0])
+            *orgs, me = owners()
+            choices = [(o, o) for o in orgs] + [(me, f"{me} (your own account: only you can see the project)")]
+            org = ask_choice("Which organisation, or your own account, will own the project?", choices,
+                             orgs[0] if orgs else me)
         name = args.name or (ask("Project name", target.name) if asking else None)
         if not org or not name:
             raise ScriptError("create needs --org and --name")

@@ -21,8 +21,8 @@ Two ways to reach a workspace:
   `session.py start` commits them as the researcher's. The signed-in user is
   then `PHYSICS_INTERN_LOCAL_USER`.
 
-What the files mean (status, evidence, the draft's results, debriefs, what a
-session receives, the checks, references.bib, the PDF) comes from the
+What the files mean (status, evidence, the draft's results, debriefs and which
+session read them, the checks, references.bib, the PDF) comes from the
 workspace's own copy of the method scripts, `.physics-intern/scripts/`,
 imported again at every refresh.
 """
@@ -365,8 +365,9 @@ class Backend:
         return line
 
     def project_name(self) -> str:
+        """The project's name: the workspace repository org/physics-hive-x, or the local folder, gives x."""
         label = self.store.label if self.store is not None else "PhysicsIntern"
-        return label.rstrip("/").rsplit("/", 1)[-1]
+        return label.rstrip("/").rsplit("/", 1)[-1].removeprefix("physics-hive-")
 
     def hub_url(self, kind: str, *parts: str) -> str | None:
         """A page on the Hub for one of the project's repositories (None in local mode)."""
@@ -414,13 +415,6 @@ class Backend:
         return [{"id": f"S{pr['num']}", "title": pr["title"], "url": pr["url"]}
                 for pr in self.pull_requests if is_session_pr(pr) and pr["status"] in ("draft", "open")]
 
-    def next_session_receives(self) -> str:
-        """What a session started now would receive, as session.py start prints it."""
-        snap = self.current()
-        human = snap.m.human
-        _, since = human.previous_start(snap.ws.sessions.values())
-        return human.format_received(human.received(snap.ws, human.History(snap.root, since)), max_patch_lines=0)
-
     # --- Project ---
 
     def project(self) -> dict:
@@ -428,13 +422,6 @@ class Backend:
         doc = snap.ws.project_doc
         return {"project": self.read("project.md"), "conventions": self.read("conventions.md"),
                 "title": doc.title if doc and not doc.is_template else None}
-
-    def title(self) -> str | None:
-        try:
-            doc = self.current().ws.project_doc
-        except SpaceError:
-            return None
-        return doc.title if doc and not doc.is_template else None
 
     # --- LaTeX: the draft and the notes ---
 

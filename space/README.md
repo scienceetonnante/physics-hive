@@ -1,5 +1,5 @@
 ---
-title: PhysicsIntern
+title: Physics Hive
 emoji: ⚛️
 colorFrom: indigo
 colorTo: gray
@@ -7,8 +7,10 @@ sdk: docker
 app_port: 7860
 hf_oauth: true
 pinned: false
-short_description: Read and answer a PhysicsIntern workspace
 ---
+
+<!-- When the Space is deployed, its title becomes "[Physics Hive] <project>" and its short_description the question
+of project.md (scripts/hub.py, space_card). Each session start updates the description if the question changed. -->
 
 # PhysicsIntern Space
 
@@ -16,11 +18,10 @@ This Space is the browser view of one PhysicsIntern shared space: a private rese
 run sessions in a terminal and the researcher follows and steers them from here. Sign in with your Hugging
 Face account (you must be a member of the organisation that owns the project).
 
-- **Latest**: the debriefs of the sessions, newest first. Answer the questions, tick the lines you accept,
-  and write anything else in the note box; the next session applies what you ticked. Below them, what the
-  next session will receive.
-- **Project**: `project.md` (the question, goal, approach, next steps, done steps, definition of done) and
-  `conventions.md`, each with an editor.
+- **Latest**: the debriefs of the sessions, newest first; the ones no session has read yet are marked *active*. Answer the questions, tick the lines you accept,
+  and write anything else in the note box; the next session applies what you ticked.
+- **Project**: `project.md` (the question, goal, approach and next steps) and `conventions.md`, each with an
+  editor.
 - **Draft**: `draft.tex`, the best current state of the research, rendered like an arXiv HTML paper, with an
   editor beside a preview and the PDF. A claim is established when a result of the draft names it.
 - **Sessions**: one line per session; each opens its note, rendered the same way.

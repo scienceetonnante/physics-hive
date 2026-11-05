@@ -2,8 +2,8 @@
 
 The researcher works with a handful of files, never with the record:
 
-- `project.md`: the question in one line as its title, then Goal, Approach,
-  Next steps, Done, Definition of done, and the question in full;
+- `project.md`: the question in one line as its title, then Goal, Approach
+  and Next steps;
 - `conventions.md`;
 - `draft.tex`: the draft paper; a claim is established when a `result`
   environment in it names its card with `\\card{CL-...}`;
@@ -30,7 +30,7 @@ from pathlib import Path
 import yaml
 
 # Files the researcher writes and agents may change only as the design says
-# (apply a ticked line, move a finished step to Done, fix a convention). Every
+# (apply a ticked line, remove a finished step, fix a convention). Every
 # change a session makes to them is listed in its debrief.
 HUMAN_FILES = ("project.md", "conventions.md", "draft.tex")
 # Files only the researcher writes.
@@ -38,7 +38,6 @@ RESEARCHER_FILES = ("literature/seeds.md", "literature/ratings.yaml")
 RATINGS = ("high", "medium", "low", "not relevant")
 RATINGS_FILE = "literature/ratings.yaml"
 
-PROJECT_SECTIONS = ("Goal", "Approach", "Next steps", "Done", "Definition of done", "The question in full")
 TITLE_PLACEHOLDER = "<the question in one line>"
 
 
@@ -62,7 +61,6 @@ class Project:
     title: str
     sections: dict[str, str]
     next_steps: list[str]
-    done: list[str]
 
     @property
     def is_template(self) -> bool:
@@ -97,8 +95,7 @@ def parse_project(text: str) -> Project:
             lines.append(line)
     if current is not None:
         sections[current] = "\n".join(lines).strip()
-    return Project(title=title, sections=sections, next_steps=list_items(sections.get("Next steps", "")),
-                   done=list_items(sections.get("Done", "")))
+    return Project(title=title, sections=sections, next_steps=list_items(sections.get("Next steps", "")))
 
 
 # ----- debriefs -----
@@ -563,7 +560,7 @@ def received(ws, history: History) -> Received:
 
 
 def format_received(news: Received, max_patch_lines: int = 60) -> str:
-    """The text `session.py start` prints, and the Space shows, for what a new session receives."""
+    """The text `session.py start` prints for what a new session receives."""
     since = f"since {news.previous} started" if news.previous else "since the project began"
     out = [f"From you {since}"]
     if not news.debriefs:

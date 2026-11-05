@@ -27,10 +27,9 @@ def test_project_md():
     template = (__import__("pathlib").Path(__file__).resolve().parents[1] / "commons/templates/project.md").read_text()
     assert parse_project(template).is_template
     project = parse_project("# Can walks find eigenvalues?\n\n## Goal\n\nDecide.\n\n## Next steps\n\n"
-                            "1. Reference spectra\n   on three domains.\n2. Weights.\n\n## Done\n\n- Survey (S1).\n")
+                            "1. Reference spectra\n   on three domains.\n2. Weights.\n")
     assert not project.is_template and project.title == "Can walks find eigenvalues?"
     assert project.next_steps == ["Reference spectra on three domains.", "Weights."]
-    assert project.done == ["Survey (S1)."]
 
 
 def test_debrief_parse_and_write_back():

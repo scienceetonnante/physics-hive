@@ -11,7 +11,7 @@ This is a bootstrap. Ask the questions below in the chat, run the bundled initia
    - **join a shared space** (`--mode join`): clone a team's existing workspace.
 2. **Harnesses.** Codex CLI is always included. Run `bash "${PLUGIN_ROOT}/scripts/plugin-init.sh" --list-harnesses` and ask whether the folder should also be set up for the other installed harnesses (Claude Code, OpenCode, Pi), for people who will open it with them.
 3. **Where.** The default is the current folder. For local and create it must be empty, apart from an optional `project.md`; for join it must be empty, or you can choose a new subfolder.
-4. **Create:** run `bash "${PLUGIN_ROOT}/scripts/plugin-init.sh" --list-orgs` (this needs `hf auth login`; if it fails, ask the user to run `hf auth login` and stop) and ask which organisation owns the project, then the project name. **Join:** ask for the workspace repository (`org/name`).
+4. **Create:** run `bash "${PLUGIN_ROOT}/scripts/plugin-init.sh" --list-orgs` (this needs `hf auth login`; if it fails, ask the user to run `hf auth login` and stop) and ask which organisation owns the project (the last line is the user's own account, which only they can see), then the project name. **Join:** ask for the workspace repository (`org/name`).
 5. **Run once:**
 
    ```
