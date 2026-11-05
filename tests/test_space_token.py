@@ -110,6 +110,7 @@ def test_a_token_that_cannot_read_the_workspace_is_reported(fake_hub, monkeypatc
 def test_init_uses_the_variable_by_default(monkeypatch, tmp_path, env, flag, expected):
     seen = {}
     monkeypatch.setattr(hub, "create_shared", lambda *args, **kwargs: seen.setdefault("choice", args[5]))
+    monkeypatch.setattr(init, "DOTENV", tmp_path / "absent.env")
     if env:
         monkeypatch.setenv(hub.SPACE_TOKEN_ENV, env)
     else:
@@ -119,3 +120,18 @@ def test_init_uses_the_variable_by_default(monkeypatch, tmp_path, env, flag, exp
     monkeypatch.setattr(sys, "argv", argv)
     assert init.main() == 0
     assert seen["choice"] == expected
+
+
+def test_init_reads_the_token_from_the_dotenv_of_the_method_repository(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(hub, "create_shared", lambda *args, **kwargs: seen.setdefault("choice", args[5]))
+    monkeypatch.delenv(hub.SPACE_TOKEN_ENV, raising=False)
+    dotenv = tmp_path / ".env"
+    dotenv.write_text('OTHER=1\nPHYSICS_INTERN_SPACE_TOKEN = "hf_from_file"\n')
+    monkeypatch.setattr(init, "DOTENV", dotenv)
+    workspace = tmp_path / "ws"
+    monkeypatch.setattr(sys, "argv", ["init.py", "--mode", "create", "--org", "lab", "--name", "x",
+                                      "--harness", "claude", "--dir", str(workspace), "--yes"])
+    assert init.main() == 0
+    assert seen["choice"] == "env"
+    assert init.os.environ[hub.SPACE_TOKEN_ENV] == "hf_from_file"

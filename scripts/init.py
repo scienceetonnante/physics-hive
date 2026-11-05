@@ -22,7 +22,8 @@ Usage:
 
 The Space of a new shared space holds a copy of a token, its secret HF_TOKEN. By
 default it is the token in the environment variable PHYSICS_INTERN_SPACE_TOKEN
-if that is set, else your login token (`hf auth login`).
+if that is set (or in the .env at the root of this method repository, when run
+from a clone of it), else your login token (`hf auth login`).
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from common import ScriptError, git, git_out, is_git_repo, rendered_harnesses, r
 
 METHOD_ROOT = Path(__file__).resolve().parents[1]  # holds commons/, hosts/, scripts/, VERSION
 METHOD_PARTS = ("commons", "hosts", "scripts", "space", "VERSION")
+DOTENV = METHOD_ROOT / ".env"  # in a clone of the method repository; read only for the Space's token
 HARNESSES = {
     "claude": ("Claude Code", "claude"),
     "codex": ("Codex CLI", "codex"),
@@ -327,6 +329,17 @@ def say_next_steps(harnesses: list[str], mode: str) -> None:
 # ----- entry point -----
 
 
+def load_from_dotenv(name: str) -> None:
+    """Put `name` from DOTENV into the environment, unless the environment already has it."""
+    if os.environ.get(name, "").strip() or not DOTENV.is_file():
+        return
+    for line in DOTENV.read_text().splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip().removeprefix("export ").strip() == name:
+            os.environ[name] = value.strip().strip("'\"")
+            return
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("dir_arg", nargs="?", metavar="DIR", help="target folder (same as --dir)")
@@ -422,6 +435,7 @@ def main() -> int:
         name = args.name or (ask("Project name", target.name) if asking else None)
         if not org or not name:
             raise ScriptError("create needs --org and --name")
+        load_from_dotenv(SPACE_TOKEN_ENV)
         space_token = args.space_token
         if space_token is None and os.environ.get(SPACE_TOKEN_ENV, "").strip():
             space_token = "env"
