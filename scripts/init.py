@@ -8,8 +8,11 @@ Run without options, it asks a few questions in the terminal, each with a
 default: what to do (create a shared space on the Hugging Face Hub, join one,
 or start a local workspace), which harnesses will be used on this machine,
 where, and for a new workspace the question of the project and its goal, which
-it writes into project.md. Every question also has a flag, so the plugin
-bootstraps can ask in the chat and pass the answers.
+it writes into project.md. Every question also has a flag. When no Hugging
+Face token is found for a shared space, it offers to log in.
+
+It is launched by install.sh, from a downloaded release of the method, or by
+init-physics-hive.sh, from a clone of the method repository.
 
 Run inside an existing workspace, it renders the harness files again (to add a
 harness or refresh them) from the workspace's own copy of the method. With
@@ -20,7 +23,7 @@ Usage:
                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
                          [--question TEXT] [--goal TEXT]
                          [--chat-model ID] [--space-token env|mine|none] [--yes]
-                         [--list-orgs] [--list-harnesses] [--upgrade]
+                         [--upgrade]
 
 The Space of a new shared space holds a copy of a token, its secret HF_TOKEN. By
 default it is the token in the environment variable PHYSICS_HIVE_SPACE_TOKEN
@@ -409,22 +412,8 @@ def main() -> int:
                         help="create: the token the Space holds: the one in PHYSICS_HIVE_SPACE_TOKEN (env, the "
                              "default when it is set), your login token (mine), or none, set later in the Space settings")
     parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
-    parser.add_argument("--list-orgs", action="store_true",
-                        help="print the organisations you belong to, then your own account, and exit")
-    parser.add_argument("--list-harnesses", action="store_true", help="print the harnesses and whether each is installed")
     parser.add_argument("--upgrade", action="store_true", help="replace the workspace's method copy with this one")
     args = parser.parse_args()
-
-    if args.list_harnesses:
-        for name, (label, cmd) in HARNESSES.items():
-            say(f"{name}: {label} ({'installed' if shutil.which(cmd) else 'not found on this machine'})")
-        return 0
-    if args.list_orgs:
-        from hub import owners
-
-        for owner in owners():
-            say(owner)
-        return 0
 
     asking = interactive() and not args.yes
     harness_flag = args.harness or args.host
@@ -461,6 +450,7 @@ def main() -> int:
     if mode == "join":
         from hub import join, project_name
 
+        ensure_hub_login(asking)
         repo = args.repo or (ask("Workspace repository to join (org/name)", "") if asking else "")
         if not repo:
             raise ScriptError("join needs the workspace repository: --repo org/name")
@@ -482,6 +472,7 @@ def main() -> int:
     else:
         from hub import SPACE_TOKEN_ENV, create_shared, owners
 
+        ensure_hub_login(asking)
         org = args.org
         if org is None and asking:
             *orgs, me = owners()
@@ -505,6 +496,17 @@ def main() -> int:
                       first_commit=first_commit, regen=regen, version=method_version())
     say_next_steps(harnesses, mode, missing=project_missing(target))
     return 0
+
+
+def ensure_hub_login(asking: bool) -> None:
+    """When no Hugging Face token is found, log in in the terminal rather than stop with an error."""
+    from huggingface_hub import get_token, interpreter_login
+
+    if get_token() or not asking:
+        return
+    say("You are not logged in to Hugging Face. Log in with a token that can write to the organisation that")
+    say("will own the project (https://huggingface.co/settings/tokens); it is saved as `hf auth login` does.")
+    interpreter_login()
 
 
 def ask_project(args: argparse.Namespace, asking: bool, target: Path) -> tuple[str, str]:

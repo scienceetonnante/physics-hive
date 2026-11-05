@@ -36,7 +36,7 @@ from huggingface_hub import HfApi, get_token
 from huggingface_hub import constants as hf_constants
 from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars
 
-from common import ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
+from common import INSTALL_COMMAND, ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
 
 DATASET = "dataset"
 SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
@@ -155,9 +155,9 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     host = space_host(repos["space"])
     if host:
         say(f"             {host} (the Space alone, outside the Hub's page: sign-in stays in the same tab)")
-    say("To work from another checkout or machine (or, later, to add a colleague), join with:")
-    say(f"  init-physics-hive.sh --mode join --repo {repos['workspace']}")
-    say(f"  (or, in Claude Code or Codex, the init-physics-hive plugin command with the repository {repos['workspace']})")
+    say("To run sessions from another machine (yours or a colleague's), join with:")
+    say(f"  {INSTALL_COMMAND} -s -- --mode join --repo {repos['workspace']}")
+    say("Colleagues who only read and answer need nothing installed: they sign in to the Space.")
 
 
 def repo_names(org: str, name: str) -> dict:

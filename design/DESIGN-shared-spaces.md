@@ -69,7 +69,7 @@ Adding people later costs little, because IDs embed the session number and every
 
 ## 5. Starting a project
 
-`init-physics-hive` asks a few questions, each with a default and a command-line flag: start a local workspace, create a shared space, or join one; which harnesses to render (Claude Code, Codex, OpenCode, Pi); where; and, to create, the Hugging Face organisation and the project name. The plugin commands ask the same questions in the chat and call the script with flags. This part of the October design is implemented and does not change.
+`init-physics-hive` asks a few questions, each with a default and a command-line flag: start a local workspace, create a shared space, or join one; which harnesses to render (Claude Code, Codex, OpenCode, Pi); where; and, to create, the Hugging Face organisation and the project name. Since then, the plugin commands that asked the same questions in a chat were replaced by an installer, `install.sh`, which downloads a release and runs the script. This part of the October design is implemented and does not change.
 
 Two choices from the October draft stay. **Harness files are personal**: they are rendered locally and git-ignored, so researchers on different harnesses share only research files. **The method is copied into the workspace** (`.physics-hive/`, with its version in `project.toml`), so every session and the Space run the same prompts and scripts, and the prompts that produced a result sit in the git history next to it.
 

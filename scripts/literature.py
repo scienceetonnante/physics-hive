@@ -54,7 +54,7 @@ from cards import PAPER_ID_RE, FrontMatterError, find_root, split_front_matter  
 
 _VERSION_FILE = Path(__file__).resolve().parents[1] / "VERSION"
 VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.is_file() else "dev"
-USER_AGENT = f"PhysicsHive/{VERSION} literature.py (+https://github.com/huggingface/physics-hive-claude-plugin)"
+USER_AGENT = f"PhysicsHive/{VERSION} literature.py (+https://github.com/scienceetonnante/physics-hive)"
 
 INSPIRE_API = "https://inspirehep.net/api/literature"
 ARXIV_API = "https://export.arxiv.org/api/query"

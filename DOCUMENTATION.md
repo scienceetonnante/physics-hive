@@ -1,6 +1,6 @@
 # PhysicsHive — Developer Documentation
 
-This document is for people who work on the PhysicsHive method itself: the prompts, the renderer, the workspace scripts, the Space, the plugins and the audit skill. For installing and using PhysicsHive, see [README.md](README.md). The design behind the card-based format and shared spaces is in `design/DESIGN-shared-spaces.md`.
+This document is for people who work on the PhysicsHive method itself: the prompts, the renderer, the workspace scripts, the Space, the installer and the audit skill. For installing and using PhysicsHive, see [README.md](README.md). The design behind the card-based format and shared spaces is in `design/DESIGN-shared-spaces.md`.
 
 ## Contents
 
@@ -18,7 +18,7 @@ This document is for people who work on the PhysicsHive method itself: the promp
 12. [The Space](#the-space)
 13. [Literature tools](#literature-tools)
 14. [The reviewer benchmark](#the-reviewer-benchmark)
-15. [Distribution: plugins](#distribution-plugins)
+15. [Distribution: the installer and releases](#distribution-the-installer-and-releases)
 16. [Tests](#tests)
 17. [Design choices worth remembering](#design-choices-worth-remembering)
 18. [Adding a host, an agent or a skill](#adding-a-host-an-agent-or-a-skill)
@@ -32,7 +32,7 @@ PhysicsHive is for a small team of scientists who steer AI agents on one problem
 
 The repo started in November 2026 as a fork of the `shared-spaces` branch of [Physics Intern](https://github.com/huggingface/physics-intern). Physics Intern remains the project for autonomous runs, where agents work without anyone steering them; fixes to the parts both projects have (the renderer, the host glue, the review and literature tools) may be worth carrying across. `/autoresearch` and `/finalize`, which served autonomous runs, were removed; the reviewer benchmark stays, because it measures the blind review that every session relies on.
 
-This repo holds the **method**: the prompts that turn an AI coding harness (Claude Code, Codex CLI, OpenCode, Pi) into a research coordinator with fresh-context sub-agents; the renderer that writes them in each harness's format; the **workspace scripts** that do the deterministic work (computing views, validating, opening and closing sessions, what a session receives from the researcher, Hub operations, trace export, PDFs); the **Space** app where the researcher reads and answers in a browser; the plugin bootstraps; and the audit skill used to improve all of this from real runs.
+This repo holds the **method**: the prompts that turn an AI coding harness (Claude Code, Codex CLI, OpenCode, Pi) into a research coordinator with fresh-context sub-agents; the renderer that writes them in each harness's format; the **workspace scripts** that do the deterministic work (computing views, validating, opening and closing sessions, what a session receives from the researcher, Hub operations, trace export, PDFs); the **Space** app where the researcher reads and answers in a browser; the installer; and the audit skill used to improve all of this from real runs.
 
 The harness provides tool-use loops, sub-agent dispatch, shell, web search and slash commands; we do not rebuild those. Research content (cards, derivations, sessions) is produced inside workspaces, never here.
 
@@ -43,7 +43,8 @@ The harness provides tool-use loops, sub-agent dispatch, shell, web search and s
 physics-hive/
 ├── README.md, DOCUMENTATION.md, CLAUDE.md
 ├── VERSION                       method version, copied into every workspace
-├── init-physics-hive.sh          thin launcher: uv run scripts/init.py
+├── install.sh                    the installer: downloads a release, runs its scripts/init.py
+├── init-physics-hive.sh          development launcher: runs this clone's scripts/init.py
 ├── commons/                      host-agnostic method
 │   ├── render.py                 renderer (stdlib only)
 │   ├── workspace-doc.md          body of AGENTS.md
@@ -67,8 +68,6 @@ physics-hive/
 │   └── common.py                 git helpers, the active-session file
 ├── space/                        the Space app (FastAPI pages, LaTeX converter), deployed by init --mode create
 ├── bench/reviewer/               reviewer benchmark: cases with planted errors, runner
-├── plugins/<host>/               authored files of the plugin bootstraps
-├── build-*plugin.sh              assemble the publishable plugin repos
 ├── tests/                        pytest suite; hub_e2e.py (live, manual)
 ├── .claude/skills/investigate-run/   the audit skill (repo-level)
 ├── design/                       design documents
@@ -185,14 +184,14 @@ A shared space is five private repositories in one organisation, named by `hub.r
 
 **Hub behaviours this relies on**, verified on scratch repositories before writing `session.py end`: a pull request is the ref `refs/pr/<n>` and accepts pushes and force-pushes of a rebased branch; a draft cannot be merged until `change_discussion_status(..., "open")`; **merging squashes** the pull request into one commit titled `<title> (#<n>)`, so session commits do not keep their SHAs on `main` (they stay reachable through `refs/pr/<n>`, and `meta.json` lists them with the merge commit); `create_commit(create_pr=True)` opens a ready pull request; small binary files push fine over plain git, and new repositories come with a `.gitattributes` routing many extensions to LFS, which `create` removes so that workspaces stay plain git.
 
-**Authentication.** Git gets the token of `hf auth login` through `GIT_CONFIG_COUNT`/`http.<endpoint>/.extraHeader` for each command; it is never written to `.git/config`. The Space holds its own copy of a token, the secret `HF_TOKEN`, set by `create`. It is the token in the environment variable `PHYSICS_HIVE_SPACE_TOKEN`; if the variable is not set, `init.py` looks for it in the `.env` at the root of the method repository, which exists only when it runs from a clone of the repository (plugins do not ship one). Failing both, it is the creator's login token. `hub.space_secret` checks a dedicated token with `whoami` before anything is created, and `deploy_space` warns if it cannot read the new workspace. `--space-token env|mine|none` overrides the default. The README lists the permissions to give a dedicated Space token.
+**Authentication.** Git gets the token of `hf auth login` through `GIT_CONFIG_COUNT`/`http.<endpoint>/.extraHeader` for each command; it is never written to `.git/config`. The Space holds its own copy of a token, the secret `HF_TOKEN`, set by `create`. It is the token in the environment variable `PHYSICS_HIVE_SPACE_TOKEN`; if the variable is not set, `init.py` looks for it in the `.env` at the root of the method repository, which exists only when it runs from a clone of the repository (the installer's download has none). Failing both, it is the creator's login token. `hub.space_secret` checks a dedicated token with `whoami` before anything is created, and `deploy_space` warns if it cannot read the new workspace. `--space-token env|mine|none` overrides the default. The README lists the permissions to give a dedicated Space token.
 
 **Traces.** `meta.json` holds the session, pull request, operator, harness, declared model, models found in the trace, method version, start and end, the session's commits and the ref that keeps them, the merge commit, and a note when the export was partial.
 
 
 ## The init script
 
-`scripts/init.py` (launched by `init-physics-hive.sh` and by the plugins) asks, each with a default and a flag: the mode (`--mode create|join|local`, `create` by default), the harnesses (`--harness`, a tick list with installed ones ticked), the folder (`--dir`), for create the owner and name (`--org`, `--name`; the owner is one of your organisations or, listed last, your own account), for join the repository (`--repo`), and for create and local the question and the goal (`--question`, `--goal`; either may be left empty, and nothing is asked when the folder already holds a `project.md`). `--yes` never asks; `--list-harnesses` and `--list-orgs` (the organisations, then your account) print choices for the plugins.
+`scripts/init.py` (launched by `install.sh` from a downloaded release, or by `init-physics-hive.sh` from a clone) asks, each with a default and a flag: the mode (`--mode create|join|local`, `create` by default), the harnesses (`--harness`, a tick list with installed ones ticked), the folder (`--dir`), for create the owner and name (`--org`, `--name`; the owner is one of your organisations or, listed last, your own account), for join the repository (`--repo`), and for create and local the question and the goal (`--question`, `--goal`; either may be left empty, and nothing is asked when the folder already holds a `project.md`). `--yes` never asks. For create and join, when no Hugging Face token is found and it is asking, it logs in first with `huggingface_hub.interpreter_login` (a pasted token, or a sign-in in the browser), saved as `hf auth login` saves it.
 
 - **local / create**: refuse a non-empty folder (except `project.md`) and a workspace in the earlier format; copy the method; write `project.toml`, the skeletons (`project.md`, `conventions.md`, `draft.tex`, `literature/seeds.md`), the question and the goal into `project.md` (`fill_project`, which replaces the template's placeholders), the record folders and the committed `.gitignore`; render; first commit; regen. **create** then creates the repositories, fetches the Hub's initial commit and builds on it (dropping its `.gitattributes`), pushes, and deploys the Space (`space/` from the method copy, its card showing the question when `project.md` has both the question and the goal, with the variables `PHYSICS_HIVE_WORKSPACE` and `CHAT_DEBUG`, and the secret `HF_TOKEN`, chosen as described under *Authentication* above). A personal namespace is accepted with a warning, for trying shared mode alone.
 - **join**: clone into an empty folder, then render the selected harnesses from the clone's method copy.
@@ -272,19 +271,15 @@ The body is the coordinator's workflow for that skill: get the IDs (`session.py 
 `bench/reviewer/` measures each reviewer configuration (harness and model, with the method's reviewer prompt) on planted-error cases: the catch rate (planted errors refuted) and the false-alarm rate (correct work refuted). Each case is an artefact in the exact format a reviewer receives, with a `case.toml` giving the label, the claim, and for planted cases the error, its location and expected severity. `verify_cases.py` checks every correct case by an independent route (SymPy, numerical integration, exact diagonalisation) and shows that each planted result fails the same check. `run.py` creates a fresh workspace per case and configuration, runs the harness non-interactively as the reviewer (Claude Code with an explicit tool allowlist, Codex in its workspace sandbox with network, OpenCode with `--auto`), and scores the review files; `--dry-run` uses a fake reviewer to test the pipeline. Results go to `bench/reviewer/results/` (git-ignored). See `bench/reviewer/README.md`. Real runs call models and cost money.
 
 
-## Distribution: plugins
+## Distribution: the installer and releases
 
-The plugins bootstrap a workspace from inside a harness. They carry the whole method (vendored by the build scripts: every host, the scripts, the Space app, `VERSION`), because a workspace created with one harness may be opened with any other, and joiners render from the workspace's copy. They do not install the method's skills globally.
+Users never clone this repository. They run `install.sh` from GitHub (`curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh`, with options for `init.py` after `sh -s --`). The installer checks for git and uv and offers to install uv; picks the version, which is `PHYSICS_HIVE_VERSION` if set (a tag, or a branch such as `master`) and otherwise the highest tag `v*` in version order (`git ls-remote --sort=-v:refname`); clones that version shallowly into a temporary folder; and runs its `scripts/init.py` with uv, in the user's current folder. With `curl … | sh`, standard input is the script itself, so it reads answers from `/dev/tty`. The workspace receives its own copy of the method, so nothing stays installed. `PHYSICS_HIVE_REPO` replaces the GitHub address (the tests point it at a local repository).
 
-| Harness | Authored files | Build | Command |
-|---|---|---|---|
-| Claude Code | `plugins/claude/` (marketplace, `plugin.json`, `skills/init-physics-hive/SKILL.md`, `scripts/plugin-init.sh`) | `build-plugin.sh` → `physics-hive-claude-plugin` | `/physics-hive:init-physics-hive` |
-| Codex CLI | `plugins/codex/` (marketplace under `.agents/plugins/`, `plugin.json`, the skill with `agents/openai.yaml` making it user-only, `scripts/plugin-init.sh`) | `build-codex-plugin.sh` → `physics-hive-codex-plugin` | `$physics-hive:init-physics-hive` |
-| OpenCode | `plugins/opencode/` (`install.sh`, the global command, `scripts/plugin-init.sh`) | `build-opencode-plugin.sh` → `physics-hive-opencode-plugin` | `/init-physics-hive` |
+**Releases** are git tags `v<VERSION>`. To publish: bump `VERSION`, commit, then `git tag v<VERSION>` and `git push origin master v<VERSION>`. The installer itself is always taken from `master`, while the method it downloads is the release, so `install.sh` must keep working with every release it can download: it relies only on `scripts/init.py` taking the options the user passes.
 
-The command asks the init questions in the chat (the harness is known) and runs `plugin-init.sh` once with the answers as flags; `plugin-init.sh` is a uv launcher for the vendored `scripts/init.py`. In Claude Code, `${CLAUDE_PLUGIN_ROOT}` is only available in an expansion-time `` !`…` `` block, so the command prints the initializer's path that way; Codex exposes `${PLUGIN_ROOT}` to model-issued shell commands; OpenCode's kit sits at a fixed path under `${XDG_CONFIG_HOME:-~/.config}/opencode/physics-hive/`. After the bootstrap, the user restarts the harness in the workspace so that its skills load.
+**Developing.** `./init-physics-hive.sh` runs this clone's `scripts/init.py`, so a workspace created with it gets the method as it is on disk, uncommitted changes included. `PHYSICS_HIVE_VERSION=master` lets the installer take the unreleased `master` branch from GitHub, for trying it on another machine.
 
-Publishing: bump `version` in the plugin manifests (Claude, Codex), rebuild, commit and push the built tree to the plugin repo (the OpenCode repo must be public). Never hand-edit a built plugin. Local test: `bash build-plugin.sh /tmp/out` then `claude --plugin-dir /tmp/out/plugin` in a folder outside this repo; for Codex, `codex plugin marketplace add /tmp/out`; for OpenCode, `XDG_CONFIG_HOME=/tmp/cfg bash /tmp/out/install.sh`.
+**Joining and colleagues.** `create` prints the installer's command with `--mode join --repo <workspace>` for a second operator. A colleague who only reads and answers installs nothing and signs in to the Space.
 
 
 ## Tests
@@ -300,6 +295,7 @@ Without `fastapi` and `httpx`, the test of the Space's pages is skipped.
 - `tests/test_local_flow.py`: the acceptance test of phase A, through the real scripts: init, then three local sessions in which the researcher only edits debriefs and `project.md` in an editor. Each decision is applied by the session after it; a result copied into the draft shows as established; an unreviewed result is refused by `check`; a question answered in the terminal is recorded as the researcher's; an edited card is refused at the end. A second test checks that `--question` and `--goal` are written into `project.md`.
 - `tests/test_space_backend.py`: the Space's backend in local mode, the Hub store against a local git repository with a fake API, and every page and form through a test client.
 - `tests/test_latex.py`: the LaTeX converter on a real note and a sample draft.
+- `tests/test_install.py`: the installer against a local repository standing in for GitHub: the highest release in version order by default, a branch when `PHYSICS_HIVE_VERSION` names one, and an error when there is no release. It needs uv.
 - `tests/test_space_token.py`: which token `create` stores in the Space (`PHYSICS_HIVE_SPACE_TOKEN`, the login token, or none), with a fake Hub client.
 - `tests/test_export_trace.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the trace exporter, the literature tools without network, the benchmark in dry-run mode.
 - `tests/ACCEPTANCE.md` maps each acceptance test of the design's build plan to how it is checked, and gives the steps of those that need real agents.

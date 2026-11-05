@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 
 ACTIVE_SESSION = ".active-session"
+METHOD_REPO = "https://github.com/scienceetonnante/physics-hive"
+INSTALL_COMMAND = "curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh"
 
 
 class ScriptError(SystemExit):

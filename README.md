@@ -17,21 +17,22 @@ PhysicsHive grew out of [Physics Intern](https://github.com/huggingface/physics-
 
 ## Prerequisites
 
-- **git** and **[uv](https://docs.astral.sh/uv/)** (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`). The scripts run through uv with their dependencies declared inline; nothing else needs installing by hand.
+- **git**, and **[uv](https://docs.astral.sh/uv/)**, which runs the scripts with their dependencies; the installer offers to install uv if it is missing. Nothing else needs installing by hand.
 - At least one harness: **[Claude Code](https://claude.com/claude-code)** (`claude`), **[Codex CLI](https://github.com/openai/codex)** (`codex`), **[OpenCode](https://opencode.ai)** (`opencode`) or **[Pi](https://pi.dev)** (`pi`).
-- A Hugging Face account, membership of the organisation that will own the space, and `hf auth login`. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project). To try a space alone, choose your own account as the owner. A [local workspace](#working-locally) needs no account.
+- A Hugging Face account, and membership of the organisation that will own the space; the installer logs you in if needed. Private repositories under a personal account cannot be shared, so a team needs one organisation (one per team, not per project). To try a space alone, choose your own account as the owner. A [local workspace](#working-locally) needs no account.
 - Optional, to compile the draft and the notes to PDF on your machine: a TeX distribution with `latexmk` (TeX Live or MacTeX). The Space compiles them itself.
 - Optional: `SEMANTIC_SCHOLAR_API_KEY`, which raises the rate limit of the citation lookups for papers outside INSPIRE.
 
 
 ## Quick start
 
+In the folder where you want the workspace:
+
 ```bash
-git clone <this repo> physics-hive
-./physics-hive/init-physics-hive.sh
+curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh
 ```
 
-The script asks what to do (create a shared space, which is the default; join one; or start a local workspace), which harnesses you will use on this machine (a tick list, with the installed ones ticked), where (the current folder by default), and for a new space the owner (one of your organisations, or your own account to try alone) and the name. Last, it asks for the question of the project in one line and its goal (the question in full, and what would count as an answer), and writes them into `project.md`; you may leave either for later. A session needs both to start.
+The installer checks for git and uv, downloads the latest release of PhysicsHive, and runs its init script; nothing stays installed, since the workspace keeps its own copy of the method. If you are not logged in to Hugging Face, it logs you in. It asks what to do (create a shared space, which is the default; join one; or start a local workspace), which harnesses you will use on this machine (a tick list, with the installed ones ticked), where (the current folder by default), and for a new space the owner (one of your organisations, or your own account to try alone) and the name. Last, it asks for the question of the project in one line and its goal (the question in full, and what would count as an answer), and writes them into `project.md`; you may leave either for later. A session needs both to start.
 
 `create` makes the local workspace, the private dataset repositories `our-lab/physics-hive-x-correction` (the research files), `-traces`, `-sources` and `-chat-debug`, and the private Space `our-lab/physics-hive-x-correction` (the Hub keeps datasets and Spaces apart, so they share the name), and pushes the first commit. It prints the Space's own address (`https://our-lab-physics-hive-x-correction.hf.space`): opened there rather than on huggingface.co, the Space signs you in within the same tab. Then:
 
@@ -40,14 +41,17 @@ The script asks what to do (create a shared space, which is the default; join on
 3. Run **`/session-run`** (in Codex, `$session-run`). The coordinator proposes a brief, by default the first next step of `project.md`; you adjust and confirm it; it works on its own until a stop condition, then writes its note and its debrief, and merges its work into the space.
 4. In the Space, read the note (*Sessions*) and answer the debrief (*Latest*): write under each question, tick the lines you accept, and add anything in the note box. Run `/session-run` again: the next session applies what you ticked before anything else.
 
-Every question of the init script also has a flag, for scripts and the plugin bootstraps:
+Every question also has a flag, passed after `sh -s --`:
 
 ```bash
-./physics-hive/init-physics-hive.sh --mode create --org our-lab --name x-correction --harness claude \
+curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh -s -- \
+    --mode create --org our-lab --name x-correction --harness claude \
     --question "<the question in one line>" --goal "<the goal>" --yes
 ```
 
-Run it again inside a workspace to add a harness or refresh the rendered files (`--harness codex`), or with `--upgrade` to replace the workspace's copy of the method with a newer one (a pull request in a shared space).
+Inside a workspace, `uv run .physics-hive/scripts/init.py --harness codex` adds a harness or refreshes the rendered files, from the workspace's own copy of the method. To move a workspace to the latest release of the method, run the installer inside it with `--upgrade` (in a shared space, this opens a pull request).
+
+**Working on the method.** From a clone of this repository, run `./init-physics-hive.sh` instead of the installer. It takes the same options and uses the method as it is in your clone, uncommitted changes included. To try the unreleased `master` branch without a clone, set `PHYSICS_HIVE_VERSION=master` before `sh` in the installer's command.
 
 
 ## Shared spaces
@@ -59,12 +63,14 @@ Run it again inside a workspace to add a harness or refresh the rendered files (
 **Join** (once per checkout, for a second machine or a second operator):
 
 ```bash
-./physics-hive/init-physics-hive.sh --mode join --repo our-lab/physics-hive-x-correction
+curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh -s -- --mode join --repo our-lab/physics-hive-x-correction
 ```
+
+`create` prints this command with your repository.
 
 This clones the workspace and renders the harness files you selected from the workspace's own copy of the method, so that every checkout and the Space run exactly the same prompts and scripts. Harness files are personal: they are git-ignored, and only research content and the method copy are shared. A colleague who only reads and answers needs no checkout: as a member of the organisation, they sign in to the Space.
 
-**The Space's token.** The Space reads the workspace and saves your edits with its own copy of a token, the Space secret `HF_TOKEN`. By default `create` copies your login token there. To give new Spaces a dedicated token instead, put `PHYSICS_HIVE_SPACE_TOKEN=hf_...` in the `.env` at the root of your clone of this repository (git-ignored; read only when you run `./init-physics-hive.sh` from that clone), or set it in your shell profile (`export PHYSICS_HIVE_SPACE_TOKEN=hf_...` in `~/.zshrc`), which also works for the plugin command. Do not put it in a `.env` file inside the workspace: the workspace is pushed to the Hub. Make it a fine-grained token (Hugging Face → Settings → Access Tokens) with only these permissions:
+**The Space's token.** The Space reads the workspace and saves your edits with its own copy of a token, the Space secret `HF_TOKEN`. By default `create` copies your login token there. To give new Spaces a dedicated token instead, set `PHYSICS_HIVE_SPACE_TOKEN=hf_...` in your shell profile (`export PHYSICS_HIVE_SPACE_TOKEN=hf_...` in `~/.zshrc`). When you work from a clone of this repository, the `.env` at its root also works (it is git-ignored, and read only by `./init-physics-hive.sh`). Do not put it in a `.env` file inside the workspace: the workspace is pushed to the Hub. Make it a fine-grained token (Hugging Face → Settings → Access Tokens) with only these permissions:
 
 - in the section for the organisation that owns your projects: read and write access to the contents of all its repositories;
 - *Make calls to Inference Providers*, for the Space's assistant once it exists.
@@ -79,7 +85,7 @@ To push your own edits from a terminal, use `uv run .physics-hive/scripts/hubgit
 A local workspace is a git repository on one machine, without the Hub: to try the method, or for work that will not be shared. Sessions work the same way, without pull requests.
 
 ```bash
-./physics-hive/init-physics-hive.sh --mode local --harness claude,opencode --dir ../my-problem --yes
+curl -LsSf https://raw.githubusercontent.com/scienceetonnante/physics-hive/master/install.sh | sh -s -- --mode local
 ```
 
 The script asks for the question and the goal, as for a shared space (or takes them from `--question` and `--goal`). If you left them for later, write them in `project.md` in your editor, or dictate them to the coordinator. Then run `/session-run`. Answer each debrief in your editor: write under each `> **Answer:**`, tick the lines you accept (`- [x]`), and add anything under `> **Note:**`. The next `session.py start` commits your edits as yours.
@@ -101,17 +107,6 @@ To read the notes and the draft rendered, and answer debriefs in a browser, run 
 **How decisions flow.** You never ask the agents for anything in the middle of their work. You answer the latest debrief, tick its lines, and write in its note box, in the Space or in an editor; you may also edit `project.md`, `conventions.md` or the draft directly. The next `session.py start` prints, and records in `sessions/S<n>/received.md`, everything written since the previous session started; the session applies the ticked lines first, asks any question left unanswered, and then proposes its brief. An unticked line is not applied. An unanswered question that still matters is asked again in the next debrief.
 
 **What "established" means.** A claim is *established* when a `result` environment of `draft.tex` names its card (`\card{CL-S2-1}`). Only the researchers decide what enters the draft, by ticking a line such as "Copy Result 1 of note S2 into the draft, as a result" or by editing it. `check` refuses a result whose claim has no confirming review of a supporting derivation or computation (or a verification by a researcher, reported in a debrief); such a claim goes in a `conjecture` environment instead.
-
-
-## Plugins
-
-Each harness also has an installable bootstrap that asks the init questions in the chat and runs the same script. The PhysicsHive plugin repositories are not published yet; these are the commands they will use:
-
-- **Claude Code**: `/plugin marketplace add huggingface/physics-hive-claude-plugin`, then `/plugin install physics-hive@physics-hive-claude`; run `/init-physics-hive` in an empty folder.
-- **Codex CLI**: `codex plugin marketplace add huggingface/physics-hive-codex-plugin`, then `codex plugin add physics-hive@physics-hive-codex`; run `$physics-hive:init-physics-hive`.
-- **OpenCode** (no marketplace): `git clone https://github.com/huggingface/physics-hive-opencode-plugin && cd physics-hive-opencode-plugin && ./install.sh`; run `/init-physics-hive`.
-
-After the bootstrap, restart the harness in the workspace folder so that the workspace's skills and agents load.
 
 
 ## Harness notes
