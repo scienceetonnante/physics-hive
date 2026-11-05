@@ -22,7 +22,7 @@ from human import parse_debrief, set_answer, set_note, set_ticks  # noqa: E402
 
 
 def run(*args, cwd: Path) -> subprocess.CompletedProcess:
-    env = {**os.environ, "PHYSICS_INTERN_NO_WARMUP": "1"}  # no dependency installs in tests
+    env = {**os.environ, "PHYSICS_HIVE_NO_WARMUP": "1"}  # no dependency installs in tests
     return subprocess.run([sys.executable, *map(str, args)], cwd=cwd, capture_output=True, text=True, env=env)
 
 
@@ -77,8 +77,8 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     git(ws, "config", "user.name", "tester")
 
     # Method copy and project files are committed; harness files and generated files are not.
-    assert (ws / ".physics-intern/scripts/regen.py").is_file()
-    assert (ws / ".physics-intern/VERSION").read_text().strip() == (REPO / "VERSION").read_text().strip()
+    assert (ws / ".physics-hive/scripts/regen.py").is_file()
+    assert (ws / ".physics-hive/VERSION").read_text().strip() == (REPO / "VERSION").read_text().strip()
     assert (ws / "CLAUDE.md").read_text() == "@AGENTS.md\n"
     agents_md = (ws / "AGENTS.md").read_text()
     assert "### Claude Code" in agents_md and "### OpenCode" in agents_md and "### Codex CLI" not in agents_md
@@ -94,7 +94,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert "### Codex CLI" in (ws / "AGENTS.md").read_text() and (ws / ".claude/agents/writer.md").is_file()
     assert git(ws, "status", "--porcelain") == ""
 
-    scripts = ws / ".physics-intern/scripts"
+    scripts = ws / ".physics-hive/scripts"
     r = run(scripts / "session.py", "start", "--harness", "claude", "--model", "m1", cwd=ws)
     assert r.returncode != 0 and "project.md has no title or goal yet" in r.stderr
     assert not (ws / "sessions/S1").exists() and not (ws / ".active-session").exists()
@@ -110,7 +110,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert "Session S1 started" in r.stdout and "From you since the project began" in r.stdout
     # The templates committed by init are not the researcher's edits; only the title and the goal are.
     assert "project.md       +3 −1 lines" in r.stdout and "conventions.md   unchanged" in r.stdout
-    assert "draft.tex        unchanged" in r.stdout and "Initialize PhysicsIntern" not in r.stdout
+    assert "draft.tex        unchanged" in r.stdout and "Initialize PhysicsHive" not in r.stdout
     assert "already active" in run(scripts / "session.py", "start", cwd=ws).stderr
 
     def next_id(*what):
@@ -231,3 +231,18 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert r.returncode != 0
     assert "claims/CL-S1-1.md" in r.stdout and "edited after creation" in r.stdout
     assert (ws / ".active-session").exists()
+
+
+def test_init_writes_the_question_and_the_goal(tmp_path):
+    from human import parse_project
+
+    ws = tmp_path / "ws"
+    question = "Does the correction to x vanish at one loop?"
+    goal = "Compute the one-loop correction to x, or show that it vanishes, with its sign conventions stated."
+    r = run(REPO / "scripts/init.py", "--mode", "local", "--harness", "claude", "--dir", ws,
+            "--question", question, "--goal", goal, "--yes", cwd=tmp_path)
+    assert r.returncode == 0, r.stderr + r.stdout
+    project = parse_project((ws / "project.md").read_text())
+    assert project.title == question and project.sections["Goal"] == goal and not project.is_template
+    assert "project.md" not in git(ws, "status", "--porcelain")  # part of the first commit
+    assert "If you have seed papers" in r.stdout and "write the question" not in r.stdout

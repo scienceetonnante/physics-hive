@@ -1,4 +1,4 @@
-"""Read a PhysicsIntern workspace and compute what follows from its files.
+"""Read a PhysicsHive workspace and compute what follows from its files.
 
 The record of a workspace is small Markdown files with a YAML front matter:
 cards in `claims/` (claims and dead ends), artefact summaries and reviews in
@@ -250,7 +250,7 @@ def find_root(start: Path | None = None) -> Path:
     for folder in (here, *here.parents):
         if (folder / "project.toml").is_file():
             return folder
-    raise SystemExit("No project.toml found here or in a parent folder; is this a PhysicsIntern workspace?")
+    raise SystemExit("No project.toml found here or in a parent folder; is this a PhysicsHive workspace?")
 
 
 class Workspace:

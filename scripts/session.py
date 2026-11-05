@@ -29,7 +29,7 @@ Subcommands:
                                 if needed, push, upload sources and the trace, merge.
   abort                         Abandon the active session.
 
-Usage: uv run .physics-intern/scripts/session.py <subcommand> [options]
+Usage: uv run .physics-hive/scripts/session.py <subcommand> [options]
 """
 
 from __future__ import annotations
@@ -189,10 +189,10 @@ def cmd_start(root: Path, args) -> None:
             "project.md has no title or goal yet. The researcher writes the question in one line as its title and "
             "the goal under ## Goal (in the Space, in an editor, or by dictating them to the coordinator outside a "
             "session), and commits it; in shared mode it is pushed to main "
-            "(`uv run .physics-intern/scripts/hubgit.py push origin main`)."
+            "(`uv run .physics-hive/scripts/hubgit.py push origin main`)."
         )
     if ws.mode == "local":
-        refuse_if_stale(root, (root / ".physics-intern" / "VERSION").read_text().strip())
+        refuse_if_stale(root, (root / ".physics-hive" / "VERSION").read_text().strip())
     harness = args.harness or detect_harness()
     model = args.model or "unknown"
     info = {"mode": ws.mode, "harness": harness, "model": model, "started": now_iso()}

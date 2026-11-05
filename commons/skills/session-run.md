@@ -9,7 +9,7 @@ Run one session from start to end. The operator's part is: start it, answer open
 ## 1. Start
 
 ```
-uv run .physics-intern/scripts/session.py start --harness <your harness> --model <your model id>
+uv run .physics-hive/scripts/session.py start --harness <your harness> --model <your model id>
 ```
 
 It refuses to start when `project.md` has no title or goal yet, when the checkout has uncommitted changes that are not the researcher's, or when a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
@@ -70,7 +70,7 @@ If the session finished a next step of `project.md`, remove it from *Next steps*
 ## 7. Note, debrief, handoff
 
 1. **The note.** Dispatch the `writer` sub-agent (see the dispatch syntax for your harness in AGENTS.md) with, inline: the session ID, the output path `sessions/S<n>/note.tex`, and the claim cards of this session that the note should present as results (the others it may mention as working). It reads the brief, the log and the artefacts itself. Read its return and the note; if the note misstates a result, dispatch the writer again with what to fix, rather than editing the note yourself. Commit it: `[S<n>] note`.
-2. **The debrief.** Write `sessions/S<n>/debrief.md` (AGENTS.md §7; the template is `.physics-intern/commons/templates/debrief.md`): the summary, then the questions, the tick lines and the empty note box. Number the questions from 1. Refer to results by their number in the note ("Result 1 of note S12") and by card. Keep it to one screen.
+2. **The debrief.** Write `sessions/S<n>/debrief.md` (AGENTS.md §7; the template is `.physics-hive/commons/templates/debrief.md`): the summary, then the questions, the tick lines and the empty note box. Number the questions from 1. Refer to results by their number in the note ("Result 1 of note S12") and by card. Keep it to one screen.
 3. **The handoff.** End `sessions/S<n>/log.md` with `## Handoff`: what the next session needs that the researcher does not (open threads, requirements for later briefs, deferred flags, approaches set aside and why).
 
 Run regen, then commit the debrief and the log: `[S<n>] debrief and handoff`.

@@ -5,14 +5,14 @@
 """Literature tools: search INSPIRE and arXiv, follow citations, download sources.
 
 Usage, from the workspace root:
-  uv run .physics-intern/scripts/literature.py search-inspire "<query>"
-  uv run .physics-intern/scripts/literature.py search-arxiv "<query>"
-  uv run .physics-intern/scripts/literature.py references <paper>
-  uv run .physics-intern/scripts/literature.py citations <paper>
-  uv run .physics-intern/scripts/literature.py download <arXiv id>
-  uv run .physics-intern/scripts/literature.py card <paper>
-  uv run .physics-intern/scripts/literature.py search-cards "<query>"
-  uv run .physics-intern/scripts/literature.py mcp
+  uv run .physics-hive/scripts/literature.py search-inspire "<query>"
+  uv run .physics-hive/scripts/literature.py search-arxiv "<query>"
+  uv run .physics-hive/scripts/literature.py references <paper>
+  uv run .physics-hive/scripts/literature.py citations <paper>
+  uv run .physics-hive/scripts/literature.py download <arXiv id>
+  uv run .physics-hive/scripts/literature.py card <paper>
+  uv run .physics-hive/scripts/literature.py search-cards "<query>"
+  uv run .physics-hive/scripts/literature.py mcp
 
 A paper is an arXiv identifier (2301.01234, 2301.01234v2, hep-th/9711200,
 arXiv:2301.01234, a paper-card ID such as P-hep-th_9711200) or an INSPIRE
@@ -54,7 +54,7 @@ from cards import PAPER_ID_RE, FrontMatterError, find_root, split_front_matter  
 
 _VERSION_FILE = Path(__file__).resolve().parents[1] / "VERSION"
 VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.is_file() else "dev"
-USER_AGENT = f"PhysicsIntern/{VERSION} literature.py (+https://github.com/huggingface/physics-intern-claude-plugin)"
+USER_AGENT = f"PhysicsHive/{VERSION} literature.py (+https://github.com/huggingface/physics-hive-claude-plugin)"
 
 INSPIRE_API = "https://inspirehep.net/api/literature"
 ARXIV_API = "https://export.arxiv.org/api/query"
@@ -65,7 +65,7 @@ S2_API = "https://api.semanticscholar.org/graph/v1/paper/"
 TIMEOUT = 30  # seconds per HTTP request
 ARXIV_HOSTS = {"export.arxiv.org", "arxiv.org"}
 ARXIV_DELAY = 3.0  # arXiv asks for no more than one request every 3 seconds
-ARXIV_STAMP = Path(tempfile.gettempdir()) / "physics-intern-arxiv-last-request"
+ARXIV_STAMP = Path(tempfile.gettempdir()) / "physics-hive-arxiv-last-request"
 MAX_BYTES = 200 * 1024 * 1024  # cap on a download and on an unpacked source archive
 MAX_LIMIT = 250
 

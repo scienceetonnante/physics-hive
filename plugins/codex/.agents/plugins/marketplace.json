@@ -1,11 +1,11 @@
 {
-  "name": "physics-intern-codex",
+  "name": "physics-hive-codex",
   "interface": {
-    "displayName": "PhysicsIntern (Codex)"
+    "displayName": "PhysicsHive (Codex)"
   },
   "plugins": [
     {
-      "name": "physics-intern",
+      "name": "physics-hive",
       "source": {
         "source": "local",
         "path": "./plugin"

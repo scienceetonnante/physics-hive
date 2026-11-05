@@ -187,7 +187,7 @@ window.MathJax = {
         <span>{{ user }}</span>
         {% if not local %}<a href="{{ sign_out }}">Sign out</a>{% endif %}
       {% elif local %}
-        <span>Local folder, no user: set PHYSICS_INTERN_LOCAL_USER to write.</span>
+        <span>Local folder, no user: set PHYSICS_HIVE_LOCAL_USER to write.</span>
       {% else %}
         <a class="btn primary sign-in" href="{{ sign_in }}">Sign in with Hugging Face</a>
       {% endif %}

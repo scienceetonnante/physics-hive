@@ -18,7 +18,7 @@ commit.
 Git talks to the Hub with the token of `hf auth login`, passed in an HTTP
 header for each command; it is never written to the repository's config.
 The Space gets its own copy of a token, the secret HF_TOKEN: the one in the
-environment variable PHYSICS_INTERN_SPACE_TOKEN if it is set, else the
+environment variable PHYSICS_HIVE_SPACE_TOKEN if it is set, else the
 creator's login token.
 """
 
@@ -39,7 +39,7 @@ from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars
 from common import ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
 
 DATASET = "dataset"
-SPACE_TOKEN_ENV = "PHYSICS_INTERN_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
+SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
 REPO_PREFIX = "physics-hive-"  # the repositories of project <name> are <org>/physics-hive-<name>[-traces, ...]
 CARD_TITLE = "[Physics Hive] {name}"
 CARD_DESCRIPTION_LIMIT = 60  # the Hub refuses a longer short_description
@@ -141,7 +141,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     # The Hub's default .gitattributes routes many extensions to LFS; a workspace
     # holds small text files and plain git is simpler for every operator.
     git(target, "rm", "-q", "--cached", "--ignore-unmatch", ".gitattributes")
-    first_commit(target, f"Initialize PhysicsIntern workspace (shared space {repos['workspace']})")
+    first_commit(target, f"Initialize PhysicsHive workspace (shared space {repos['workspace']})")
     git(target, "push", "-q", "origin", "HEAD:main", env=env)
     git(target, "branch", "-q", "--set-upstream-to=origin/main", check=False)
     regen(target)
@@ -156,8 +156,8 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     if host:
         say(f"             {host} (the Space alone, outside the Hub's page: sign-in stays in the same tab)")
     say("To work from another checkout or machine (or, later, to add a colleague), join with:")
-    say(f"  init-physics-intern.sh --mode join --repo {repos['workspace']}")
-    say(f"  (or, in Claude Code or Codex, the init-physics-intern plugin command with the repository {repos['workspace']})")
+    say(f"  init-physics-hive.sh --mode join --repo {repos['workspace']}")
+    say(f"  (or, in Claude Code or Codex, the init-physics-hive plugin command with the repository {repos['workspace']})")
 
 
 def repo_names(org: str, name: str) -> dict:
@@ -195,14 +195,14 @@ def space_secret(choice: str) -> dict | None:
 
 def deploy_space(target: Path, repos: dict, secret: dict | None) -> None:
     """Create the private Space, upload the app from the method copy, and store its token."""
-    app = target / ".physics-intern" / "space"
+    app = target / ".physics-hive" / "space"
     hf = api()
     if not (app / "app.py").is_file():
-        warn("The method copy has no Space app (.physics-intern/space/); skipping the Space.")
+        warn("The method copy has no Space app (.physics-hive/space/); skipping the Space.")
         return
     hf.create_repo(repos["space"], repo_type="space", space_sdk="docker", private=True)
-    upload_space_app(app, repos, project_question(target), "Deploy the PhysicsIntern Space")
-    hf.add_space_variable(repos["space"], "PHYSICS_INTERN_WORKSPACE", repos["workspace"])
+    upload_space_app(app, repos, project_question(target), "Deploy the PhysicsHive Space")
+    hf.add_space_variable(repos["space"], "PHYSICS_HIVE_WORKSPACE", repos["workspace"])
     hf.add_space_variable(repos["space"], "CHAT_DEBUG", "0")
     say(f"Created private Space {repos['space']}")
     if secret is None:
@@ -305,11 +305,11 @@ def join(target: Path, repo: str, harnesses: list[str], render, regen, check_new
         raise ScriptError(f"{target} is not empty; join clones the workspace into an empty folder")
     target.mkdir(parents=True, exist_ok=True)
     git(target, "clone", "-q", repo_url(repo), ".", env=git_env())
-    if not ((target / "project.toml").is_file() and (target / ".physics-intern").is_dir()):
-        raise ScriptError(f"{repo} is not a PhysicsIntern workspace (no project.toml or .physics-intern/)")
+    if not ((target / "project.toml").is_file() and (target / ".physics-hive").is_dir()):
+        raise ScriptError(f"{repo} is not a PhysicsHive workspace (no project.toml or .physics-hive/)")
     render(target, harnesses)
     regen(target)
-    version = (target / ".physics-intern" / "VERSION").read_text().strip()
+    version = (target / ".physics-hive" / "VERSION").read_text().strip()
     say(f"Joined {repo} in {target} (method {version}, from the workspace's own copy).")
 
 
@@ -331,7 +331,7 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
         if ahead != "0":
             raise ScriptError(f"main has {ahead} commit(s) that are not on the Hub; push them first "
                               "(git push origin main) or move them to a pull request")
-    upstream = git(root, "show", "origin/main:.physics-intern/VERSION", check=False).stdout.strip()
+    upstream = git(root, "show", "origin/main:.physics-hive/VERSION", check=False).stdout.strip()
     rendered = rendered_version(root)
     if upstream and rendered and upstream != rendered:
         git(root, "checkout", "-q", "-B", "main", "origin/main")
@@ -454,7 +454,7 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
         "harness": active["harness"],
         "model": active["model"],
         "models_in_trace": trace["models"],
-        "method_version": (root / ".physics-intern" / "VERSION").read_text().strip(),
+        "method_version": (root / ".physics-hive" / "VERSION").read_text().strip(),
         "started": active["started"],
         "ended": now_iso(),
         "commits": [{"sha": sha, "subject": subject} for sha, subject in commits],
@@ -562,7 +562,7 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     fetch(target, env)
     hf = api()
     pr = hf.create_pull_request(repos["workspace"], title=f"Upgrade the method from {old} to {new}",
-                                description="Replaces .physics-intern/ with a newer copy of the method. "
+                                description="Replaces .physics-hive/ with a newer copy of the method. "
                                             "Merge it, then re-render in every checkout with init.",
                                 repo_type=DATASET)
     previous = git_out(target, "rev-parse", "--abbrev-ref", "HEAD")
@@ -571,9 +571,9 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     toml = (target / "project.toml").read_text()
     import re
 
-    toml = re.sub(r'(physics_intern_version\s*=\s*)"[^"]*"', lambda m: f'{m.group(1)}"{new}"', toml)
+    toml = re.sub(r'(physics_hive_version\s*=\s*)"[^"]*"', lambda m: f'{m.group(1)}"{new}"', toml)
     (target / "project.toml").write_text(toml)
-    git(target, "add", "-A", "--", ".physics-intern", "project.toml")
+    git(target, "add", "-A", "--", ".physics-hive", "project.toml")
     git(target, "commit", "-q", "-m", f"Upgrade the method copy from {old} to {new}")
     push_pr(target, pr.num, env)
     hf.change_discussion_status(repos["workspace"], pr.num, "open", repo_type=DATASET)

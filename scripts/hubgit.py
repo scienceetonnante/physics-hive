@@ -9,8 +9,8 @@ credentials. This passes the token of `hf auth login` in an HTTP header for
 this one command, without storing it. The researcher uses it to push their own
 edits of project.md, conventions.md or draft.tex to main from a terminal.
 
-Usage: uv run .physics-intern/scripts/hubgit.py <git arguments>
-  e.g. uv run .physics-intern/scripts/hubgit.py push origin main
+Usage: uv run .physics-hive/scripts/hubgit.py <git arguments>
+  e.g. uv run .physics-hive/scripts/hubgit.py push origin main
 """
 
 from __future__ import annotations

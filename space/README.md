@@ -12,9 +12,9 @@ pinned: false
 <!-- When the Space is deployed, its title becomes "[Physics Hive] <project>" and its short_description the question
 of project.md (scripts/hub.py, space_card). Each session start updates the description if the question changed. -->
 
-# PhysicsIntern Space
+# PhysicsHive Space
 
-This Space is the browser view of one PhysicsIntern shared space: a private research workspace where agents
+This Space is the browser view of one PhysicsHive shared space: a private research workspace where agents
 run sessions in a terminal and the researcher follows and steers them from here. Sign in with your Hugging
 Face account (you must be a member of the organisation that owns the project).
 
@@ -31,10 +31,10 @@ Face account (you must be a member of the organisation that owns the project).
 Saving commits the file to the workspace repository with this Space's token and names you in the commit.
 The Space applies nothing by itself. The research files live in the workspace dataset, not in this Space.
 
-Configuration (set by `init-physics-intern` when it creates the space): the variable
-`PHYSICS_INTERN_WORKSPACE` (org/name of the workspace dataset) and the secret `HF_TOKEN` (a token that can
-read and write the workspace: the one in `PHYSICS_INTERN_SPACE_TOKEN` on the creator's machine, else the
+Configuration (set by `init-physics-hive` when it creates the space): the variable
+`PHYSICS_HIVE_WORKSPACE` (org/name of the workspace dataset) and the secret `HF_TOKEN` (a token that can
+read and write the workspace: the one in `PHYSICS_HIVE_SPACE_TOKEN` on the creator's machine, else the
 creator's login token).
 
 For development, run the app on a local workspace folder:
-`PHYSICS_INTERN_LOCAL=/path/to/workspace PHYSICS_INTERN_LOCAL_USER=<name> uvicorn app:app --reload`.
+`PHYSICS_HIVE_LOCAL=/path/to/workspace PHYSICS_HIVE_LOCAL_USER=<name> uvicorn app:app --reload`.

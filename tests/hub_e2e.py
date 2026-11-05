@@ -58,7 +58,7 @@ def commit(cwd, msg):
 
 
 def hubgit(cwd, *args):
-    return run(cwd, ".physics-intern/scripts/hubgit.py", *args)
+    return run(cwd, ".physics-hive/scripts/hubgit.py", *args)
 
 
 DEBRIEF = """The session checked {card} by {route}.
@@ -82,11 +82,11 @@ Read the full note: `sessions/{sid}/note.tex`.
 
 def session_work(ws, sid, kind):
     """What a session leaves: an artefact, its claim, a confirming review, a note, a debrief and a handoff."""
-    art = run(ws, ".physics-intern/scripts/session.py", "next", kind).stdout.strip()
-    card = run(ws, ".physics-intern/scripts/session.py", "next", "CL").stdout.strip()
+    art = run(ws, ".physics-hive/scripts/session.py", "next", kind).stdout.strip()
+    card = run(ws, ".physics-hive/scripts/session.py", "next", "CL").stdout.strip()
     route = "derivation" if kind == "D" else "computation"
     write(ws / f"sessions/{sid}/brief.md", {"session": sid, "goal": f"Find X by {route}", "budget": 4}, "## Goal\n")
-    run(ws, ".physics-intern/scripts/session.py", "brief")
+    run(ws, ".physics-hive/scripts/session.py", "brief")
     if kind == "D":
         write(ws / f"derivations/{art}.summary.md", {"id": art, "kind": "derivation", "supports": [card]}, "## Summary\n")
         (ws / f"derivations/{art}.tex").write_text("\\documentclass{article}\n\\begin{document}x\\end{document}\n")
@@ -97,7 +97,7 @@ def session_work(ws, sid, kind):
     write(ws / f"claims/{card}.md", {"id": card, "kind": "claim", "statement": f"X = a/2 (by {route})", "depends_on": [],
           "produced_by": {"kind": "agent", "model": "m", "operator": ME}, "session": sid, "supersedes": [], "refutes": []}, "x\n")
     commit(ws, f"[{sid}] {route}({art}): X")
-    rpath = run(ws, ".physics-intern/scripts/session.py", "next", "review", art).stdout.strip()
+    rpath = run(ws, ".physics-hive/scripts/session.py", "next", "review", art).stdout.strip()
     write(ws / rpath, {"id": Path(rpath).stem, "kind": "review", "target": art, "supports": [card], "claim": "X = a/2",
           "verdict": "confirmed", "by": {"kind": "agent"}, "session": sid, "date": "2026-11-04"}, "## Tests\n")
     commit(ws, f"[{sid}] review: confirmed")
@@ -120,7 +120,7 @@ try:
     files = set(api.list_repo_files(space, repo_type="space"))
     assert {"app.py", "backend.py", "latex.py", "latex.css", "README.md", "requirements.txt", "Dockerfile"} <= files, files
     variables = api.get_space_variables(space)
-    assert variables["PHYSICS_INTERN_WORKSPACE"].value == WS, variables
+    assert variables["PHYSICS_HIVE_WORKSPACE"].value == WS, variables
     print("Space deployed with", sorted(files))
 
     # 2. The researcher writes the title and the goal of project.md, and pushes to main.
@@ -134,8 +134,8 @@ try:
     assert (B / ".opencode/agents/deriver.md").is_file()
 
     # 4. Two sessions in parallel; B sees A's.
-    run(A, ".physics-intern/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
-    rb = run(B, ".physics-intern/scripts/session.py", "start", "--harness", "opencode", "--model", "model-b")
+    run(A, ".physics-hive/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
+    rb = run(B, ".physics-hive/scripts/session.py", "start", "--harness", "opencode", "--model", "model-b")
     sa = json.loads((A / ".active-session").read_text())["id"]
     sb = json.loads((B / ".active-session").read_text())["id"]
     print("sessions:", sa, sb)
@@ -145,8 +145,8 @@ try:
     session_work(B, sb, "C")
 
     # 5. A ends first; B ends after, which needs a rebase on the new main.
-    run(A, ".physics-intern/scripts/session.py", "end")
-    run(B, ".physics-intern/scripts/session.py", "end")
+    run(A, ".physics-hive/scripts/session.py", "end")
+    run(B, ".physics-hive/scripts/session.py", "end")
     index = (B / "INDEX.md").read_text()
     assert index.count("**CL-") == 2, index
     assert "Changed by this session" in (B / f"sessions/{sb}/debrief.md").read_text()
@@ -163,7 +163,7 @@ try:
 
     # 7. The next session receives the answer and the tick, applies it, and lists it as changed.
     hubgit(B, "pull", "-q", "origin", "main")
-    rc = run(B, ".physics-intern/scripts/session.py", "start", "--harness", "opencode", "--model", "model-b")
+    rc = run(B, ".physics-hive/scripts/session.py", "start", "--harness", "opencode", "--model", "model-b")
     sc = json.loads((B / ".active-session").read_text())["id"]
     assert "Answer: Yes, for now." in rc.stdout and f"✓ Copy Result 1 of note {sa}" in rc.stdout, rc.stdout
     assert "Your note: Start on the disk." in rc.stdout and f"Handoff from {sa}" in rc.stdout
@@ -172,18 +172,18 @@ try:
                                                + card_a + "}\n\\end{result}\n\n\\bibliographystyle"))
     commit(B, f"[{sc}] apply the lines ticked in the {sa} debrief")
     write(B / f"sessions/{sc}/brief.md", {"session": sc, "goal": "Derive the next order", "budget": 4}, "## Goal\n")
-    run(B, ".physics-intern/scripts/session.py", "brief")
+    run(B, ".physics-hive/scripts/session.py", "brief")
     (B / f"sessions/{sc}/note.tex").write_text("\\documentclass{article}\\begin{document}Nothing yet.\\end{document}\n")
     (B / f"sessions/{sc}/debrief.md").write_text("Nothing new.\n\n#### Anything else for the next session\n\n> **Note:**\n")
     commit(B, f"[{sc}] note and debrief")
-    run(B, ".physics-intern/scripts/session.py", "end")
+    run(B, ".physics-hive/scripts/session.py", "end")
     changed = (B / f"sessions/{sc}/debrief.md").read_text()
     assert f"as you ticked in {sa}" in changed, changed
     assert f"**{card_a}** · established" in (B / "INDEX.md").read_text()
 
     # 8. An aborted session leaves the checkout on main.
-    run(A, ".physics-intern/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
-    r = run(A, ".physics-intern/scripts/session.py", "abort")
+    run(A, ".physics-hive/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
+    r = run(A, ".physics-hive/scripts/session.py", "abort")
     assert "uncommitted" not in r.stdout + r.stderr and git(A, "rev-parse", "--abbrev-ref", "HEAD") == "main"
 
     # 9. What the Hub holds.

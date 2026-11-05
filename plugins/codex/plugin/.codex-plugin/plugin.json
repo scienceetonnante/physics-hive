@@ -1,10 +1,10 @@
 {
-  "name": "physics-intern",
+  "name": "physics-hive",
   "version": "0.2.0",
-  "description": "Set up a PhysicsIntern research workspace in the current folder: local, or shared on the Hugging Face Hub (Codex CLI).",
+  "description": "Set up a PhysicsHive research workspace in the current folder: local, or shared on the Hugging Face Hub (Codex CLI).",
   "author": { "name": "David Louapre" },
-  "homepage": "https://github.com/huggingface/physics-intern-codex-plugin",
-  "repository": "https://github.com/huggingface/physics-intern-codex-plugin",
+  "homepage": "https://github.com/huggingface/physics-hive-codex-plugin",
+  "repository": "https://github.com/huggingface/physics-hive-codex-plugin",
   "license": "MIT",
   "keywords": ["physics", "mathematics", "research", "methodology", "agents"],
   "skills": "./skills/"

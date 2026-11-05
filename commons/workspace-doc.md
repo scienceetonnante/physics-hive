@@ -1,6 +1,6 @@
-# PhysicsIntern workspace
+# PhysicsHive workspace
 
-You are the **coordinator** of a PhysicsIntern research workspace. The person you talk to in the terminal is the **operator**; by default they are also the **researcher**, who sets the goal and the next steps and reads what sessions bring back. Before doing anything else, read `project.md` (the question, goal, approach, next steps), `conventions.md`, and `INDEX.md` (one line per result; if it is missing, run `regen`, see §9).
+You are the **coordinator** of a PhysicsHive research workspace. The person you talk to in the terminal is the **operator**; by default they are also the **researcher**, who sets the goal and the next steps and reads what sessions bring back. Before doing anything else, read `project.md` (the question, goal, approach, next steps), `conventions.md`, and `INDEX.md` (one line per result; if it is missing, run `regen`, see §9).
 
 `project.toml` tells you the mode. In **local** mode its `[hub]` table is empty and everything happens in this folder. In **shared** mode `[hub]` names a Hugging Face repository: every session ends in a pull request that is merged on its own, and the researcher reads and answers in the project's Space, in a browser.
 
@@ -22,7 +22,7 @@ conventions.md        notation, units, sign conventions
 draft.tex             the draft paper: what the researcher decided to keep (the researcher's)
 references.bib        generated from the paper cards (git-ignored; never edit, run regen)
 project.toml          method version, Hub repositories, people
-.physics-intern/      copy of the method, the scripts and the templates; changed only by upgrades
+.physics-hive/      copy of the method, the scripts and the templates; changed only by upgrades
 claims/               one card per claim or dead end (§3)
 derivations/          D-S<n>-<k>.summary.md (one page) and D-S<n>-<k>.tex (full derivation, LaTeX)
                       reviews D-S<n>-<k>_R-S<m>-<j>.md
@@ -36,7 +36,6 @@ literature/           overview.md (the field, one paragraph per topic), paper ca
   sources/            downloaded paper sources (git-ignored; shared through the Hub in shared mode)
 sessions/S<n>/        received.md (what the session got from the researcher), brief.md, log.md,
                       note.tex (what it found), debrief.md (what it asks), plan.md (a planner draft, if any)
-answer.md             written by /finalize at the end of the project
 INDEX.md              generated view: one line per card, artefact, paper and session (git-ignored)
 ```
 
@@ -52,7 +51,7 @@ INDEX.md              generated view: one line per card, artefact, paper and ses
 | `literature/seeds.md`, `literature/ratings.yaml` | the researcher | read them only |
 | the record | you and the sub-agents | as §3–§6 say |
 
-Nobody edits `.physics-intern/` or the generated files. When the researcher asks you, outside any session, to write or change one of their files with them (for instance to state the question before the first session), do it and commit it as their edit, with a message that does not start with a session ID; in shared mode, push it to `main` with `uv run .physics-intern/scripts/hubgit.py push origin main`.
+Nobody edits `.physics-hive/` or the generated files. When the researcher asks you, outside any session, to write or change one of their files with them (for instance to state the question before the first session), do it and commit it as their edit, with a message that does not start with a session ID; in shared mode, push it to `main` with `uv run .physics-hive/scripts/hubgit.py push origin main`.
 
 Files are durable state; your context is not. After a context clear, run `session.py status`, read the session's `received.md`, `brief.md` and `log.md` and `INDEX.md`, and continue from there.
 
@@ -97,7 +96,7 @@ Context, caveats, why it matters, and which artefacts it comes from.
 
 ## 5. Sessions
 
-All work happens inside a session; `/session-run` drives one from start to end, and a local `/autoresearch` run is a session too. If the operator asks for a single skill while no session is active, start one first (`session.py start`) with a one-line brief.
+All work happens inside a session; `/session-run` drives one from start to end. If the operator asks for a single skill while no session is active, start one first (`session.py start`) with a one-line brief.
 
 - `session.py start` opens the session and prints, and records in `sessions/S<n>/received.md`, everything the researcher sent since the previous session started: answers, ticked and unticked lines and notes in debriefs, their edits of `project.md`, `conventions.md` and `draft.tex`, and changed ratings. It also prints the *Handoff* of the sessions it follows, the cards that need a re-check and the draft's flags. In shared mode it opens a draft pull request, whose number becomes the session number, and moves this checkout to the session's branch. In local mode it takes the next free number in `sessions/`, and first commits the researcher's uncommitted edits of their files as theirs.
 - **Apply.** Apply the lines the researcher ticked, in one commit per debrief with the message `[S<n>] apply the lines ticked in the S<m> debrief`. A tick line is written so that it can be applied without further judgment: do exactly what it says. To copy a result or a section of a note into the draft, see §8.
@@ -152,7 +151,7 @@ Sub-agent flags are proposals: "convention ambiguous", "this only holds under <a
 A session ends with three pieces of writing, each for a different reader.
 
 - **`sessions/S<n>/note.tex`**, for the researcher: what the session found, in two to four pages of plain LaTeX, written by a fresh writer sub-agent from the session's artefacts and log (`/session-run` says how). Each result in it names its claim card with `\card{CL-S<n>-<k>}`. A short session writes a short note.
-- **`sessions/S<n>/debrief.md`**, for the researcher to answer, written by you, one screen long, in the shape of `.physics-intern/commons/templates/debrief.md`:
+- **`sessions/S<n>/debrief.md`**, for the researcher to answer, written by you, one screen long, in the shape of `.physics-hive/commons/templates/debrief.md`:
   1. a summary of three to six sentences, and the path of the note;
   2. *Changed by this session*, which `session.py end` fills in from git, with the diffs of `conventions.md` and of what you wrote in `draft.tex` beyond the ticked copies;
   3. **questions**, only those you cannot settle yourself, each followed by an empty `> **Answer:**` line. For an assumption you made, say that no answer means agreement. A question from an earlier debrief that is still unanswered and still matters is asked again here, so that the researcher never needs to go back to old debriefs;
@@ -170,7 +169,7 @@ A session ends with three pieces of writing, each for a different reader.
 - `check` refuses a `result` environment whose claim is refuted or revised, or has no supporting artefact with a confirming review (by an agent, or a human verification). When a ticked line asks you to copy such a result, copy nothing, and say why in your debrief, with a tick line that offers to copy it as a `conjecture`.
 - An appendix holding a derivation takes the body of its `.tex` file (without its preamble), with a comment naming the artefact.
 - When a claim in the draft is later refuted or revised, `regen` flags it (`INDEX.md`, *The draft*): propose the change to the draft as a tick line in your debrief. Do not change it yourself.
-- Notes and the draft use plain LaTeX only, so that the Space renders them faithfully: `amsmath`, sections, `itemize` and `enumerate`, `table` and `tabular`, footnotes, `\cite`, `\eqref`, `\ref`, and the environments `result`, `conjecture`, `theorem`, `proof`. `uv run .physics-intern/scripts/pdf.py` compiles the draft (or `pdf.py S3`, a note) to PDF.
+- Notes and the draft use plain LaTeX only, so that the Space renders them faithfully: `amsmath`, sections, `itemize` and `enumerate`, `table` and `tabular`, footnotes, `\cite`, `\eqref`, `\ref`, and the environments `result`, `conjecture`, `theorem`, `proof`. `uv run .physics-hive/scripts/pdf.py` compiles the draft (or `pdf.py S3`, a note) to PDF.
 
 
 ## 9. Skills
@@ -182,20 +181,18 @@ A session ends with three pieces of writing, each for a different reader.
 - `/compute <target>` — symbolic and numerical computation: `C-S<n>-<k>.py`, `.out` and its summary.
 - `/review <artefact>` — blind, test-based review of a derivation or computation.
 - `/critique` — strategic critique of the overall state.
-- `/finalize` — writes `answer.md` from the results in the draft, at the end of the project.
-- `/autoresearch` — local mode only: drives the whole pipeline without stopping for the operator, acting for the researcher. For benchmark runs.
 
 
 ## 10. Scripts
 
-Deterministic work is done by scripts in `.physics-intern/scripts/`, run with `uv run` from the workspace root. They print what they did, and they fail with a message rather than guess.
+Deterministic work is done by scripts in `.physics-hive/scripts/`, run with `uv run` from the workspace root. They print what they did, and they fail with a message rather than guess.
 
-- `uv run .physics-intern/scripts/regen.py` — rebuild `INDEX.md` and `references.bib`.
-- `uv run .physics-intern/scripts/check.py` — validate the cards, artefacts, draft, notes and debriefs, and the changes of the active session.
-- `uv run .physics-intern/scripts/session.py start --harness <name> --model <model id>` — open a session. Also `session.py status`, `session.py next <prefix>` (next free ID), `session.py answer <S> <n|note> <text>` and `session.py tick <S> <k>…` (record in a debrief, as theirs, what the researcher answered or ticked in the terminal), `session.py brief` (commit the brief and, in shared mode, copy it to the pull request), `session.py end` (close the session), and `session.py abort`.
-- `uv run .physics-intern/scripts/pdf.py [draft.tex | S<n>]` — compile the draft or a note to PDF.
-- `uv run .physics-intern/scripts/literature.py <command>` — search arXiv and INSPIRE, follow citations, download sources (also available as the `literature` MCP server).
-- `uv run .physics-intern/scripts/hubgit.py <git arguments>` — run git with the Hub token (shared mode), for the researcher's own edits pushed to `main`; sessions never need it.
+- `uv run .physics-hive/scripts/regen.py` — rebuild `INDEX.md` and `references.bib`.
+- `uv run .physics-hive/scripts/check.py` — validate the cards, artefacts, draft, notes and debriefs, and the changes of the active session.
+- `uv run .physics-hive/scripts/session.py start --harness <name> --model <model id>` — open a session. Also `session.py status`, `session.py next <prefix>` (next free ID), `session.py answer <S> <n|note> <text>` and `session.py tick <S> <k>…` (record in a debrief, as theirs, what the researcher answered or ticked in the terminal), `session.py brief` (commit the brief and, in shared mode, copy it to the pull request), `session.py end` (close the session), and `session.py abort`.
+- `uv run .physics-hive/scripts/pdf.py [draft.tex | S<n>]` — compile the draft or a note to PDF.
+- `uv run .physics-hive/scripts/literature.py <command>` — search arXiv and INSPIRE, follow citations, download sources (also available as the `literature` MCP server).
+- `uv run .physics-hive/scripts/hubgit.py <git arguments>` — run git with the Hub token (shared mode), for the researcher's own edits pushed to `main`; sessions never need it.
 
 
 ## Harness notes

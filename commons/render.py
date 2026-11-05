@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the harness files of a PhysicsIntern workspace for one or more harnesses.
+"""Render the harness files of a PhysicsHive workspace for one or more harnesses.
 
 Usage:
   render.py --hosts=claude,opencode --target=<workspace dir>
@@ -272,7 +272,7 @@ def _render_skill_pi(meta: dict, body: str, host: dict, target: Path) -> None:
     prompt_fields: list[tuple[str, object]] = [("description", meta["description"])]
     if meta.get("arguments_hint"):
         prompt_fields.append(("args", meta["arguments_hint"]))
-    prompt_fields.append(("section", "PhysicsIntern Workflows"))
+    prompt_fields.append(("section", "PhysicsHive Workflows"))
     if meta.get("top_level_cli", True):
         prompt_fields.append(("topLevelCli", True))
     prompt_body = host.get("preamble", "").lstrip() + "\n" + body.lstrip()
@@ -306,7 +306,7 @@ def render_workspace_doc(hosts: list[dict], target: Path) -> None:
     names = ", ".join(h["display_name"] for h in hosts)
     text = substitute((COMMONS / "workspace-doc.md").read_text(), {"harness_sections": sections, "harness_names": names})
     # The stamp lets session.py notice harness files rendered from an older method copy.
-    stamp = f"<!-- Rendered from the PhysicsIntern method {method_version()} in .physics-intern/. -->\n"
+    stamp = f"<!-- Rendered from the PhysicsHive method {method_version()} in .physics-hive/. -->\n"
     (target / "AGENTS.md").write_text(stamp + text)
     if any(h["name"] == "claude" for h in hosts):
         (target / "CLAUDE.md").write_text("@AGENTS.md\n")

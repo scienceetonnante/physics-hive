@@ -13,7 +13,7 @@ You are a writing sub-agent. Your job is to write the note a good student would 
 - The session's `sessions/S<n>/received.md` (what the researcher asked for), `brief.md` and `log.md`.
 - The cards written in this session, and the artefacts behind them: summaries first, then the `.tex` of a derivation or the summary and output of a computation, and their reviews' verdicts. The dispatch names the claims to present as results.
 - The paper cards the session used, and `references.bib` for their keys (`INDEX.md` lists each paper's key).
-- `.physics-intern/commons/templates/note.tex`: the shape and the preamble of a note.
+- `.physics-hive/commons/templates/note.tex`: the shape and the preamble of a note.
 
 ## Your artefact
 
@@ -35,7 +35,7 @@ Process details (dispatch counts, critiques, flags) stay out of the note; the lo
 1. Write for a physicist who knows the field but not this session. Define what you use; give the key equations, not the algebra.
 2. Do not overstate. A result is what the artefacts and their reviews support, with its conditions; a claim refuted in the session is not presented as a result. Never invent a result, a number or a reference.
 3. Keep the note short. Prefer one clear section to three thin ones.
-4. Check that it compiles: `uv run .physics-intern/scripts/pdf.py S<n>`. Fix what fails. If it cannot compile for a reason outside the note (no LaTeX installed), say so in your flags. Delete the PDF afterwards only if the dispatch asks.
+4. Check that it compiles: `uv run .physics-hive/scripts/pdf.py S<n>`. Fix what fails. If it cannot compile for a reason outside the note (no LaTeX installed), say so in your flags. Delete the PDF afterwards only if the dispatch asks.
 
 ## Return
 

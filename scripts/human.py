@@ -362,7 +362,7 @@ def is_session_commit(subject: str) -> bool:
 
 def is_method_commit(subject: str) -> bool:
     """Commits made by init: the workspace's first commit (with the templates) and upgrades of the method copy."""
-    return subject.startswith(("Initialize PhysicsIntern workspace", "Upgrade the method copy"))
+    return subject.startswith(("Initialize PhysicsHive workspace", "Upgrade the method copy"))
 
 
 class History:

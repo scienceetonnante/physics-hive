@@ -17,4 +17,3 @@ Draft or revise the approach and the next steps. The `planner` sub-agent reads `
    - Read the return block (the planner returns it in its reply only).
    - Turn the draft into tick lines for your debrief: one to set the approach (if it changes), one per next step to add (in order), one per next step to remove (with its reason). Proposed conventions become a question or a tick line too. Approaches set aside, with their reasons, go in the *Handoff* of the log.
    - Disposition every flag in the session log, log the dispatch, run regen and commit: `[S<n>] research-plan: <one-line summary>`.
-   - Under `/autoresearch`, apply the draft to `project.md` yourself and log the decision as a skipped gate.

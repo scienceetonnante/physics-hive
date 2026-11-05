@@ -1,4 +1,4 @@
-"""The PhysicsIntern Space: the researcher's view of a research workspace, in a browser.
+"""The PhysicsHive Space: the researcher's view of a research workspace, in a browser.
 
 Five pages, each showing files (design, section 14):
 
@@ -21,7 +21,7 @@ Every write takes the signed-in user from the sign-in session itself
 (`parse_huggingface_oauth`), never from a value the page sends.
 
 Run it on a local workspace folder, without the Hub and without sign-in:
-    PHYSICS_INTERN_LOCAL=/path/to/workspace PHYSICS_INTERN_LOCAL_USER=alice uvicorn app:app --reload
+    PHYSICS_HIVE_LOCAL=/path/to/workspace PHYSICS_HIVE_LOCAL_USER=alice uvicorn app:app --reload
 """
 
 import re
@@ -138,7 +138,7 @@ def fresh(request: Request) -> None:
         backend.refresh_if_stale()
 
 
-app = FastAPI(title="PhysicsIntern", docs_url=None, redoc_url=None, openapi_url=None, dependencies=[Depends(fresh)])
+app = FastAPI(title="PhysicsHive", docs_url=None, redoc_url=None, openapi_url=None, dependencies=[Depends(fresh)])
 if backend.local:
     app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 else:

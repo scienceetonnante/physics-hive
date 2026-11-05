@@ -1,4 +1,4 @@
-"""The Space of a shared space: the token it holds (PHYSICS_INTERN_SPACE_TOKEN when it is set, else the
+"""The Space of a shared space: the token it holds (PHYSICS_HIVE_SPACE_TOKEN when it is set, else the
 creator's login token), and its card on the Hub (title and question)."""
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def fake_hub(monkeypatch, tmp_path):
     monkeypatch.setattr(hub, "api", lambda: FakeHub())
     monkeypatch.setattr(hub, "get_token", lambda: LOGIN)
     monkeypatch.delenv(hub.SPACE_TOKEN_ENV, raising=False)
-    app = tmp_path / ".physics-intern" / "space"
+    app = tmp_path / ".physics-hive" / "space"
     app.mkdir(parents=True)
     (app / "app.py").write_text("")
     (app / "README.md").write_text(README.read_text())
@@ -146,7 +146,7 @@ def test_the_card_names_the_project_and_shows_its_question(fake_hub):
     [(_, readme)] = FakeHub.uploads
     meta = card(readme)
     assert meta["title"] == "[Physics Hive] x" and "short_description" not in meta
-    assert meta["sdk"] == "docker" and meta["hf_oauth"] is True and "# PhysicsIntern Space" in readme
+    assert meta["sdk"] == "docker" and meta["hf_oauth"] is True and "# PhysicsHive Space" in readme
 
     (fake_hub / "project.md").write_text(f"# {PENDULUM}\n\n## Goal\n\nFind T.\n")
     FakeHub.uploads = []
@@ -196,7 +196,7 @@ def test_init_reads_the_token_from_the_dotenv_of_the_method_repository(monkeypat
     monkeypatch.setattr(hub, "create_shared", lambda *args, **kwargs: seen.setdefault("choice", args[5]))
     monkeypatch.delenv(hub.SPACE_TOKEN_ENV, raising=False)
     dotenv = tmp_path / ".env"
-    dotenv.write_text('OTHER=1\nPHYSICS_INTERN_SPACE_TOKEN = "hf_from_file"\n')
+    dotenv.write_text('OTHER=1\nPHYSICS_HIVE_SPACE_TOKEN = "hf_from_file"\n')
     monkeypatch.setattr(init, "DOTENV", dotenv)
     workspace = tmp_path / "ws"
     monkeypatch.setattr(sys, "argv", ["init.py", "--mode", "create", "--org", "lab", "--name", "x",

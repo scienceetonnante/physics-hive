@@ -13,8 +13,4 @@ logs/
 .idea/
 tmp/
 
-workspaces/
 hives/
-references/
-results/
-problems/

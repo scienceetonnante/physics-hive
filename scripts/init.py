@@ -2,26 +2,28 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6", "huggingface_hub>=1.0"]
 # ///
-"""Create, join or refresh a PhysicsIntern workspace.
+"""Create, join or refresh a PhysicsHive workspace.
 
 Run without options, it asks a few questions in the terminal, each with a
-default: what to do (start a local workspace, create a shared space on the
-Hugging Face Hub, or join one), which harnesses will be used on this machine,
-and where. Every question also has a flag, so the plugin bootstraps can ask in
-the chat and pass the answers.
+default: what to do (create a shared space on the Hugging Face Hub, join one,
+or start a local workspace), which harnesses will be used on this machine,
+where, and for a new workspace the question of the project and its goal, which
+it writes into project.md. Every question also has a flag, so the plugin
+bootstraps can ask in the chat and pass the answers.
 
 Run inside an existing workspace, it renders the harness files again (to add a
 harness or refresh them) from the workspace's own copy of the method. With
 --upgrade it replaces that copy with this one.
 
 Usage:
-  uv run scripts/init.py [--mode local|create|join] [--harness claude,codex,opencode,pi]
+  uv run scripts/init.py [--mode create|join|local] [--harness claude,codex,opencode,pi]
                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
+                         [--question TEXT] [--goal TEXT]
                          [--chat-model ID] [--space-token env|mine|none] [--yes]
                          [--list-orgs] [--list-harnesses] [--upgrade]
 
 The Space of a new shared space holds a copy of a token, its secret HF_TOKEN. By
-default it is the token in the environment variable PHYSICS_INTERN_SPACE_TOKEN
+default it is the token in the environment variable PHYSICS_HIVE_SPACE_TOKEN
 if that is set (or in the .env at the root of this method repository, when run
 from a clone of it), else your login token (`hf auth login`).
 """
@@ -29,16 +31,19 @@ from a clone of it), else your login token (`hf auth login`).
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import re
 import shutil
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import ScriptError, git, git_out, is_git_repo, rendered_harnesses, rerender, say  # noqa: E402
+from human import TITLE_PLACEHOLDER, parse_project  # noqa: E402
 
 METHOD_ROOT = Path(__file__).resolve().parents[1]  # holds commons/, hosts/, scripts/, VERSION
 METHOD_PARTS = ("commons", "hosts", "scripts", "space", "VERSION")
@@ -52,6 +57,7 @@ HARNESSES = {
 DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
 WORKSPACE_DIRS = ("claims", "derivations/.briefs", "computations/.briefs", "critiques", "literature", "sessions")
 ALLOWED_IN_NEW_DIR = {"project.md", ".DS_Store"}
+GOAL_HINT = "<!-- The question in full, and what would count as an answer. -->"  # in commons/templates/project.md
 
 
 def method_version() -> str:
@@ -84,6 +90,10 @@ def ask_choice(question: str, options: list[tuple[str, str]], default: str) -> s
         if reply in keys:
             return reply
         say("Please type one of the numbers.")
+
+
+def ask_optional(question: str) -> str:
+    return input(f"{question}\n(press Enter to write it later): ").strip()
 
 
 def installed_harnesses() -> list[str]:
@@ -124,8 +134,8 @@ def parse_harnesses(value: str) -> list[str]:
 
 
 def copy_method(target: Path) -> None:
-    """Copy the method (commons/, hosts/, scripts/, space/, VERSION) into .physics-intern/."""
-    dest = target / ".physics-intern"
+    """Copy the method (commons/, hosts/, scripts/, space/, VERSION) into .physics-hive/."""
+    dest = target / ".physics-hive"
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
@@ -138,12 +148,12 @@ def copy_method(target: Path) -> None:
             shutil.copy2(src, dest / part)
     (dest / "README.md").write_text(
         "# Method copy\n\n"
-        f"This folder is a copy of the PhysicsIntern method, version {method_version()}: the prompts\n"
+        f"This folder is a copy of the PhysicsHive method, version {method_version()}: the prompts\n"
         "(`commons/`, `hosts/`), the workspace scripts (`scripts/`) and the Space app (`space/`).\n"
         "Every operator renders their harness files from it, so everyone runs the same prompts and\n"
         "scripts, and the prompts that produced a result sit in the git history next to it.\n\n"
         "Do not edit it. Sessions may not touch it; an upgrade replaces it as a whole\n"
-        "(`uv run .physics-intern/scripts/init.py --upgrade`, run from a newer copy of the method).\n"
+        "(`uv run .physics-hive/scripts/init.py --upgrade`, run from a newer copy of the method).\n"
     )
 
 
@@ -153,10 +163,10 @@ def toml_string(value: str) -> str:
 
 def project_toml(version: str, hub: dict | None, leads: list[str], chat_model: str) -> str:
     lines = [
-        "# PhysicsIntern project file. Written by init; edit [people] and [models] by hand if needed.",
+        "# PhysicsHive project file. Written by init; edit [people] and [models] by hand if needed.",
         "",
         "[method]",
-        f"physics_intern_version = {toml_string(version)}   # version of the method copy in .physics-intern/",
+        f"physics_hive_version = {toml_string(version)}   # version of the method copy in .physics-hive/",
         "",
         "[hub]                                  # empty in local mode",
     ]
@@ -188,6 +198,31 @@ def write_skeleton(target: Path) -> None:
         (target / folder / ".gitkeep").touch()
 
 
+def fill_project(target: Path, question: str, goal: str) -> None:
+    """Write the question (the title) and the goal into project.md, where it still shows the template's placeholders."""
+    path = target / "project.md"
+    text = path.read_text(encoding="utf-8")
+    if question:
+        text = text.replace(f"# {TITLE_PLACEHOLDER}\n", f"# {question}\n", 1)
+    if goal:
+        text = text.replace(GOAL_HINT, goal, 1)
+    path.write_text(text, encoding="utf-8")
+
+
+def project_missing(target: Path) -> list[str]:
+    """What project.md still lacks before a session can start: the question (its title), the goal, or neither."""
+    path = target / "project.md"
+    if not path.is_file():
+        return ["question", "goal"]
+    doc = parse_project(path.read_text(encoding="utf-8"))
+    missing = []
+    if doc.title.strip() in ("", TITLE_PLACEHOLDER):
+        missing.append("question")
+    if not doc.sections.get("Goal", "").strip():
+        missing.append("goal")
+    return missing
+
+
 def render(target: Path, harnesses: list[str]) -> None:
     """Render harness files from the workspace's own method copy."""
     rerender(target, harnesses)
@@ -195,7 +230,7 @@ def render(target: Path, harnesses: list[str]) -> None:
 
 def regen(target: Path) -> None:
     subprocess.run(
-        [sys.executable, str(target / ".physics-intern" / "scripts" / "regen.py"), "--root", str(target), "--quiet"],
+        [sys.executable, str(target / ".physics-hive" / "scripts" / "regen.py"), "--root", str(target), "--quiet"],
         check=False,
     )
 
@@ -203,11 +238,11 @@ def regen(target: Path) -> None:
 def warm_up(target: Path) -> None:
     """Install the literature tools' dependencies once, so that the harnesses' first start of the
     MCP server does not spend its startup timeout installing them. Failures are not fatal."""
-    if os.environ.get("PHYSICS_INTERN_NO_WARMUP") or not shutil.which("uv"):
+    if os.environ.get("PHYSICS_HIVE_NO_WARMUP") or not shutil.which("uv"):
         return
     say("Preparing the literature tools (installing their dependencies once)…")
     try:
-        subprocess.run(["uv", "run", "--quiet", ".physics-intern/scripts/literature.py", "--help"], cwd=target,
+        subprocess.run(["uv", "run", "--quiet", ".physics-hive/scripts/literature.py", "--help"], cwd=target,
                        capture_output=True, timeout=300, check=False)
     except subprocess.TimeoutExpired:
         say("  (not finished; the first literature call will finish it)")
@@ -218,9 +253,9 @@ def check_new_dir(target: Path) -> None:
         return
     names = {p.name for p in target.iterdir()}
     for doc in ("CLAUDE.md", "AGENTS.md"):
-        if (target / doc).is_file() and "PhysicsIntern workspace" in (target / doc).read_text(errors="ignore"):
+        if (target / doc).is_file() and "PhysicsHive workspace" in (target / doc).read_text(errors="ignore"):
             raise ScriptError(
-                f"{target} holds a PhysicsIntern workspace in the earlier format. It keeps working as it is "
+                f"{target} holds a PhysicsHive workspace in the earlier format. It keeps working as it is "
                 "and is not converted. Create the new workspace in an empty folder."
             )
     extra = sorted(names - ALLOWED_IN_NEW_DIR)
@@ -234,7 +269,7 @@ def check_new_dir(target: Path) -> None:
 def first_commit(target: Path, message: str) -> None:
     if not is_git_repo(target):
         git(target, "init", "-q", "-b", "main")
-    paths = [".gitignore", ".physics-intern", "project.toml", "project.md", "conventions.md", "draft.tex", *WORKSPACE_DIRS]
+    paths = [".gitignore", ".physics-hive", "project.toml", "project.md", "conventions.md", "draft.tex", *WORKSPACE_DIRS]
     git(target, "add", "--", *paths)
     git(target, "commit", "-q", "-m", message, "-m", f"Bootstrapped by init (method {method_version()}).")
 
@@ -243,12 +278,13 @@ def first_commit(target: Path, message: str) -> None:
 
 
 def create_local(target: Path, harnesses: list[str], chat_model: str, hub: dict | None = None,
-                 leads: list[str] | None = None) -> None:
+                 leads: list[str] | None = None, question: str = "", goal: str = "") -> None:
     check_new_dir(target)
     target.mkdir(parents=True, exist_ok=True)
     copy_method(target)
     (target / "project.toml").write_text(project_toml(method_version(), hub, leads or [], chat_model))
     write_skeleton(target)
+    fill_project(target, question, goal)
     render(target, harnesses)
     warm_up(target)
 
@@ -270,7 +306,7 @@ def upgrade(target: Path, harnesses: list[str] | None) -> None:
     import tomllib
 
     project = tomllib.loads((target / "project.toml").read_text())
-    old = project.get("method", {}).get("physics_intern_version", "?")
+    old = project.get("method", {}).get("physics_hive_version", "?")
     new = method_version()
     if is_git_repo(target) and git_out(target, "status", "--porcelain"):
         raise ScriptError("the workspace has uncommitted changes; commit or discard them before an upgrade")
@@ -289,10 +325,10 @@ def upgrade(target: Path, harnesses: list[str] | None) -> None:
         return
     copy_method(target)
     text = (target / "project.toml").read_text()
-    text = re.sub(r'(physics_intern_version\s*=\s*)"[^"]*"', lambda m: f'{m.group(1)}"{new}"', text)
+    text = re.sub(r'(physics_hive_version\s*=\s*)"[^"]*"', lambda m: f'{m.group(1)}"{new}"', text)
     (target / "project.toml").write_text(text)
     render(target, harnesses or rendered_harnesses(target))
-    git(target, "add", "-A", "--", ".physics-intern", "project.toml")
+    git(target, "add", "-A", "--", ".physics-hive", "project.toml")
     git(target, "commit", "-q", "-m", f"Upgrade the method copy from {old} to {new}")
     regen(target)
     say(f"Upgraded the method copy from {old} to {new} and re-rendered the harness files.")
@@ -310,19 +346,32 @@ def say_launch(harnesses: list[str], prefix: str = "") -> None:
         say(f"{' ' * len(prefix)}     {hints[h]}")
 
 
-def say_next_steps(harnesses: list[str], mode: str) -> None:
+def say_next_steps(harnesses: list[str], mode: str, missing: list[str]) -> None:
+    what = {
+        ("question", "goal"): "the question in one line as the title of project.md, and the goal under Goal",
+        ("question",): "the question in one line as the title of project.md",
+        ("goal",): "the goal under Goal in project.md",
+    }.get(tuple(missing), "")
+    if mode == "create" and what:
+        first = (f"In the Space (its address is above), on the Project page, write {what}. Write there rather than "
+                 "in this folder: a session does not start while this checkout has uncommitted changes. Add seed "
+                 "papers on the Literature page if you have some.")
+    elif mode == "create":
+        first = "If you have seed papers, list them on the Space's Literature page (its address is above)."
+    elif mode == "local" and what:
+        them = "them" if len(missing) == 2 else "it"
+        first = (f"Write {what} (the other sections can wait), or dictate {them} to the coordinator. List seed "
+                 "papers in literature/seeds.md if you have some.")
+    elif mode == "local":
+        first = "If you have seed papers, list them in literature/seeds.md."
+    else:
+        first = "Read project.md and the latest debrief (the Space shows both)."
     say("")
     say("Next steps:")
-    if mode in ("local", "create"):
-        say("  1. In project.md, write the question in one line as the title, and the goal under ## Goal")
-        say("     (the other sections can wait), and seed papers in literature/seeds.md if you have some.")
-        say("     You can also dictate them to the coordinator.")
-    else:
-        say("  1. Read project.md and the latest debrief (the Space shows both).")
+    say(textwrap.fill(first, width=100, initial_indent="  1. ", subsequent_indent="     "))
     say_launch(harnesses, prefix="  2. ")
     codex = " ($session-run in Codex)" if "codex" in harnesses else ""
-    bench = " For a benchmark run, use /autoresearch instead." if mode == "local" else ""
-    say(f"  3. Run /session-run{codex} to start a session.{bench}")
+    say(f"  3. Run /session-run{codex} to start a session.")
     say("")
 
 
@@ -343,7 +392,7 @@ def load_from_dotenv(name: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("dir_arg", nargs="?", metavar="DIR", help="target folder (same as --dir)")
-    parser.add_argument("--mode", choices=["local", "create", "join"])
+    parser.add_argument("--mode", choices=["create", "join", "local"], help="default: create")
     parser.add_argument("--harness", "--harnesses", dest="harness", help="comma-separated: " + ", ".join(HARNESSES))
     parser.add_argument("--host", help=argparse.SUPPRESS)  # earlier name of --harness
     parser.add_argument("--dir", help="target folder (default: the current folder)")
@@ -351,9 +400,13 @@ def main() -> int:
                         "repositories")
     parser.add_argument("--name", help="create: project name")
     parser.add_argument("--repo", help="join: the workspace repository, org/name")
+    parser.add_argument("--question", default="", help="create and local: the question of the project in one line, "
+                        "written as the title of project.md")
+    parser.add_argument("--goal", default="", help="create and local: the goal (the question in full, and what "
+                        "would count as an answer), written under Goal in project.md")
     parser.add_argument("--chat-model", default=None, help=f"model of the Space's explainer chat (default {DEFAULT_CHAT_MODEL})")
     parser.add_argument("--space-token", choices=["env", "mine", "none"], default=None,
-                        help="create: the token the Space holds: the one in PHYSICS_INTERN_SPACE_TOKEN (env, the "
+                        help="create: the token the Space holds: the one in PHYSICS_HIVE_SPACE_TOKEN (env, the "
                              "default when it is set), your login token (mine), or none, set later in the Space settings")
     parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
     parser.add_argument("--list-orgs", action="store_true",
@@ -380,7 +433,7 @@ def main() -> int:
 
     # Inside an existing workspace: refresh or upgrade.
     probe = Path(dir_value or ".").expanduser().resolve()
-    if (probe / "project.toml").is_file() and (probe / ".physics-intern").is_dir():
+    if (probe / "project.toml").is_file() and (probe / ".physics-hive").is_dir():
         if args.upgrade:
             upgrade(probe, harnesses)
         else:
@@ -389,17 +442,17 @@ def main() -> int:
             refresh(probe, harnesses)
         return 0
     if args.upgrade:
-        raise ScriptError(f"{probe} is not a PhysicsIntern workspace (no project.toml)")
+        raise ScriptError(f"{probe} is not a PhysicsHive workspace (no project.toml)")
 
     mode = args.mode
     if mode is None:
         mode = ask_choice(
             "What do you want to do?",
-            [("local", "Start a local workspace (one person, this machine)"),
-             ("create", "Create a shared space on the Hugging Face Hub"),
-             ("join", "Join an existing shared space")],
-            "local",
-        ) if asking else "local"
+            [("create", "Create a shared space on the Hugging Face Hub"),
+             ("join", "Join an existing shared space"),
+             ("local", "Start a local workspace (this machine only, without the Hub)")],
+            "create",
+        ) if asking else "create"
     if harnesses is None:
         default = installed_harnesses() or ["claude"]
         harnesses = ask_harnesses(default) if asking else default
@@ -416,15 +469,16 @@ def main() -> int:
         target = target.expanduser().resolve()
         join(target, repo, harnesses, render, regen, check_new_dir)
         warm_up(target)
-        say_next_steps(harnesses, mode)
+        say_next_steps(harnesses, mode, missing=[])
         return 0
 
     target = Path(dir_value or (ask("Folder for the workspace", ".") if asking else ".")).expanduser().resolve()
     if mode == "local":
-        create_local(target, harnesses, chat_model)
-        first_commit(target, "Initialize PhysicsIntern workspace (local mode)")
+        question, goal = ask_project(args, asking, target)
+        create_local(target, harnesses, chat_model, question=question, goal=goal)
+        first_commit(target, "Initialize PhysicsHive workspace (local mode)")
         regen(target)
-        say(f"PhysicsIntern workspace created at {target} (local mode, method {method_version()}).")
+        say(f"PhysicsHive workspace created at {target} (local mode, method {method_version()}).")
     else:
         from hub import SPACE_TOKEN_ENV, create_shared, owners
 
@@ -437,6 +491,7 @@ def main() -> int:
         name = args.name or (ask("Project name", target.name) if asking else None)
         if not org or not name:
             raise ScriptError("create needs --org and --name")
+        question, goal = ask_project(args, asking, target)
         load_from_dotenv(SPACE_TOKEN_ENV)
         space_token = args.space_token
         if space_token is None and os.environ.get(SPACE_TOKEN_ENV, "").strip():
@@ -446,9 +501,22 @@ def main() -> int:
                 "mine" if ask("Give the Space your Hugging Face token so it can save your answers and edits? (y/n)",
                               "y").lower().startswith("y") else "none")
         create_shared(target, org, name, harnesses, chat_model, space_token,
-                      create_local=create_local, first_commit=first_commit, regen=regen, version=method_version())
-    say_next_steps(harnesses, mode)
+                      create_local=functools.partial(create_local, question=question, goal=goal),
+                      first_commit=first_commit, regen=regen, version=method_version())
+    say_next_steps(harnesses, mode, missing=project_missing(target))
     return 0
+
+
+def ask_project(args: argparse.Namespace, asking: bool, target: Path) -> tuple[str, str]:
+    """The question and the goal for a new project.md, from the flags or asked in the terminal.
+
+    Nothing is asked when the folder already holds a project.md written by the researcher."""
+    question, goal = args.question.strip(), args.goal.strip()
+    if asking and not (target / "project.md").exists():
+        say("The project's question and goal go into project.md; a session needs both to start.")
+        question = question or ask_optional("The question of the project, in one line:")
+        goal = goal or ask_optional("The goal: the question in full, and what would count as an answer:")
+    return question, goal
 
 
 if __name__ == "__main__":

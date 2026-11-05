@@ -16,8 +16,8 @@ The tests of version 0.3.0 (re-check propagation, deterministic views, parallel 
 
 **Running phase A with a real agent.**
 
-1. `./init-physics-intern.sh --mode local --harness claude --dir /tmp/toy --yes`. In `/tmp/toy/project.md`, write a title and a goal for a small problem with a known answer (the period of a pendulum to second order in the amplitude, or one of `problems/validated/`). Do not commit.
-2. `claude` in `/tmp/toy`, then `/session-run`. Expect: your edits committed as yours, a brief you confirm, autonomous work, `sessions/S1/note.tex` (compile it with `uv run .physics-intern/scripts/pdf.py S1`), and a one-screen `sessions/S1/debrief.md` with a few questions, tick lines and an empty note box; `check` passing at the end.
+1. `./init-physics-hive.sh --mode local --harness claude --dir /tmp/toy --yes`. In `/tmp/toy/project.md`, write a title and a goal for a small problem with a known answer (the period of a pendulum to second order in the amplitude, or one of `problems/validated/`). Do not commit.
+2. `claude` in `/tmp/toy`, then `/session-run`. Expect: your edits committed as yours, a brief you confirm, autonomous work, `sessions/S1/note.tex` (compile it with `uv run .physics-hive/scripts/pdf.py S1`), and a one-screen `sessions/S1/debrief.md` with a few questions, tick lines and an empty note box; `check` passing at the end.
 3. Answer the debrief in your editor: one answer, two ticks (one copying a reviewed result into the draft, one adding a next step), one note. Leave one question empty. Also edit `project.md`.
 4. `/session-run` again. Expect: the start output lists exactly what you wrote; the coordinator asks your empty question and waits; it applies the ticks in one commit `[S2] apply the lines ticked in the S1 debrief`; the claim shows as `established` in `INDEX.md`; the debrief of S2 lists the changes under *Changed by this session*.
 5. Tick a line that copies an unreviewed claim as a result. Expect S3 to copy nothing and offer it as a conjecture in its debrief.
@@ -32,7 +32,7 @@ The tests of version 0.3.0 (re-check propagation, deterministic views, parallel 
 
 **Running phase B.**
 
-1. `./init-physics-intern.sh --mode create --org <your org> --name helmholtz-3`. Wait for the Space to build (it installs git and a small TeX Live), sign in, and write the title and goal of `project.md` on the *Project* page, and the seeds on the *Literature* page.
+1. `./init-physics-hive.sh --mode create --org <your org> --name helmholtz-3`. Wait for the Space to build (it installs git and a small TeX Live), sign in, and write the title and goal of `project.md` on the *Project* page, and the seeds on the *Literature* page.
 2. In the workspace folder, `/session-run`. When it ends, read the note on *Sessions*, answer the debrief on *Latest*, and check that *What the next session will receive* matches what you did.
 3. `/session-run` again and compare its start output with that block. Check the *Draft* page and its PDF once a result is copied.
 4. Note every time you needed a record page, and why.

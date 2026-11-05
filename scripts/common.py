@@ -143,7 +143,7 @@ def rendered_version(root: Path) -> str | None:
     doc = root / "AGENTS.md"
     if not doc.is_file():
         return None
-    match = re.search(r"Rendered from the PhysicsIntern method (\S+) in", doc.read_text(encoding="utf-8")[:300])
+    match = re.search(r"Rendered from the PhysicsHive method (\S+) in", doc.read_text(encoding="utf-8")[:300])
     return match.group(1) if match else None
 
 
@@ -152,7 +152,7 @@ def rerender(root: Path, harnesses: list[str] | None = None) -> None:
     harnesses = harnesses or rendered_harnesses(root)
     if not harnesses:
         return
-    renderer = root / ".physics-intern" / "commons" / "render.py"
+    renderer = root / ".physics-hive" / "commons" / "render.py"
     proc = subprocess.run([sys.executable, str(renderer), f"--hosts={','.join(harnesses)}", f"--target={root}"],
                           capture_output=True, text=True)
     if proc.returncode != 0:

@@ -173,7 +173,7 @@ def dispatch_prompt(case: Case, harness: str) -> str:
     files = ", ".join(f"{case.subdir}/{p.name}" for p in case.files)
     claim = case.meta["claim"].strip()
     return (
-        "You are the reviewer sub-agent of this PhysicsIntern workspace, not its coordinator. "
+        "You are the reviewer sub-agent of this PhysicsHive workspace, not its coordinator. "
         f"Read your role file, {ROLE_FILES[harness]}{where}, and follow it exactly. Do the review "
         "yourself in this conversation: do not dispatch sub-agents, start a session or commit.\n\n"
         "Dispatch:\n"

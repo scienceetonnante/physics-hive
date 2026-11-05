@@ -12,7 +12,7 @@
   "mcp": {
     "literature": {
       "type": "local",
-      "command": ["uv", "run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"],
+      "command": ["uv", "run", "--quiet", ".physics-hive/scripts/literature.py", "mcp"],
       "enabled": true,
       "timeout": 180000
     }

@@ -189,14 +189,14 @@ def test_session_rules_apply_to_the_sessions_own_commits(toy):
     (toy.root / "sessions/S1/log.md").write_text("tampered\n")
     (toy.root / "literature/seeds.md").write_text("# Seeds\n\n2301.01234\n")
     toy.card("CL-S4-1")
-    (toy.root / ".physics-intern").mkdir()
-    (toy.root / ".physics-intern/VERSION").write_text("x\n")
+    (toy.root / ".physics-hive").mkdir()
+    (toy.root / ".physics-hive/VERSION").write_text("x\n")
     toy.commit("[S2] tamper")
     messages = [str(e) for e in run_checks(Workspace(toy.root), base=base, session="S2").errors]
     assert any("sessions/S1/log.md" in m and "belongs to session S1" in m for m in messages)
     assert any("literature/seeds.md" in m and "only the researcher" in m for m in messages)
     assert any("CL-S4-1" in m and "belongs to S4" in m for m in messages)
-    assert any(".physics-intern/VERSION" in m for m in messages)
+    assert any(".physics-hive/VERSION" in m for m in messages)
     assert not any("sessions/S1/debrief.md" in m for m in messages)
 
 

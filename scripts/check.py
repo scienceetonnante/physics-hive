@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6"]
 # ///
-"""Validate a PhysicsIntern workspace.
+"""Validate a PhysicsHive workspace.
 
 Checks only what a script can verify: that every card, artefact summary,
 review and paper card has a well-formed header; that every reference points to
@@ -23,7 +23,7 @@ draft or a debrief that the session did not cause are warnings.
 When a session is active in this checkout, the base and the session default to
 those recorded in `.active-session`.
 
-Usage: uv run .physics-intern/scripts/check.py [--base REF] [--session S12] [--root PATH]
+Usage: uv run .physics-hive/scripts/check.py [--base REF] [--session S12] [--root PATH]
 Exit status 1 when there is at least one error. Warnings do not fail the check.
 """
 
@@ -298,7 +298,7 @@ def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> s
     changes = changes_since(ws.root, base)
     mine = session_paths(ws.root, base, session) if session else set()
     for status, path in changes:
-        if path.startswith(".physics-intern/"):
+        if path.startswith(".physics-hive/"):
             r.error(path, "the method copy changes only through an upgrade, never inside a session")
         if status in ("M", "D") and path.startswith(IMMUTABLE_DIRS) and "/.briefs/" not in path and not path.endswith(".gitkeep"):
             verb = "edited" if status == "M" else "deleted"

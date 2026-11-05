@@ -1,87 +1,74 @@
 ---
 name: investigate-run
-description: Post-mortem analysis of a PhysicsIntern workspace run (Claude Code, Pi, Codex, or OpenCode host; card-based or legacy workspace format). Reconstructs the trajectory from the session record — JSONL file(s) for Claude/Pi/Codex, the SQLite store for OpenCode — audits methodology adherence against the workspace's own CLAUDE.md / AGENTS.md and skill/agent prompts, checks commit discipline and flag dispositions, and assesses substantive quality. Produces a thorough evidence-anchored markdown report. Use after a workspace has been worked on to identify what went well, where the methodology slipped, and what prompts to improve.
+description: Post-mortem analysis of a PhysicsHive workspace run (Claude Code, Pi, Codex, or OpenCode host). Reconstructs the trajectory from the session record — JSONL file(s) for Claude/Pi/Codex, the SQLite store for OpenCode, or the trace uploaded to the traces dataset of a shared space — audits methodology adherence against the workspace's own AGENTS.md and skill/agent prompts, checks commit discipline, flag dispositions and what the researcher was asked to read, and assesses substantive quality. Produces a thorough evidence-anchored markdown report. Use after a workspace has been worked on to identify what went well, where the methodology slipped, and what prompts to improve.
 context: fork
 agent: general-purpose
 arguments: [workspace_path, session_id]
 ---
 
-# Investigate PhysicsIntern Run
+# Investigate PhysicsHive Run
 
-You are auditing a PhysicsIntern workspace run. Three sources:
+You are auditing a PhysicsHive workspace run. Four sources:
 
-1. **The workspace** at `$workspace_path` — files, git history, and the actual skills/agents and methodology file the run was operating under (`.claude/` + `CLAUDE.md` for Claude Code, `.pi/` + `AGENTS.md` for Pi, `.codex/` + `AGENTS.md` for Codex, `.opencode/` + `AGENTS.md` for OpenCode).
-2. **The session record** — every prompt, response, and tool call from the run. Single JSONL for Claude Code; main-agent JSONL plus per-skill sub-agent JSONLs for Pi; main-agent JSONL plus per-spawned-agent JSONLs for Codex; a **single SQLite database** (rows keyed by session, not files) for OpenCode (see *Host detection and session locations* below).
-3. **The methodology contract** — the workspace's own methodology file and `(.claude|.pi|.codex)/agents/` or `.opencode/agents/`, and `(.claude/skills|skills|.agents/skills|.opencode/commands)/`. These are the rules the run is being audited against. (Optional: the canonical templates in the parent `commons/` and `hosts/<host>/` dirs for cross-reference.)
-4. **Reference solution** (if available) — the known-correct answer to the problem, if it exists, can be documented in `references/`. This is a quality check, not a methodology requirement; the audit should be honest about whether the run produced a correct, partially correct, or incorrect answer, but the main focus is on the process rather than the outcome.
+1. **The workspace** at `$workspace_path` — files, git history, and the method copy `.physics-hive/` the run operated under.
+2. **The session record** — every prompt, response, and tool call from the run: a main-agent JSONL plus one JSONL per sub-agent for Claude Code, Pi and Codex; a **single SQLite database** (rows keyed by session, not files) for OpenCode. In a shared space, each session's record is also in the traces dataset. See *Host detection and session locations* below.
+3. **The methodology contract** — the workspace's `AGENTS.md` and its rendered roles and skills (`.claude/agents/` and `.claude/skills/`, `.codex/agents/` and `.agents/skills/`, `.opencode/agents/` and `.opencode/skills/`, `.pi/agents/` and `.pi/prompts/`). These are the rules the run is audited against. The rendered files are git-ignored and may have been re-rendered since the run: the authoritative prompts are those of the method copy at the session's commits (`git show <commit>:.physics-hive/commons/skills/<name>.md`), and the stamp at the top of `AGENTS.md` gives the version the harness loaded. (Optional: the canonical sources in this repo's `commons/` and `hosts/<host>/`, for cross-reference.)
+4. **Reference solution** (if available) — a known answer to the problem, documented in `references/`, for a calibration run. This is a quality check, not a methodology requirement: say honestly whether the run's results are correct, partially correct or wrong, but focus on the process.
 
-## Two workspace formats
+## The workspace
 
-Detect the format first, and audit against the promises of that format.
+A PhysicsHive workspace has `project.toml`, `project.md` and `.physics-hive/` at its root. Check this first: a folder without them, or with `problem.md`, `research_log.md` or `notes/flags.md` instead, was made by Physics Intern or an earlier version of the method, and this skill does not audit it. Say so and stop.
 
-- **Card-based** (method 0.2 and later): `project.toml` and `.physics-intern/` at the root. Results are immutable cards in `claims/`; artefact summaries and reviews in `derivations/` and `computations/`; reactions, human verifications and promotion records in `feedback/`; one folder per session in `sessions/S<n>/` (`brief.md`, `log.md`, `report.md`). `INDEX.md` and `research_log.md` are **generated and git-ignored**: regenerate them with `uv run .physics-intern/scripts/regen.py` rather than trusting a stale copy. Flag dispositions live in the session log, not in `notes/flags.md`. The workspace may be rendered for several harnesses at once (one shared `AGENTS.md`, a one-line `CLAUDE.md`); the harness a session ran under is in the first lines of its `log.md`, in `.active-session` while it runs, and in the trace's `meta.json`. The method version is in `project.toml` and `.physics-intern/VERSION`; the prompts the run used are those under `.physics-intern/` at the session's commits. See *The promises of a card-based workspace* below.
-- **Card-based with the human view** (method 0.4 and later): as above, plus `project.md` (replacing `problem.md` and `plan.md`), `draft.tex`, and per session `received.md`, `note.tex` and `debrief.md` (replacing `report.md`). There are no question cards, no `feedback/` folder, no promotion records and no proposal pull requests: a claim is *established* when a `result` environment of `draft.tex` names it, the researcher decides through answers, ticks and notes in debriefs, and the next session applies the ticked lines. `INDEX.md` and `references.bib` are generated; there is no `research_log.md`. See the 0.4 substitutions under the promises below.
-- **Legacy** (earlier workspaces): `research_log.md` and `notes/flags.md` are committed, IDs are `D-NNN` / `C-NNN`, one harness per workspace. The promises are listed under *The promises of a legacy workspace*.
+- **The human view**: `project.md` (the question as its title, then *Goal*, *Approach*, *Next steps*), `conventions.md`, `draft.tex`, and per session `sessions/S<n>/note.tex` and `debrief.md`; `literature/overview.md`, `seeds.md` and `ratings.yaml`.
+- **The record**: cards in `claims/` (claims `CL-S<n>-<k>`, dead ends `DE-S<n>-<k>`); artefacts in `derivations/` (`D-S<n>-<k>.summary.md` and `.tex`) and `computations/` (`C-S<n>-<k>.md`, `.py`, `.out`), with their briefs in `.briefs/` and their reviews `<artefact>_R-S<m>-<j>.md`; critiques `critiques/CR-S<n>-<k>.md`; paper cards `literature/P-<id>.md`; and per session `received.md`, `brief.md`, `log.md` and, when `/research-plan` ran, `plan.md`.
+- **Generated and git-ignored**: `INDEX.md` and `references.bib`. Regenerate them with `uv run .physics-hive/scripts/regen.py` rather than trusting a stale copy.
+- **Decisions**: a claim is *established* when a `result` environment of `draft.tex` names its card (`\card{CL-…}`). There are no question cards: the researcher decides through answers, ticks and notes in debriefs, and the next session applies the ticked lines.
+- **Harness and version**: the workspace may be rendered for several harnesses at once (one `AGENTS.md`, a one-line `CLAUDE.md`). The harness a session ran under is in the first line of its `log.md` (`Started … by <operator> with <harness> (<model>).`), in `.active-session` while it runs, and in the trace's `meta.json`. The method version is in `project.toml` and `.physics-hive/VERSION`.
+- **Shared mode** (`[hub]` filled in `project.toml`): each session is a pull request on the Hub. The squash merge leaves one commit per session on `main`; the per-dispatch commits stay on `refs/pr/<n>` (`git fetch origin refs/pr/<n>`). The traces dataset named in `[hub] traces` holds `S<n>/trace.jsonl` (the exported harness record) and `S<n>/meta.json` (operator, harness, models, method version, the session's commits, the merge commit). Download them with `hf download <traces repo> --repo-type dataset --include "S<n>/*" --local-dir /tmp/trace-S<n>`.
 
-## The promises of a card-based workspace
+## The promises
 
-1. **Coordinator only**, as below.
-2. **Cards are immutable and well-formed**: `uv run .physics-intern/scripts/check.py` passes (errors are findings; read its warnings too, e.g. "reserved ID never written"). Nothing in `claims/`, `feedback/`, `derivations/`, `computations/` is edited or deleted after the session that created it (check with `git log --diff-filter=MD --name-only -- claims feedback derivations computations`, ignoring `.briefs/`); within that session, correcting a card in place is expected. Refutations are dead-end cards; revisions of earlier sessions' claims are superseding cards. From method 0.3.0, cards are results: agents write no question cards (people write them), a claim states one assertion about the physics in one sentence and comes from a derivation or computation or answers a question, and the survey's findings stay in the survey summary and paper cards. A literature summary written as a claim, an agent-written question card, or a superseding card that only fixes the wording of a card from the same session is a finding.
-3. **Robust evidence before promotion**: every promotion record in `feedback/promotion-*.md` names a claim whose evidence, at the time of the record, came from ≥2 independent dispatch contexts with confirming reviews, or the record (or the report that proposed it) says why only one approach is available. In shared mode the record's author is in `[people] leads`; in local mode an agent-authored record follows an operator's approval (interactive) or a `Promotion gate` block in the session log (`/autoresearch`).
-4. **Blind, fresh-context review**: reviewer dispatches pass the artefact, the claim's **statement**, the card IDs for `supports` and the output path — not the card's path, not the model or operator, not earlier verdicts. Reviews start with tests that have a clear outcome (dimensions, limits, symmetries, numerical spot checks) and give each remark a location and a severity. Reviewers do not read `claims/`, `sessions/`, `feedback/`, `INDEX.md`, `research_log.md` or other reviews of the target.
-5. **Review after derive/compute**: every artefact has at least one review file `<id>_R-S<n>-<k>.md`, or the log records why the review was deferred.
-6. **Integration loop**: after every return, the coordinator writes the cards, dispositions every flag in `sessions/S<n>/log.md`, logs the dispatch, runs regen, and makes **one commit** prefixed `[S<n>]` bundling the artefact, the cards and the log.
-7. **Edit scope**: the coordinator writes `claims/`, the current session folder, the briefs, and critique resolutions. It never edits artefacts, `feedback/`, `.physics-intern/`, or (in shared mode) the lead's files `problem.md`, `plan.md`, `conventions.md`, `literature/seeds.md`.
-8. **Return schema**: as below (8a artefact, 8b reply), except that the planner returns its block in the reply only.
-9. **Sessions**: each session has a brief confirmed by the operator before work starts (`/session-run`; `/autoresearch` writes its own), a dispatch count within the budget, a stop at the first stop condition (goal reached, budget spent, 4 dispatches without progress, `problem.md` should change), and a report with the required sections whose `stop_reason` matches the log. IDs come from `session.py next`, so there are no collisions or reused numbers.
-10. **Scripts, not improvisation**: the session's pull request, pushes, trace upload and merge go through `session.py`; plan proposals through `propose.py`; promotions through `promote.py`. A coordinator that pushes, merges, rebases or uploads by hand, or edits `.active-session`, is a finding, even when the result looks fine.
+Audit the run against these eleven promises.
 
-**From method 0.4, read promises 3, 7, 9 and 10 this way**, and add promise 11:
-
-- 3. **Robust evidence before the draft**: every claim named by a `result` environment of `draft.tex` got there by a line the researcher ticked (find the tick in the debrief named by the apply commit `[S<n>] apply the lines ticked in the S<m> debrief`) or by the researcher's own edit, and the tick line said how robust its evidence was. A session that copies a result nobody ticked, or copies a result whose claim has no confirming review instead of offering it as a conjecture, fails. Under `/autoresearch`, each copy follows a `Draft gate` block in the log.
-- 7. **Edit scope**: the coordinator writes `claims/`, the current session folder, the briefs and critique resolutions; it edits `conventions.md` only when the work fixes a convention, and `project.md` and `draft.tex` only to apply ticked lines (one commit per debrief) or to move a finished step to *Done*. It never edits another session's folder (debriefs included: the researcher's answers are theirs, except through `session.py answer` and `tick`), `literature/seeds.md`, `literature/ratings.yaml`, artefacts or `.physics-intern/`.
-- 9. **Sessions**: `received.md` exists and was read (the ticked lines are applied before the brief; unanswered questions were shown to the operator before the brief); the brief takes the first next step of `project.md` unless the operator chose otherwise; the stop conditions are those of `/session-run`; the note was written by a dispatched `writer` sub-agent, not by the coordinator, is two to four pages and names its results' cards; the debrief has one screen of summary, questions only the researcher can answer, concrete tick lines and an empty note box, and no process detail; the log ends with `## Handoff`. Compare the debrief with what the note and the log say: a decision the session needed but did not ask, or a question it could have settled itself, is a finding.
-- 10. **Scripts, not improvisation**: the pull request, pushes, trace upload, merge and *Changed by this session* go through `session.py`. A coordinator that pushes, merges, rebases or uploads by hand, edits `.active-session` or `received.md`, or writes *Changed by this session* itself, is a finding.
-- 11. **The researcher's attention**: count the words of the note and the debrief, the number of questions and tick lines, and how many of them were routine (adopt a convention, a threshold, a library) rather than decisions only the researcher could take. The design's target is one note and one debrief per session that the researcher can read and answer in a few minutes.
-
-For a card-based workspace, read the rules below with these substitutions: `notes/flags.md` becomes the session log; `research_log.md` invariants become the `check.py` result and promise 2; `D-NNN_R*.md` becomes `D-S<n>-<k>_R-S<m>-<j>.md`. In shared mode, the session record is also in the traces dataset named in `project.toml [hub] traces`: `S<n>/trace.jsonl` (the exported harness record) and `S<n>/meta.json` (operator, harness, models, method version, the session's commits under `refs/pr/<n>`, the merge commit). Download it with `hf download <traces repo> --repo-type dataset --include "S<n>/*" --local-dir /tmp/trace-S<n>`. The squash merge leaves one commit per session on `main`; the per-dispatch commits are on `refs/pr/<n>` (`git fetch origin refs/pr/<n>`).
-
-## The promises of a legacy workspace
-
-1. **Main agent is coordinator only** — never performs substantive surveys, derivations, computations, reviews, or critiques itself.
-2. **`research_log.md` invariants**: every Working Claim & Established Result lists ≥1 source; canonical section order (Open Questions → Working Claims → Established Results → Dead Ends → Conventions → Sanity Checks); Dead Ends compacted but never removed; every Open Question has a status line; every sub-agent flag dispositioned in `notes/flags.md` before the integration commit.
-3. **Robust evidence before promotion**: a Working Claim becomes Established only when evidence is robust against typical failure modes (conceptual / transcription / sign-factor). Usually that means ≥2 sources from **independent dispatch contexts** — a single artefact's internal sym/num cross-check counts as one source for conceptual-bug protection. If only one approach is genuinely available, the reasoning must be recorded explicitly in `research_log.md` alongside the source list.
-4. **Fresh context for /review and /critique** — reviewers do not read sibling review files (`D-NNN_R*.md` / `C-NNN_R*.md`) for the same target; critics receive only one-line summaries of prior critiques. (Workspaces predating 2026-05 use an in-file `## Reviews` section on the target; the audit accepts either convention.)
-5. **Review is part of standard flow** — after `/derive` or `/compute`, the next dispatch should be `/review` (unless trivial; batching is permitted but must be recorded in `notes/flags.md`).
-6. **Integration loop**: every sub-agent return is followed by (i) `research_log.md` integration, (ii) per-flag disposition in `notes/flags.md`, (iii) any `plan.md` edits, (iv) **one commit** that bundles the artefact + main-agent edits. Sub-agents do not commit.
-7. **Main agent edits**: `research_log.md`, `notes/` (incl. `notes/flags.md`), `critiques/CR-NNN.md` (Resolution + status), and **targeted edits to `plan.md`** (mark done / drop / retitle / revise upcoming step). Strategy-level plan changes re-invoke `/research-plan`. Sub-agents own their artefacts.
-8. **Sub-agent return schema**: both (8a) the artefact file on disk and (8b) the reply-channel message (Claude Code `tool_result.content`, Pi `subagent` return body, Codex `wait_agent` reply / `last_task_message`) carry `## Summary` / `## Result` / `## Flags` (empty Flags rendered as `- (none)`). Extra sections (e.g. `## Integration actions`, `## Recommended next steps`) violate the schema. The two channels drift independently — usually the artefact is fine and the reply is prose. Flags are proposals; the main agent must record the disposition in `notes/flags.md`.
-9. **HITL for /research-plan** (strategy-level) — the sub-agent drafts, the main agent presents to the user for approval before continuing. Targeted plan edits by the main agent do not require user approval.
+1. **Coordinator only.** The coordinator dispatches sub-agents; it never performs substantive surveys, derivations, computations, reviews or critiques itself, and never writes the note.
+2. **Cards are immutable and well-formed.** `uv run .physics-hive/scripts/check.py` passes (errors are findings; read its warnings too, e.g. "reserved ID never written"). Nothing in `claims/`, `derivations/` or `computations/` is edited or deleted after the session that created it; within that session, correcting a card in place is expected. Refutations are dead-end cards; revisions of earlier sessions' claims are superseding cards. A claim states one assertion about the physics in one sentence and comes from a derivation or a computation; the survey's findings stay in the overview and the paper cards. A literature summary written as a claim, or a superseding card that only fixes the wording of a card from the same session, is a finding.
+3. **Robust evidence before the draft.** Every claim named by a `result` environment of `draft.tex` got there by a line the researcher ticked (find the tick in the debrief named by the apply commit `[S<n>] apply the lines ticked in the S<m> debrief`) or by the researcher's own edit, and the tick line said how robust its evidence was. A session that copies a result nobody ticked, or copies a result whose claim has no confirming review instead of offering it as a conjecture, fails. Note a result whose evidence comes from a single dispatch context (one artefact, whose internal cross-checks count as one), unless the tick line or the note says why only one approach is available.
+4. **Blind, fresh-context review.** Reviewer dispatches pass the artefact, the claim's **statement**, the card IDs for `supports` and the output path — not the card's path, not the model or operator, not earlier verdicts. Reviews start with tests that have a clear outcome (dimensions, limits, symmetries, numerical spot checks) and give each remark a location and a severity (*breaks the result*, *weakens it*, *cosmetic*). Reviewers do not read `claims/`, `sessions/`, `INDEX.md` or other reviews of the target. Critics receive only one-line summaries of earlier critiques.
+5. **Review after derive and compute.** Every artefact has at least one review file `<id>_R-S<n>-<k>.md`, or the log records why the review was deferred.
+6. **Integration loop.** After every return, the coordinator writes the cards, dispositions every flag in `sessions/S<n>/log.md`, logs the dispatch, runs regen, and makes **one commit** prefixed `[S<n>]` that bundles the artefact, the cards and the log. Sub-agents do not commit.
+7. **Edit scope.** The coordinator writes `claims/`, the current session folder, the briefs and critique resolutions. It edits `conventions.md` only when the work fixes a convention; `project.md` only to apply ticked lines (one commit per debrief) or to remove the step its session finished; and `draft.tex` only to apply ticked lines or when a next step asks for it. It never edits another session's folder (debriefs included: the researcher's answers are theirs, except through `session.py answer` and `tick`), `literature/seeds.md`, `literature/ratings.yaml`, artefacts or `.physics-hive/`.
+8. **Return schema.** Both (8a) the artefact on disk and (8b) the reply the coordinator receives carry `## Summary` / `## Result` / `## Flags`, with empty flags written `- (none)`; the surveyor, the planner and the writer return the block in the reply only. Extra sections (e.g. `## Recommended next steps`) violate the schema. The two channels drift independently: usually the artefact is fine and the reply is prose. Flags are proposals; the coordinator records each disposition in the session log.
+9. **Sessions.** `received.md` exists and was read: the ticked lines are applied before the brief, and unanswered questions were shown to the operator before the brief. The brief (`goal`, `budget`) takes the first next step of `project.md` unless the operator chose otherwise, and the operator confirmed it before the first dispatch. The dispatch count stays within the budget, and the session stops at the first stop condition (goal reached, budget spent, four dispatches in a row without progress, `project.md` should change). The note was written by a dispatched `writer` sub-agent, is two to four pages, and names its results' cards. The debrief has a short summary, only the questions the researcher alone can answer, concrete tick lines and an empty note box, and no process detail. The log ends with `## Handoff`. IDs come from `session.py next`, so there are no collisions or reused numbers.
+10. **Scripts, not improvisation.** The session's pull request, pushes, trace upload, merge and *Changed by this session* go through `session.py`. A coordinator that pushes, merges, rebases or uploads by hand, edits `.active-session` or `received.md`, or writes *Changed by this session* itself, is a finding, even when the result looks fine.
+11. **The researcher's attention.** Count the words of the note and the debrief, the number of questions and tick lines, and how many of them were routine (adopt a convention, a threshold, a library) rather than decisions only the researcher could take. The target is one note and one debrief per session that the researcher can read and answer in a few minutes. Compare the debrief with what the note and the log say: a decision the session needed but did not ask, or a question it could have settled itself, is a finding.
 
 ## Inputs
 
-- `$workspace_path` (required): path to the workspace directory (e.g. `/Users/david/projects/theoretical-physics/physics-agent/qec`).
-- `$session_id` (optional): UUID of the session. If omitted, auto-discover based on host (see below).
+- `$workspace_path` (required): path to the workspace directory (e.g. `workspaces/helmholtz-2`).
+- `$session_id` (optional): UUID of the harness session. If omitted, auto-discover based on host (see below).
 
 If `$ARGUMENTS` is empty, ask the user for the workspace path.
 
 ## Host detection and session locations
 
-First detect which host the workspace was run under by checking which methodology dir exists. In a card-based workspace several of these dirs can exist at once, because the workspace is rendered for every harness its operator selected: take the harness from the session log's first lines (`Started … with <harness> (<model>)`) or from the trace's `meta.json`, and use the matching location below. OpenCode skills are under `.opencode/skills/` in card-based workspaces (`.opencode/commands/` in legacy ones), and Pi's skills and prompts under `.pi/skills/` and `.pi/prompts/` (top-level `skills/` and `prompts/` in legacy ones).
+First detect which harness ran the session. A workspace is often rendered for several harnesses, so several of `.claude/`, `.codex/`, `.opencode/` and `.pi/` can exist at once: take the harness from the first line of the session's `log.md` or from the trace's `meta.json`, and use the matching location below.
 
-- **Claude Code**: `<workspace>/.claude/` and `CLAUDE.md` present. Single main-agent JSONL at `~/.claude/projects/<encoded>/<uuid>.jsonl`. Sub-agent activity (Skill forks) is journaled inline in the same JSONL.
-- **Pi**: `<workspace>/.pi/` and `AGENTS.md` present. **Both main and sub-agent JSONLs live under `~/.pi/agent/sessions/`** — main-agent at `~/.pi/agent/sessions/<encoded>/<timestamp>_<uuid>.jsonl`, and per-sub-agent JSONLs **nested under a sibling dir with the same basename** (timestamp + uuid, no `.jsonl`): `~/.pi/agent/sessions/<encoded>/<timestamp>_<uuid>/<short-id>/run-N/session.jsonl` (one `<short-id>` subdir per dispatched sub-agent, `run-N` for retries). Legacy Pi placed sub-agent logs at `<workspace>/.pi/sessions/<skill>/run-N/` — fall back to that if the nested layout is empty. Audit both files: the main-agent shows orchestration decisions, the sub-agents show what each fork actually did. A sibling `<encoded>/subagent-artifacts/` dir holds `<short-id>_<agent>_<n>_{input,output,meta}` triples — useful as a fast summary parallel to the JSONLs.
-- **Codex**: `<workspace>/.codex/` and `AGENTS.md` present. Sessions are **date-organised, not workspace-organised** — JSONLs live at `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`. Discover the main-agent session by reading the first record of candidate files and matching `cwd` against the workspace absolute path. **Two schemas exist**: current Codex (`multi_agents_v2`, GPT-5) uses top-level `type=="response_item"` / `type=="event_msg"` / `type=="session_meta"` with `cwd` at `.payload.cwd`; legacy Codex uses `item.type` tags (`SessionMeta`/`FunctionCall`/`EventMsg`) with `cwd` at `.item.cwd`. Sub-agent activity lives in **separate JSONL files** under the same date tree; linkage is the child UUID inside `close_agent.arguments.target` (current) or `CollabAgentSpawnBegin.child_thread_id` (legacy), which matches the child JSONL's filename suffix.
-- **OpenCode**: `<workspace>/.opencode/` and `AGENTS.md` present. There are **no JSONL files** — OpenCode keeps everything in one SQLite database at `${XDG_DATA_HOME:-~/.local/share}/opencode/opencode.db`. The trajectory lives across three tables: `session` (one row per main agent or sub-agent; `directory` = workspace abs path, `parent_id` = the dispatching main session for sub-agents, `agent` = `build` for the main agent or the role name for a sub-agent, plus `model`, `cost`, `tokens_*`), `message` (one row per turn, `data` JSON carries `role`/`modelID`/`tokens`/`finish`), and `part` (`data` JSON carries `type` ∈ `text`/`reasoning`/`tool`/`patch`/`step-start`/`step-finish`; tool parts hold `.tool`, `.state.status`, `.state.input`, `.state.output`, `.state.error`). **Discover by `session.directory`, not by project** — a single workspace re-initialised N times spawns N `project` rows for the same path, so `WHERE directory = '<abs path>'` is the only robust key. Expect **multiple main (`build`, `parent_id IS NULL`) sessions** per run (context clears, `/autoresearch` restarts, resets) — the git commits are the canonical spine; union all main sessions for the directory and order by `time_created`.
+- **Claude Code**: main-agent JSONL at `~/.claude/projects/<encoded>/<uuid>.jsonl`; the transcript of each sub-agent dispatched with the `Task` tool at `~/.claude/projects/<encoded>/<uuid>/subagents/*.jsonl`.
+- **Pi**: **both main and sub-agent JSONLs live under `~/.pi/agent/sessions/`** — main-agent at `~/.pi/agent/sessions/<encoded>/<timestamp>_<uuid>.jsonl`, and per-sub-agent JSONLs **nested under a sibling dir with the same basename** (timestamp + uuid, no `.jsonl`): `~/.pi/agent/sessions/<encoded>/<timestamp>_<uuid>/<short-id>/run-N/session.jsonl` (one `<short-id>` subdir per dispatched sub-agent, `run-N` for retries). Audit both: the main agent shows orchestration decisions, the sub-agents show what each one actually did. A sibling `<encoded>/subagent-artifacts/` dir holds `<short-id>_<agent>_<n>_{input,output,meta}` triples — useful as a fast summary parallel to the JSONLs.
+- **Codex**: sessions are **date-organised, not workspace-organised** — JSONLs live at `${CODEX_HOME:-~/.codex}/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`. Discover the main-agent session by reading the first record of candidate files and matching `cwd` against the workspace absolute path. **Two schemas exist**: current Codex (`multi_agents_v2`) uses top-level `type=="response_item"` / `type=="event_msg"` / `type=="session_meta"` with `cwd` at `.payload.cwd`; older Codex builds use `item.type` tags (`SessionMeta`/`FunctionCall`/`EventMsg`) with `cwd` at `.item.cwd`. Sub-agent activity lives in **separate JSONL files** under the same date tree; linkage is the child UUID inside `close_agent.arguments.target` (current) or `CollabAgentSpawnBegin.child_thread_id` (older), which matches the child JSONL's filename suffix.
+- **OpenCode**: there are **no JSONL files** — OpenCode keeps everything in one SQLite database at `${XDG_DATA_HOME:-~/.local/share}/opencode/opencode.db`. The trajectory lives across three tables: `session` (one row per main agent or sub-agent; `directory` = workspace abs path, `parent_id` = the dispatching main session for sub-agents, `agent` = `build` for the main agent or the role name for a sub-agent, plus `model`, `cost`, `tokens_*`), `message` (one row per turn, `data` JSON carries `role`/`modelID`/`tokens`/`finish`), and `part` (`data` JSON carries `type` ∈ `text`/`reasoning`/`tool`/`patch`/`step-start`/`step-finish`; tool parts hold `.tool`, `.state.status`, `.state.input`, `.state.output`, `.state.error`). **Discover by `session.directory`, not by project** — a single workspace re-initialised N times spawns N `project` rows for the same path, so `WHERE directory = '<abs path>'` is the only robust key. Expect **multiple main (`build`, `parent_id IS NULL`) sessions** per run (context clears, restarts) — the git commits are the canonical spine; union all main sessions for the directory and order by `time_created`.
 
-The encoded path uses `/` → `-`. Claude Code drops the leading `/`; Pi preserves it with a leading `--` (verify by `ls ~/.pi/agent/sessions/`). Codex does not encode the workspace path into the filename at all — filter by `.payload.cwd` (current) / `.item.cwd` (legacy) instead. OpenCode does not use the filesystem for sessions at all — query the SQLite `session.directory` column.
+The encoded path uses `/` → `-`. Claude Code drops the leading `/`; Pi preserves it with a leading `--` (verify by `ls ~/.pi/agent/sessions/`). Codex does not encode the workspace path into the filename at all — filter by `.payload.cwd` (current) / `.item.cwd` (older) instead. OpenCode does not use the filesystem for sessions at all — query the SQLite `session.directory` column.
+
+In a shared space, when the operator's machine is not available, use the trace from the traces dataset instead: `S<n>/trace.jsonl` wraps every record as `{"source", "record"}`, merging the main conversation and the sub-agent transcripts into one file; `source` says where each record came from (a harness file, or a table of OpenCode's database).
 
 ### Auto-discovery snippet (bash)
 
 ```bash
 WS="$workspace_path"
-if [ -d "$WS/.claude" ]; then
-  HOST=claude
+HOST=$(head -1 "$WS/sessions/S<n>/log.md" | grep -oE 'with (claude|codex|opencode|pi)' | cut -d' ' -f2)
+case "$HOST" in
+claude)
   ENCODED=$(echo "$WS" | sed 's|/|-|g')
   SESSION_DIR="$HOME/.claude/projects/${ENCODED}"
   if [ -n "$session_id" ]; then
@@ -89,29 +76,23 @@ if [ -d "$WS/.claude" ]; then
   else
     JSONL=$(ls -t "${SESSION_DIR}"/*.jsonl 2>/dev/null | head -1)
   fi
-  SUBAGENT_LOGS=""   # inline in $JSONL
-elif [ -d "$WS/.pi" ]; then
-  HOST=pi
+  SUBAGENT_LOGS="${JSONL%.jsonl}/subagents"   # one JSONL per Task dispatch
+  ;;
+pi)
   # Pi encodes the workspace path with `/` → `-` and a `--` wrap on each side
-  # (e.g. `--Users-david-...-qec-pi--`). Glob rather than reconstruct.
+  # (e.g. `--Users-david-...-qec--`). Glob rather than reconstruct.
   WS_BASENAME=$(basename "$WS")
   SESSION_DIR=$(ls -d "$HOME/.pi/agent/sessions/"*"${WS_BASENAME}"* 2>/dev/null | head -1)
   JSONL=$(ls -t "${SESSION_DIR}"/*.jsonl 2>/dev/null | head -1)
-  # Current Pi nests sub-agent JSONLs under a sibling dir named after the full
-  # JSONL basename (timestamp + uuid, no .jsonl extension):
+  # Sub-agent JSONLs are nested under a sibling dir named after the full JSONL
+  # basename (timestamp + uuid, no .jsonl extension):
   #   $SESSION_DIR/<timestamp>_<uuid>/<short-id>/run-N/session.jsonl
-  SUBAGENT_LOGS_NEW="${JSONL%.jsonl}"   # full basename, including timestamp prefix
-  SUBAGENT_LOGS_LEGACY="$WS/.pi/sessions"   # legacy per-skill layout
-  if compgen -G "${SUBAGENT_LOGS_NEW}/*/run-*/session.jsonl" >/dev/null 2>&1; then
-    SUBAGENT_LOGS="${SUBAGENT_LOGS_NEW}"   # contains <short-id>/run-N/session.jsonl
-  else
-    SUBAGENT_LOGS="${SUBAGENT_LOGS_LEGACY}"  # contains <skill>/run-N/session.jsonl
-  fi
-elif [ -d "$WS/.codex" ]; then
-  HOST=codex
+  SUBAGENT_LOGS="${JSONL%.jsonl}"
+  ;;
+codex)
   # Codex sessions are date-organised under ~/.codex/sessions/YYYY/MM/DD/
   # — not keyed by workspace. Filter all candidates by cwd, then pick the most
-  # recently-modified. Current schema puts cwd at .payload.cwd; legacy at .item.cwd.
+  # recently-modified. Current schema puts cwd at .payload.cwd; older at .item.cwd.
   SESSION_ROOT="${CODEX_HOME:-$HOME/.codex}/sessions"
   if [ -n "$session_id" ]; then
     JSONL=$(find "$SESSION_ROOT" -name "*${session_id}*.jsonl" 2>/dev/null | head -1)
@@ -125,18 +106,18 @@ elif [ -d "$WS/.codex" ]; then
   # Sub-agent JSONLs are discovered from spawn/close events in the main JSONL
   # (each carries a child UUID matching the per-child filename suffix).
   SUBAGENT_LOGS="$SESSION_ROOT"
-elif [ -d "$WS/.opencode" ]; then
-  HOST=opencode
+  ;;
+opencode)
   # OpenCode stores everything in one SQLite DB — there is no JSONL. Discovery
   # is a SQL query on session.directory, NOT filesystem globbing.
   OC_DB="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db"
   JSONL=""              # not applicable; use $OC_DB
-  # Sanity: confirm the workspace has sessions in the DB.
   sqlite3 "$OC_DB" "SELECT count(*) FROM session WHERE directory='$WS';" 2>/dev/null
-fi
+  ;;
+esac
 ```
 
-If `$JSONL` is missing or empty (or, for OpenCode, `$OC_DB` is absent or has no rows for `$WS`), do the analysis from the workspace + git history alone and note the gap in the report. For Pi, also enumerate `$SUBAGENT_LOGS/*/run-*/session.jsonl` since those exist independently of the main-agent JSONL.
+If `$JSONL` is missing or empty (or, for OpenCode, `$OC_DB` is absent or has no rows for `$WS`), use the trace from the traces dataset in a shared space; otherwise do the analysis from the workspace and git history alone, and note the gap in the report.
 
 ## Procedure
 
@@ -144,34 +125,35 @@ Execute in order. Use `jq`, `grep`, `git`, and `Read` liberally.
 
 ### Step 1 — Sanity checks and scope
 
-- Confirm `$workspace_path` exists and contains `problem.md` (or, from method 0.4, `project.md`) plus the host's methodology file: `CLAUDE.md` + `.claude/` for Claude Code, `AGENTS.md` + `.pi/` for Pi, `AGENTS.md` + `.codex/` for Codex, or `AGENTS.md` + `.opencode/` for OpenCode.
-- Read the workspace's methodology file and the agent prompts (`(.claude|.pi)/agents/*.md` Markdown, `.codex/agents/*.toml` TOML, `.opencode/agents/*.md` Markdown) and the skill/command prompts (`(.claude/skills|skills|.agents/skills)/*/SKILL.md`, or `.opencode/commands/*.md` for OpenCode) — these are the **actual prompts the run was using**. The audit's contract is what these say, not what the canonical drafts say. Note any divergence from the canonical drafts. In a card-based workspace the rendered files are git-ignored and may have been re-rendered since; the authoritative prompts are the method copy `.physics-intern/` at the session's commits (`git show <commit>:.physics-intern/commons/skills/<name>.md`), and the `AGENTS.md` stamp gives the version the harness actually loaded.
+- Confirm that `$workspace_path` is a PhysicsHive workspace (see *The workspace*) and find the harness of each session to audit.
+- Read `AGENTS.md`, the role prompts and the skill prompts the run used — from the method copy at the session's commits, since the rendered files may have changed since. The audit's contract is what these say, not what this repo's current sources say; note any divergence.
 - Size the transcript: `wc -l "$JSONL"` (Claude/Pi/Codex). For OpenCode, count rows instead: `sqlite3 "$OC_DB" "SELECT count(*) FROM part WHERE session_id IN (SELECT id FROM session WHERE directory='$WS');"`. If huge, plan to sample.
-- Capture run shape: number of artefacts, number of commits, wall-clock from first to last JSONL timestamp.
+- Capture the run's shape: sessions, dispatches, artefacts and cards, commits, and the wall-clock from the first to the last record.
 
 ### Step 2 — Trajectory reconstruction
 
 The schema differs by host — pick the right extractor.
 
-**Claude Code.** Tool calls are top-level events with `type=="tool_use"`; sub-agent dispatches use `name=="Skill"`; results are separate `tool_result` events. Sub-agent activity (Reads, Edits, etc. inside the fork) is journaled inline in the same JSONL.
+**Claude Code.** Each line is an event with `.type` (`user`, `assistant`, …) and `.timestamp`. Tool calls are items of `.message.content[]` with `type=="tool_use"` (`id`, `name`, `input`) in assistant events; their results are items with `type=="tool_result"` (`tool_use_id`, `content`) in later user events. Sub-agent dispatches are `tool_use` items named `Task` (`Agent` in recent versions), with `input.subagent_type` (the role), `input.description` and `input.prompt`. Each sub-agent's own activity is in its file under `$SUBAGENT_LOGS`.
 
 ```bash
-jq -c 'select(.type=="assistant" or .type=="user" or .type=="tool_use" or .type=="tool_result") | {type, ts:.timestamp, name:.tool_name, inp:.tool_input, out:.tool_result}' "$JSONL" > /tmp/events.jsonl
+jq -c 'select(.type=="assistant") | .timestamp as $ts | .message.content[]? | select(.type=="tool_use") | {ts:$ts, id, name, input}' "$JSONL" > /tmp/calls.jsonl
+jq -c 'select(.name=="Task" or .name=="Agent")' /tmp/calls.jsonl > /tmp/dispatches.jsonl
+jq -c 'select(.type=="user") | .timestamp as $ts | .message.content[]? | select(.type=="tool_result") | {ts:$ts, id:.tool_use_id, content}' "$JSONL" > /tmp/results.jsonl
 ```
 
-For each `tool_use` with `name=="Skill"`: capture `dispatch_ts`, skill name, `$ARGUMENTS`, the matching `tool_result` `return_ts` and content.
+For each dispatch: capture `dispatch_ts`, the role, the prompt, and the result with the same ID (`return_ts` and the reply the coordinator integrated).
 
-**Pi.** Tool calls are nested inside `message` events: `.message.content[].type == "toolCall"`. Sub-agent dispatches use `name == "subagent"`, with `.arguments.tasks[].agent` (e.g. `surveyor`, `deriver`), `.arguments.tasks[].task` (the dispatch brief), and `.arguments.sessionDir` (relative path to the per-skill sub-agent JSONL, e.g. `.pi/sessions/survey`). The sub-agent's full activity log is **in that per-skill JSONL**, not in the main-agent JSONL.
+**Pi.** Tool calls are nested inside `message` events: `.message.content[].type == "toolCall"`. Sub-agent dispatches use `name == "subagent"`, with `.arguments.tasks[].agent` (e.g. `surveyor`, `deriver`), `.arguments.tasks[].task` (the dispatch brief) and `.arguments.tasks[].output` (the artefact path). The sub-agent's full activity log is **in its own JSONL**, not in the main-agent JSONL.
 
 ```bash
 # Main-agent dispatches
 jq -c 'select(.type=="message") | .message.content[]? | select(.type=="toolCall" and .name=="subagent")' "$JSONL" > /tmp/dispatches.jsonl
 
-# For each dispatch, the sub-agent journal is at $WS/<sessionDir>/run-0/session.jsonl
-# (or run-1, run-2 for retries — list them)
+# Each sub-agent's journal: $SUBAGENT_LOGS/<short-id>/run-N/session.jsonl (run-1, run-2 for retries)
 ```
 
-For each Pi `subagent` call: capture `dispatch_ts` (from the enclosing message), agent name, task body, and read the per-skill `session.jsonl` (`$SUBAGENT_LOGS/<basename>/run-*/session.jsonl`) for the full sub-agent trajectory and the structured return.
+For each Pi `subagent` call: capture `dispatch_ts` (from the enclosing message), the agent name and the task body, and read the sub-agent's `session.jsonl` for its full trajectory and its structured return.
 
 **Codex.** Two schemas exist — sniff before extracting:
 
@@ -179,14 +161,14 @@ For each Pi `subagent` call: capture `dispatch_ts` (from the enclosing message),
 jq -r '.type // .item.type' "$JSONL" 2>/dev/null | sort -u | head
 ```
 
-If the top-level keys are `response_item` / `event_msg` / `session_meta` (lowercase tagged), the run is on **current Codex** (`multi_agents_v2`, GPT-5). If they're `SessionMeta` / `FunctionCall` / `EventMsg` (PascalCase under `.item.type`), it's **legacy Codex** — fall through to the legacy `jq` at the bottom.
+If the top-level keys are `response_item` / `event_msg` / `session_meta` (lowercase tagged), the run is on **current Codex** (`multi_agents_v2`). If they're `SessionMeta` / `FunctionCall` / `EventMsg` (PascalCase under `.item.type`), it's an **older Codex build** — use the second `jq` below.
 
 **Current schema.** Main-agent tool calls split across two `payload.type` values:
 
 - `function_call` — used by `exec_command`, `spawn_agent`, `wait_agent`, `close_agent`, and a few others.
 - `custom_tool_call` — used by `apply_patch` (a freeform Lark-grammar tool, distinct from `function_call`).
 
-The current tool inventory in `commons/` / `hosts/codex/` exposes essentially: `exec_command` (shell — Codex's **only file-read primitive**, used via `sed -n`, `cat`, `rg`, `ls`, `find`, `git`), `apply_patch` (the dedicated edit tool), and the `spawn_agent` / `wait_agent` / `close_agent` triple for sub-agent orchestration. **There is no native `read_file` / `edit_file` / `write_file` / `grep` / `glob`** — every file read is a shell call.
+The tool inventory is essentially: `exec_command` (shell — Codex's **only file-read primitive**, used via `sed -n`, `cat`, `rg`, `ls`, `find`, `git`), `apply_patch` (the dedicated edit tool), and the `spawn_agent` / `wait_agent` / `close_agent` triple for sub-agent orchestration. **There is no native `read_file` / `edit_file` / `write_file` / `grep` / `glob`** — every file read is a shell call.
 
 ```bash
 # All main-agent tool calls (both payload kinds)
@@ -202,7 +184,7 @@ jq -c 'select(.type=="response_item" and .payload.type=="function_call"
 #   find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "*${target}*.jsonl"
 ```
 
-**Legacy schema** (older Codex builds). Each line is `{timestamp, item}` with `item.type` in `FunctionCall` / `FunctionCallOutput` / `EventMsg`. Sub-agent dispatches appear as `EventMsg` items with `msg.type` in `CollabAgentSpawnBegin` / `CollabAgentSpawnEnd` etc., carrying the child `thread_id`. The current `jq` above will return nothing on legacy — use:
+**Older schema.** Each line is `{timestamp, item}` with `item.type` in `FunctionCall` / `FunctionCallOutput` / `EventMsg`. Sub-agent dispatches appear as `EventMsg` items with `msg.type` in `CollabAgentSpawnBegin` / `CollabAgentSpawnEnd` etc., carrying the child `thread_id`:
 
 ```bash
 jq -c 'select(.item.type=="FunctionCall") | {ts:.timestamp, name:.item.name, args:.item.arguments}' "$JSONL" > /tmp/calls.jsonl
@@ -241,13 +223,13 @@ def dispatches(main_id):                                    # Task calls made by
             yield inp.get("subagent_type"), inp.get("description"), (d.get("state") or {}).get("status")
 ```
 
-The dispatch return the main agent integrates is the sub-agent session's **final assistant text** (the `## Summary` / `## Result` / `## Flags` block) — extract it as the last `part.data.type=="text"` of the child session. The **model** is `session.model` (JSON) or `message.data.modelID`; record it, because on OpenCode model quality dominates sub-agent reliability (see the empty-turn heuristic below). To map a child session to its artefact, match its `agent` + `title` (e.g. `deriver` / "derive D-001 …") and the files written (`tool=="write"`/`"edit"` parts) against the committed `D-NNN.md`.
+The dispatch return the main agent integrates is the sub-agent session's **final assistant text** (the `## Summary` / `## Result` / `## Flags` block) — extract it as the last `part.data.type=="text"` of the child session. The **model** is `session.model` (JSON) or `message.data.modelID`; record it, because on OpenCode model quality dominates sub-agent reliability (see the empty-turn heuristic below). To map a child session to its artefact, match its `agent` + `title` (e.g. `deriver` / "derive D-S2-1 …") and the files written (`tool=="write"`/`"edit"` parts) against the committed artefacts.
 
 For all hosts, for each sub-agent return:
 
 - Wall-clock = `return_ts - dispatch_ts`.
-- Was the return the canonical `## Summary / ## Result / ## Flags` schema, or did it invent sections?
-- Identify main-agent activity *between* this return and the next skill dispatch: which files were edited, which user messages came in, which AskUserQuestion fired.
+- Was the return the canonical `## Summary` / `## Result` / `## Flags` block, or did it invent sections?
+- Identify the coordinator's activity *between* this return and the next dispatch: which files were edited, which operator messages came in, which questions it asked.
 
 Produce a numbered trajectory table.
 
@@ -258,81 +240,59 @@ cd "$WS" && git log --all --pretty='%h %ai %s'
 git status --porcelain
 ```
 
-For each skill invocation in step 2: was there a commit between `dispatch_ts` and `return_ts` (or shortly after) that touched the expected artefact (e.g. `survey.md` for `/survey`, `derivations/D-NNN.md` for `/derive`, etc.)? Build a table:
+In shared mode, fetch `refs/pr/<n>` first: `main` holds one squash commit per session. For each dispatch from step 2: was there one `[S<n>]` commit after its return, before the next dispatch, that touched the expected artefact together with the cards and the log? Expected artefacts: `literature/P-*.md` and `literature/overview.md` for `/survey`, `derivations/D-S<n>-<k>.*` for `/derive`, `computations/C-S<n>-<k>.*` for `/compute`, the `_R-` file for `/review`, `critiques/CR-S<n>-<k>.md` for `/critique`, `sessions/S<n>/plan.md` for `/research-plan`, `sessions/S<n>/note.tex` for the writer. Build a table:
 
-| Skill | Expected artefact | Commit? | Files left uncommitted |
+| Dispatch | Expected artefact | Commit? | Files left uncommitted |
 |---|---|---|---|
 
-End-of-run `git status` is the ground truth for which files are uncommitted. Any non-empty entry there is a finding.
+Outside an active session, `git status` should be empty; any entry is a finding.
 
-### Step 4 — Methodology adherence (rule-by-rule)
+### Step 4 — The promises, one by one
 
-For each rule above (Rule 8 split into 8a artefact + 8b reply channel — 10 checks total), decide **pass / partial / fail** with specific evidence. Don't be charitable. Cite JSONL line numbers (or `jq` queries) and commit hashes.
+For each promise, decide **pass / partial / fail** with specific evidence (promise 8 is split into 8a and 8b: twelve checks). Don't be charitable. Cite JSONL line numbers (or `jq` queries) and commit hashes. Mechanical checks:
 
-Mechanical checks:
-
-- **Rule 1 (coordinator-only)**: count main-agent tool calls by type. Flag any main-agent Write/Edit to `derivations/`, `computations/`, `critiques/CR-NNN.md` `## Findings`, `survey.md`, `answer.md`. Also scan main-agent text turns for inline derivations or substantive maths/code — heuristic: text turn with multiple equations not framed as quoted sub-agent output. **Tool-count caveat**: raw tool counts are *not comparable across hosts* — Claude Code has dedicated `Read`/`Edit`/`Write`, Pi has structured `read`/`edit`/`write`, OpenCode has native `read`/`edit`/`write`/`bash`/`glob`/`grep` (so its counts *are* comparable to Claude/Pi), Codex has only `exec_command` + `apply_patch` (so every file read is a `sed -n` shell). For Codex, classify each `exec_command` by command stem (`sed`/`cat`/`rg`/`find`/`ls`/`git`/`mkdir`/`python`/`curl`) before counting — a `git commit` and a `sed -n` view are not the same logical operation. For OpenCode, the main agent is itself an OpenCode session (`agent=='build'`); its tool parts are queried the same way as any other session. Report both the raw count and the normalised count of **logical operations** (file-reads, file-writes, sub-agent dispatches, commits, HITL prompts).
-- **Rule 2 (research_log invariants)**: parse the final `research_log.md`. Check:
-  - Canonical section order.
-  - Every `W-` and `E-` entry has a `sources:` line.
-  - Every Open Question has a status line.
-  - Dead Ends section never shrank across commits (`git log -p -- research_log.md | grep -c "Dead End"` over time should be monotonic non-decreasing).
-  - **`notes/flags.md` exists** and contains a disposition for every sub-agent flag returned during the run (cross-check against step 5).
-- **Rule 3 (robust evidence before promotion)**: for each ER, extract cited sources and group by **dispatch context** — two paths inside the same `C-NNN.md` artefact count as one. An ER with all sources in one dispatch context is flagged UNLESS the entry explicitly records why only one approach is available. The audit should not be charitable about this: vague "no other method available" without a stated reason → still a finding.
-- **Rule 4 (fresh-context for /review and /critique)**: spot-check the dispatch argument passed to `/review`. Did it include prior reviews of the same target (the target's `## Reviews` section in legacy workspaces, or any sibling `_R*.md` file in current workspaces)? It should not. For `/critique`, were only one-line summaries of prior critiques passed (not full bodies)?
-- **Rule 5 (review-after-derive/compute)**: for every `D-NNN.md` and `C-NNN.md`, check that **at least one** of the following holds: (i) a `## Reviews` heading exists in the target (legacy convention), or (ii) a sibling `D-NNN_R*.md` / `C-NNN_R*.md` file exists (current convention). Missing both → flag with the artefact ID. If review was batched (multiple `/derive` or `/compute` before `/review`), check `notes/flags.md` for the recorded reasoning.
-- **Rule 6 (integration loop / commits)**: tally from step 3. Each skill invocation should produce one commit that bundles the sub-agent's artefact, the `research_log.md` update, the `notes/flags.md` dispositions, and any `plan.md` edits. Missing commits, or commits that touch only the artefact without the main-agent edits, → flag.
-- **Rule 7 (main-agent edit scope)**: parse all main-agent `Edit`/`Write` tool calls. Allowed paths: `research_log.md`, `notes/*` (incl. `notes/flags.md`), `critiques/CR-NNN.md` (Resolution/status only — not the original findings), `plan.md` (targeted edits: mark done, drop, retitle, revise upcoming step). Edits to `derivations/` (incl. `D-NNN_R*.md` review files), `computations/` (incl. `C-NNN_R*.md`), `survey.md`, `answer.md`, legacy `## Reviews` sections in target files, or wholesale rewrites of `plan.md` → finding.
-- **Rule 8a (artefact schema)**: every artefact file (`survey.md`, `D-NNN.md`, `C-NNN.md`, `D/C-NNN_R*.md`, `CR-NNN.md`, `answer.md`) should match the agent's declared heading structure — usually `## Summary` / `## Result` / `## Flags` (critiques: `## Findings` / `## Resolution`). Extra sections (`## Recommended next steps`, etc.) are findings. Check by `grep -E '^## ' <artefact>`.
-- **Rule 8b (reply-channel schema)**: the sub-agent's **reply message** — the body the main agent actually sees inline as the dispatch return — should *also* be the canonical `## Summary` / `## Result` / `## Flags` block, not a narrative summary. Locations: Claude Code → `tool_result.content` in the main JSONL; Pi → the `subagent` tool's return body (also visible at the head of the per-sub-agent `session.jsonl`); Codex → the `wait_agent` reply / `last_task_message`; OpenCode → the child session's **final `text` part** (and mirrored in the parent's `task` tool `state.output`). Schema drift on 8b is **independent** of 8a — artefacts are usually fine; replies are where drift lives, and it causes flags to be silently dropped because the main agent integrates from the reply, not the file. Empty Flags should be `## Flags\n- (none)\n`, not omitted.
-- **Rule 9 (HITL for /research-plan)**: between a strategy-level `/research-plan` return and the next non-research-plan skill dispatch, look for `AskUserQuestion`, user message, or main-agent text presenting the plan for approval. Missing → flag. Targeted plan edits by the main agent (not via `/research-plan`) do not require approval; do not flag those.
-
-### Step 4b — Card-based checks (card-based workspaces only)
-
-Audit the ten promises of a card-based workspace, **pass / partial / fail** with evidence, in addition to the rules above as substituted. Mechanical checks:
-
-- **Validation**: `uv run .physics-intern/scripts/check.py` on the final state, then once per session with that session's base (`--base <first parent of the session's first commit> --session S<n>`; in shared mode fetch `refs/pr/<n>` first). Every error is a finding; quote it.
-- **Immutability**: `git log --diff-filter=MD --name-only --format='%h %s' -- claims feedback derivations computations literature/P-*` (ignore `.briefs/`). Each hit outside the session that created the file is a finding.
-- **IDs**: every artefact's `supports` names a card that exists (`check.py` warns "reserved ID never written"; acceptable only when the log says the result was a dead end); no ID of session S<n> appears in another session's commits; IDs have no gaps that suggest hand counting.
-- **Sessions**: for each `sessions/S<n>/`: a brief with `goal` and `budget`, confirmed by the operator before the first dispatch (look for the operator's confirmation in the record; `/autoresearch` logs it instead); the number of `Dispatch k/N` lines in `log.md` against the budget and against the dispatches actually made in the record; the stop condition that applied first, compared with the report's `stop_reason`; the report's sections (`Found`, `Refuted`, `Left open`, `Why the session stopped`, `Proposed plan changes`, `Proposed promotions`, `Needs a human decision`).
-- **Blind review**: for every reviewer dispatch, check the prompt for a card path (`claims/…`), a model name, an operator or human author, or an earlier verdict. Check the reviewer's own tool calls for reads of `claims/`, `sessions/`, `feedback/`, `INDEX.md`, `research_log.md` or sibling reviews. Check that each review file has a `## Tests` table before its remarks, and that every remark has a location and one of the three severities.
-- **Promotions**: list `feedback/promotion-*.md` with author and date; for each, reconstruct the evidence at that commit (`git show <commit>:…` or `check.py` on a worktree) and apply promise 3.
-- **Scripts bypassed**: search the coordinator's shell calls for `git push`, `git rebase`, `git merge`, `hf upload`, `huggingface_hub` calls, or edits of `.active-session`, outside the scripts. Each is a finding, with the script failure that preceded it if any.
-- **Lead's files** (shared mode, method 0.3): `git log --format='%h %s' -- problem.md plan.md conventions.md literature/seeds.md` must show only the lead's own commits and merged proposal pull requests, never a session's commit.
-- **The human files** (method 0.4): `git log --format='%h %s' -- project.md draft.tex conventions.md` shows, for sessions, only apply commits, *Done* moves, convention fixes and draft edits that a next step asked for, each listed in that session's debrief under *Changed by this session* (convention fixes and the draft edits with their diff). For each apply commit, compare its diff with the ticked lines of the debrief it names, and with what `received.md` says the session received: a ticked line not applied, an unticked line applied, or a line applied twice is a finding. `uv run .physics-intern/scripts/session.py status` outside a session prints what the next session would receive; compare with the researcher's latest edits.
+- **1 (coordinator only)**: count the coordinator's tool calls by type. Flag any coordinator write or edit to `derivations/` or `computations/` (outside `.briefs/`), the findings of a critique, `literature/P-*.md`, `literature/overview.md` or `sessions/S<n>/note.tex`. Also scan the coordinator's text turns for inline derivations or substantive maths or code — heuristic: a text turn with several equations not framed as quoted sub-agent output. **Tool-count caveat**: raw tool counts are *not comparable across hosts* — Claude Code has dedicated `Read`/`Edit`/`Write`, Pi has structured `read`/`edit`/`write`, OpenCode has native `read`/`edit`/`write`/`bash`/`glob`/`grep` (so its counts *are* comparable to Claude/Pi), Codex has only `exec_command` + `apply_patch` (so every file read is a `sed -n` shell). For Codex, classify each `exec_command` by command stem (`sed`/`cat`/`rg`/`find`/`ls`/`git`/`mkdir`/`python`/`curl`) before counting. For OpenCode, the coordinator is itself an OpenCode session (`agent=='build'`); its tool parts are queried the same way as any other session. Report both the raw count and the normalised count of **logical operations** (file reads, file writes, sub-agent dispatches, commits, questions to the operator).
+- **2 (cards)**: run `uv run .physics-hive/scripts/check.py` on the final state, then once per session with that session's base (`--base <first parent of the session's first commit> --session S<n>`; in shared mode fetch `refs/pr/<n>` first). Every error is a finding; quote it. Immutability: `git log --diff-filter=MD --name-only --format='%h %s' -- claims derivations computations literature/P-*` (ignore `.briefs/`); each hit outside the session that created the file is a finding. IDs: every artefact's `supports` names a card that exists (`check.py` warns "reserved ID never written"; acceptable only when the log says the result was a dead end); no ID of session S<n> appears in another session's commits; IDs have no gaps that suggest hand counting.
+- **3 (evidence before the draft)**: for each `result` environment of `draft.tex`, find the commit that added it (`git log -S'\card{CL-…}' --format='%h %s' -- draft.tex`), the tick or the researcher's edit behind it, and the claim's evidence at that commit (`regen` and `check.py` on a worktree at that commit). Group the evidence by dispatch context.
+- **4 (blind review)**: for every reviewer dispatch, check the prompt for a card path (`claims/…`), a model name, an operator or human author, or an earlier verdict. Check the reviewer's own tool calls for reads of `claims/`, `sessions/`, `INDEX.md` or sibling reviews. Check that each review file has a `## Tests` table before its remarks, and that every remark has a location and one of the three severities. For `/critique`, check that only one-line summaries of earlier critiques were passed.
+- **5 (review after artefacts)**: for every `D-S<n>-<k>` and `C-S<n>-<k>`, a sibling `_R-` file exists; otherwise the log says why the review was deferred.
+- **6 (integration loop)**: from the table of step 3.
+- **7 (edit scope)**: list the coordinator's writes and edits outside the allowed paths. For the human files, `git log --format='%h %s' -- project.md draft.tex conventions.md` shows, for sessions, only apply commits, removals of finished steps, convention fixes and draft edits that a next step asked for, each listed in that session's debrief under *Changed by this session*. For each apply commit, compare its diff with the ticked lines of the debrief it names, and with what `received.md` says the session received: a ticked line not applied, an unticked line applied, or a line applied twice is a finding. `uv run .physics-hive/scripts/session.py status` outside a session prints what the next session would receive; compare it with the researcher's latest edits.
+- **8a (artefact schema)**: every artefact (derivation and computation summaries, reviews, critiques) starts with its role's return block — `## Summary` / `## Result` / `## Flags` — followed by the sections its role declares (reviews: `## Tests` then `## Remarks`; critiques: `## Findings` then `## Resolution`). Extra sections are findings. Check with `grep -E '^## ' <artefact>`.
+- **8b (reply schema)**: the sub-agent's **reply** — what the coordinator actually sees as the dispatch return — should *also* be the canonical block, not a narrative summary. Locations: Claude Code → the `tool_result` content of the `Task` call; Pi → the `subagent` tool's return body (also at the head of the sub-agent's `session.jsonl`); Codex → the `wait_agent` reply / `last_task_message`; OpenCode → the child session's **final `text` part** (mirrored in the parent's `task` tool `state.output`). Drift on 8b is **independent** of 8a, and it causes flags to be silently dropped, because the coordinator integrates from the reply, not the file.
+- **9 (sessions)**: for each `sessions/S<n>/`: the brief has `goal` and `budget` and was confirmed by the operator before the first dispatch (look for the confirmation in the record); the `Dispatch k/N` lines in `log.md` match the budget and the dispatches actually made in the record; the stop condition that applied first is the one the log gives; the writer was dispatched for the note, and the note names the cards of its results (compile it with `uv run .physics-hive/scripts/pdf.py S<n>` to count pages); the debrief passes `check.py` and contains what promise 9 asks.
+- **10 (scripts bypassed)**: search the coordinator's shell calls for `git push`, `git rebase`, `git merge`, `hf upload`, `huggingface_hub` calls, or edits of `.active-session` or `received.md`, outside the scripts. Each is a finding, with the script failure that preceded it if any.
+- **11 (attention)**: `wc -w` on the note's text and the debrief; count the questions (`grep -c '^\*\*Question'`) and the tick lines (`grep -c '^- \['`); classify each as routine or as a decision only the researcher could take.
 
 ### Step 5 — Flag-disposition trace
 
 For every sub-agent return that contained a `## Flags` block:
 
 - Extract each flag (one bullet per flag).
-- **Primary check**: is there a corresponding line in `notes/flags.md` (legacy) or in the session's `sessions/S<n>/log.md` (card-based)? The canonical disposition record is:
-  `[skill][artefact-id] <flag summary> → accepted/dismissed/deferred (one-line reason)`
-  (card-based: `[<skill> <artefact id>] <flag> → …`). From method 0.3.0, a flag that calls for later work goes to the session report (*Proposed plan changes* or *Needs a human decision*), never to a question card. In older card-based workspaces, a flag turned into a question card counts as dispositioned when the log says so and the card exists.
-- Verify the disposition matches subsequent main-agent activity within ~5 minutes / before next skill dispatch:
-  - **accepted** → a `research_log.md` edit, a follow-up skill dispatch, or a `notes/*` file created.
-  - **dismissed** → reason in the `notes/flags.md` line is sufficient; no further action needed.
-  - **deferred** → reason names what's being waited on or when to revisit.
-- Flags with no entry in `notes/flags.md` → finding ("silently dropped"), regardless of any incidental activity afterwards.
-
-If `notes/flags.md` is missing entirely, that is itself a finding — `init-physics-intern` seeds it, and the integration loop mandates its use.
+- **Primary check**: is there a matching line in `sessions/S<n>/log.md`, in the form `[<skill> <artefact id>] <flag> → accepted / dismissed / deferred (one-line reason)`?
+- Verify that the disposition matches what the coordinator did next, before the next dispatch:
+  - **accepted** → a card, a follow-up dispatch, a question or a tick line in the debrief, or an entry in the *Handoff*.
+  - **dismissed** → the reason in the log line is enough.
+  - **deferred** → the reason names what it waits for, and the flag appears in the debrief (if it needs the researcher) or the *Handoff* (if only the next session needs it).
+- A flag with no line in the log is a finding ("silently dropped"), whatever the coordinator did afterwards.
 
 ### Step 6 — Prompt-vs-behaviour delta
 
-Compare what the workspace's agent prompts (`(.claude|.pi|.opencode)/agents/*.md` Markdown, `.codex/agents/*.toml` TOML) and skill/command prompts (`(.claude/skills|skills|.agents/skills)/*/SKILL.md`, or `.opencode/commands/*.md`) *claim* against what actually happened:
+Compare what the run's role prompts (`(.claude|.pi|.opencode)/agents/*.md`, `.codex/agents/*.toml`) and skill prompts (`(.claude/skills|.agents/skills|.opencode/skills)/*/SKILL.md`, `.pi/prompts/*.md`) *claim* against what actually happened:
 
-- For each agent's declared `tools:` list: did the sub-agent run any tool outside that list? (Possible — Claude Code may not strictly enforce.) Note for each agent. **N/A for Codex and OpenCode**, whose roles carry no per-agent tools allowlist (Codex is sandbox-scoped; OpenCode relies on the file-ownership prose), so there is no list to violate — skip this bullet for them.
-- For each agent's declared artefact heading structure (e.g. "writes `## Derivation`"): does the produced artefact actually use those headings? Mismatches are findings.
-- For each agent's "Do NOT" constraints: any violations?
-- For each agent's "report back via `## Flags` rather than expanding scope": any cases where the sub-agent silently expanded scope (Read other artefacts, browsed `references/`)?
-- **Brief priors-leakage** (main-agent side): scan the dispatch briefs (the `$ARGUMENTS` / `task` / `prompt` body the main agent passes to `/derive`, `/compute`, `/review`, `/critique`) for explicit numeric targets ("This should give 16/25"), pre-stated sub-claim values ("Sub-claim: u_1 = 7"), or worked hints. The sub-agent is supposed to discover those independently — pre-stating them defeats the cross-check. This is distinct from Rule 4 (leaking prior **reviews**); this leaks author-supplied **priors**. Flag with the brief file path or JSONL event ID and quote the offending line.
+- For each role's declared `tools:` list: did the sub-agent run any tool outside that list? (Possible — Claude Code may not strictly enforce.) **N/A for Codex and OpenCode**, whose roles carry no per-role tools allowlist (Codex is sandbox-scoped; OpenCode relies on the file-ownership prose) — skip this bullet for them.
+- For each role's declared artefact structure: does the produced artefact use it? Mismatches are findings.
+- For each role's "do not" constraints: any violations?
+- For each role's instruction to report through `## Flags` rather than expand its scope: did a sub-agent silently expand its scope (read other artefacts, browse `references/`)?
+- **Brief priors-leakage** (coordinator side): scan the dispatch briefs (`derivations/.briefs/`, `computations/.briefs/`, or the inline prompt) for explicit numeric targets ("This should give 16/25"), pre-stated sub-claim values ("Sub-claim: u_1 = 7"), or worked hints. The sub-agent is supposed to find those independently; pre-stating them defeats the cross-check. This is distinct from promise 4 (leaking earlier **reviews**): it leaks author-supplied **priors**. Flag it with the brief path or JSONL event and quote the offending line.
 
 ### Step 7 — Substantive quality (lighter pass)
 
-- Does `answer.md` exist? Does it cite ER IDs inline? Does it name assumptions and sanity checks?
-- Cross-check `research_log.md` ER citations against actual artefact files: `grep -E 'D-[0-9]+|C-[0-9]+' research_log.md` → does each cited file exist? Open it; does its `# Task` match the claim?
-- Reconcile `plan.md` final state with `research_log.md`: completed plan steps should map to ERs or Dead Ends; dropped steps should have a stated reason.
-- Note if any unresolved critique findings (`status: pending` in `critiques/`) bear on the answer.
+- Do the results of `draft.tex` answer the question of `project.md`, or say how far they go? Does each result name its card, and does the draft state its assumptions?
+- For each card named in the draft and the notes: does it exist, and do its supporting artefacts establish its statement (open the summary: does its task match the claim)?
+- Reconcile the next steps of `project.md` with what the sessions did: finished steps were removed by the session that finished them; routes set aside have a stated reason in a note or a *Handoff*.
+- Note any unresolved critique findings that bear on the results.
+- If a reference solution exists, compare.
 
 ### Step 8 — Compile the report
 
@@ -342,13 +302,16 @@ Write to `/tmp/audit-<workspace-basename>.md`. Structure:
 # <Workspace> Run Post-Mortem
 
 ## Run shape
-<wall-clock; # skill invocations; # commits; # artefacts; headline judgement (substantive answer correct/partial/wrong)>
+<wall-clock; sessions; dispatches; commits; artefacts and cards; headline judgement (results correct/partial/wrong)>
 
 ## Trajectory
 <numbered list with timestamps, dispatch args, return summary, integration actions>
 
 ## Methodology adherence
-<table: rule → pass/partial/fail with evidence>
+<table: promise → pass/partial/fail with evidence>
+
+## The researcher's attention
+<per session: words of the note and the debrief, questions and tick lines, how many were routine>
 
 ## Prompt-quality issues
 <numbered findings; each with file:line, current text, observed behaviour, proposed fix>
@@ -360,7 +323,7 @@ Write to `/tmp/audit-<workspace-basename>.md`. Structure:
 | # | Skill | Agent | Dispatched at | Returned at | Duration | Artefact |
 |---|---|---|---|---|---|---|
 
-### Main-agent tool inventory
+### Coordinator tool inventory
 
 Report logical operations (comparable across hosts) and raw tool calls (host-dependent) separately.
 
@@ -371,16 +334,16 @@ Report logical operations (comparable across hosts) and raw tool calls (host-dep
 | File writes/edits | |
 | Commits | |
 | Shell (other) | |
-| HITL prompts | |
+| Questions to the operator | |
 
 | Raw tool / command stem | Count | Notes |
 |---|---|---|
 
 ### Backtracks, retries, recoveries
-<list any: deriver re-runs, apply_patch retries, `close_agent` thread-limit recoveries, HITL clarifications, sub-agent timeouts, and (OpenCode) **empty-turn dispatch failures** — sub-agent sessions that read their inputs but produced no artefact and were re-dispatched. Count the churn (e.g. "deriver dispatched 4× before D-001 was written") and attribute it: a weak model is the usual cause, and the main agent's detect-and-re-dispatch is the methodology self-healing, not a defect.>
+<list any: re-dispatches, apply_patch retries, `close_agent` thread-limit recoveries, clarifications asked of the operator, sub-agent timeouts, and (OpenCode) **empty-turn dispatch failures** — sub-agent sessions that read their inputs but produced no artefact and were re-dispatched. Count the churn (e.g. "deriver dispatched 4× before D-S2-1 was written") and attribute it: a weak model is the usual cause, and the coordinator's detect-and-re-dispatch is the method recovering, not a defect.>
 
 ## Substantive quality
-<short prose: does answer.md actually answer problem.md; are artefacts well-formed>
+<short prose: does the draft answer the question of project.md; are artefacts well-formed>
 
 ## Recommended fixes (prioritised)
 1. <highest impact, with specific files to edit>
@@ -392,27 +355,27 @@ Then return a tight summary (under 800 words) to the caller covering:
 - Headline verdict (substantive correctness + methodology score)
 - Top 5 findings with evidence anchors
 - Top 5 recommended fixes
-- Anything systemic (e.g. "the heading-slice spec is fiction" applies across multiple sub-agents)
+- Anything systemic (e.g. one instruction that several roles ignore)
 
 ## Heuristics to bake in
 
-- **"Did not commit per integration loop"** = no commit between `dispatch_ts` and `return_ts` (or within ~30s after) that touches both the expected artefact AND the main-agent integration edits (`research_log.md`, `notes/flags.md`, optionally `plan.md`).
-- **"Flag silently dropped"** = a flag returned in a `## Flags` block has no corresponding line in `notes/flags.md`. Subsequent incidental activity does not redeem it; the disposition record is the canonical signal.
-- **"Single-context ER"** = the union of cited artefact files spans ≤1 dispatch context, AND the entry does not record an explicit "only one approach available because …" reason. Multiple paths inside one `C-NNN.md` or one `D-NNN.md` is still one context.
-- **"Missing review"** = an ER-cited source artefact (`D-NNN.md` or `C-NNN.md`) has neither a `## Reviews` heading (legacy) nor any sibling `_R*.md` file (current).
-- **"Scope expansion"** = a sub-agent Read a file outside its dispatch (`grep` the JSONL for `Read` tool calls inside the fork; cross-check against what was named in the dispatch).
-- **"Artefact schema drift"** (Rule 8a) = the on-disk artefact file (`D-NNN.md`, etc.) contains sections outside the agent's declared schema, or is missing the canonical `## Summary` / `## Result` / `## Flags` block.
-- **"Reply-channel schema drift"** (Rule 8b) = the sub-agent's **reply message** (what the main agent sees inline as the dispatch return) is narrative prose without `## Summary` / `## Result` / `## Flags` headers — even when the on-disk artefact is canonical. Most common on Codex (`wait_agent` reply) and on long-artefact returns in Claude Code. Causes flags to be silently dropped because the main agent integrates from the reply, not the file.
-- **"Brief priors-leakage"** = the main agent's dispatch brief pre-states the expected answer numerically ("This should give 16/25") or names a sub-claim's value. Distinct from Rule 4 — Rule 4 is about leaking prior **reviews**; this is leaking author-supplied **priors**.
-- **"Empty-turn dispatch failure"** (OpenCode) = a sub-agent session (`part` rows show completed `read`s) that ends with a near-zero-output final assistant turn and **zero `write`/`edit` tool calls**, so no artefact lands on disk and the main agent re-dispatches. Detect it as: child session with `tokens_output` ≈ a few hundred, no `tool=='write'`/`'edit'` parts, and a sibling re-dispatch of the same role/target minutes later. It is a **model-reliability** signature (weak models stall after reading instead of proceeding to write), not a permissions or prompt bug — confirm `write` works elsewhere in the same run before blaming config. Report the churn count and the model (`session.model`); the fix is "use a stronger model," not a prompt edit.
-- **"Split run across sessions/projects"** (OpenCode) = the same workspace has multiple `project` rows (one per re-init) and/or multiple main (`build`) sessions (context clears, `/autoresearch` restarts). This is expected, not a finding — reconstruct by `session.directory` and treat the git commits as the canonical spine. Note it so per-session wall-clocks aren't mistaken for the whole run.
+- **"Did not commit per integration loop"** = no `[S<n>]` commit between a return and the next dispatch that touches both the expected artefact and the coordinator's integration edits (the cards, the session log).
+- **"Flag silently dropped"** = a flag returned in a `## Flags` block has no line in the session log. Later incidental activity does not redeem it; the log line is the canonical record.
+- **"Single-context result"** = a result of the draft whose supporting artefacts span ≤1 dispatch context, with no stated reason why only one approach is available. Several paths inside one artefact are still one context.
+- **"Missing review"** = an artefact with no sibling `_R-` file and no reason in the log.
+- **"Scope expansion"** = a sub-agent read a file outside its dispatch (check its read calls against what the dispatch named).
+- **"Artefact schema drift"** (8a) = the artefact on disk contains sections outside its role's schema, or lacks the return block.
+- **"Reply schema drift"** (8b) = the sub-agent's **reply** is narrative prose without `## Summary` / `## Result` / `## Flags` headers — even when the artefact on disk is canonical. Most common on Codex (`wait_agent` reply) and on long returns in Claude Code. It causes flags to be silently dropped, because the coordinator integrates from the reply, not the file.
+- **"Brief priors-leakage"** = the coordinator's dispatch brief pre-states the expected answer numerically ("This should give 16/25") or names a sub-claim's value. Distinct from promise 4, which is about leaking earlier **reviews**.
+- **"Empty-turn dispatch failure"** (OpenCode) = a sub-agent session (`part` rows show completed `read`s) that ends with a near-zero-output final assistant turn and **zero `write`/`edit` tool calls**, so no artefact lands on disk and the coordinator re-dispatches. Detect it as: child session with `tokens_output` ≈ a few hundred, no `tool=='write'`/`'edit'` parts, and a re-dispatch of the same role and target minutes later. It is a **model-reliability** signature (weak models stall after reading instead of writing), not a permissions or prompt bug — confirm `write` works elsewhere in the same run before blaming the configuration. Report the churn count and the model (`session.model`); the fix is "use a stronger model", not a prompt edit.
+- **"Split run across sessions/projects"** (OpenCode) = the same workspace has several `project` rows (one per re-init) and/or several main (`build`) sessions (context clears, restarts). This is expected, not a finding — reconstruct by `session.directory` and treat the git commits as the canonical spine. Note it so that per-session wall-clocks aren't mistaken for the whole run.
 
 ## Constraints
 
 - **Be evidence-anchored.** Cite file paths, line numbers, JSONL events, commit hashes. Findings without evidence are useless.
 - **Don't be charitable.** A "soft" violation is still a violation; flag it as partial rather than passing.
 - **Don't propose generic fixes** ("be more rigorous"). Propose specific edits to specific files with the current text and the replacement.
-- **Stateless and idempotent** — runnable any time, any workspace + session JSONL pair. Do not edit the workspace, the JSONL, or any global files. Only write to `/tmp/audit-*.md`.
+- **Stateless and idempotent** — runnable any time, on any workspace and session record. Do not edit the workspace, the session record, or any global files. Only write to `/tmp/audit-*.md`.
 - **Honest about gaps.** If the session record is missing or truncated — a missing/truncated JSONL, or (OpenCode) an `opencode.db` with no rows for the workspace directory — say so and report only what the workspace + git can tell you.
 
 ## Tools required

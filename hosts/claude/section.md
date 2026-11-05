@@ -12,5 +12,5 @@
   )
   ```
 
-  For dispatches without a brief file (`/review`, `/critique`, `/survey`, `/research-plan`, `/finalize`, and the writer of the note), put the small context inline in `prompt`.
+  For dispatches without a brief file (`/review`, `/critique`, `/survey`, `/research-plan`, and the writer of the note), put the small context inline in `prompt`.
 - Your model ID is in your system prompt. Pass it to `session.py start --model`.

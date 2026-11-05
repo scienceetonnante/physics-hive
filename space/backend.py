@@ -1,4 +1,4 @@
-"""Workspace access for the PhysicsIntern Space, without any user interface.
+"""Workspace access for the PhysicsHive Space, without any user interface.
 
 The Space shows the human view of a workspace (design, section 14): the
 debriefs, project.md and conventions.md, the draft, the session notes and the
@@ -10,20 +10,20 @@ the next session.
 Two ways to reach a workspace:
 
 - In the deployed Space, the workspace is a private dataset repository on the
-  Hub, named by the Space variable `PHYSICS_INTERN_WORKSPACE` (org/name). The
+  Hub, named by the Space variable `PHYSICS_HIVE_WORKSPACE` (org/name). The
   Space keeps a git clone of it (with the Space secret `HF_TOKEN`), fetched on
   demand and after each write, and shows each commit of main from its own git
   worktree, so that it can read the history as `session.py` does. Every write
   is a commit made through the Hub API with that token, on the commit the page
   was built from, and names the signed-in user in its message.
-- For development, tests and local mode, `PHYSICS_INTERN_LOCAL=/path/to/workspace`
+- For development, tests and local mode, `PHYSICS_HIVE_LOCAL=/path/to/workspace`
   reads a folder directly and writes files into it without committing; the next
   `session.py start` commits them as the researcher's. The signed-in user is
-  then `PHYSICS_INTERN_LOCAL_USER`.
+  then `PHYSICS_HIVE_LOCAL_USER`.
 
 What the files mean (status, evidence, the draft's results, debriefs and which
 session read them, the checks, references.bib, the PDF) comes from the
-workspace's own copy of the method scripts, `.physics-intern/scripts/`,
+workspace's own copy of the method scripts, `.physics-hive/scripts/`,
 imported again at every refresh.
 """
 
@@ -105,10 +105,10 @@ def is_session_pr(pr: dict) -> bool:
 
 def method_scripts(root: Path) -> Path:
     """The scripts of the workspace's method copy, or the fallback ones for a toy workspace."""
-    for folder in (root / ".physics-intern" / "scripts", REPO_SCRIPTS):
+    for folder in (root / ".physics-hive" / "scripts", REPO_SCRIPTS):
         if (folder / "cards.py").is_file() and (folder / "human.py").is_file():
             return folder
-    raise SpaceError("The workspace has no method copy (.physics-intern/scripts/) that this Space can read. "
+    raise SpaceError("The workspace has no method copy (.physics-hive/scripts/) that this Space can read. "
                      "It may use an earlier format of the method.")
 
 
@@ -155,7 +155,7 @@ class LocalStore:
 
     def snapshot(self) -> tuple[Path, str | None]:
         if not (self.root / "project.toml").is_file():
-            raise SpaceError(f"{self.root} is not a PhysicsIntern workspace (it has no project.toml).")
+            raise SpaceError(f"{self.root} is not a PhysicsHive workspace (it has no project.toml).")
         return self.root, None
 
     def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
@@ -177,7 +177,7 @@ class HubStore:
         self.api = api or HfApi(token=token)
         self.label = repo_id
         self.remote = remote or f"{HUB}/datasets/{repo_id}"
-        self.cache = Path(cache or Path(tempfile.gettempdir()) / "physics-intern-space") / repo_id.replace("/", "--")
+        self.cache = Path(cache or Path(tempfile.gettempdir()) / "physics-hive-space") / repo_id.replace("/", "--")
         self._env: dict | None = None
 
     def git_env(self) -> dict:
@@ -262,13 +262,13 @@ class Backend:
     @classmethod
     def from_env(cls, env: dict | None = None) -> Backend:
         env = os.environ if env is None else env
-        if env.get("PHYSICS_INTERN_LOCAL"):
-            return cls(LocalStore(env["PHYSICS_INTERN_LOCAL"]), local_user=env.get("PHYSICS_INTERN_LOCAL_USER") or None)
-        repo = env.get("PHYSICS_INTERN_WORKSPACE", "").strip()
+        if env.get("PHYSICS_HIVE_LOCAL"):
+            return cls(LocalStore(env["PHYSICS_HIVE_LOCAL"]), local_user=env.get("PHYSICS_HIVE_LOCAL_USER") or None)
+        repo = env.get("PHYSICS_HIVE_WORKSPACE", "").strip()
         token = env.get("HF_TOKEN", "").strip()
         if not repo:
             return cls(error="This Space does not know which workspace to show: the Space variable "
-                             "PHYSICS_INTERN_WORKSPACE (org/name) is not set.")
+                             "PHYSICS_HIVE_WORKSPACE (org/name) is not set.")
         if not token:
             return cls(error=f"This Space cannot read the workspace {repo}: the Space secret HF_TOKEN is not set. "
                              f"Add it in the Space settings (a token that can read and write {repo}).")
@@ -353,7 +353,7 @@ class Backend:
         if self.snap is None:
             return f"**{self.error}**" if self.error else "Loading…"
         ws = self.snap.ws
-        version = (ws.project.get("method") or {}).get("physics_intern_version", "?")
+        version = (ws.project.get("method") or {}).get("physics_hive_version", "?")
         where = f"local folder `{self.store.label}`" if self.local else f"workspace **{self.store.label}**"
         commit = f", main at `{self.snap.revision[:8]}`" if self.snap.revision else ""
         loaded = time.strftime("%H:%M UTC", time.gmtime(self.snap.loaded_at))
@@ -366,7 +366,7 @@ class Backend:
 
     def project_name(self) -> str:
         """The project's name: the workspace repository org/physics-hive-x, or the local folder, gives x."""
-        label = self.store.label if self.store is not None else "PhysicsIntern"
+        label = self.store.label if self.store is not None else "PhysicsHive"
         return label.rstrip("/").rsplit("/", 1)[-1].removeprefix("physics-hive-")
 
     def hub_url(self, kind: str, *parts: str) -> str | None:

@@ -9,7 +9,7 @@ cards, so that the workspace stays clean, and writes draft.pdf or
 sessions/S<n>/note.pdf (both git-ignored). Needs latexmk (TeX Live or MacTeX).
 The Space calls build_pdf() for its PDF buttons.
 
-Usage: uv run .physics-intern/scripts/pdf.py [draft.tex | sessions/S3/note.tex | S3]
+Usage: uv run .physics-hive/scripts/pdf.py [draft.tex | sessions/S3/note.tex | S3]
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def build_pdf(tex: str, bib: str, name: str = "document", timeout: int = 120) ->
     """Compile a LaTeX text with a bibliography. Returns (the PDF, or None on failure; the end of the log)."""
     if not latexmk():
         return None, "latexmk is not installed (it comes with TeX Live or MacTeX)."
-    with tempfile.TemporaryDirectory(prefix="physics-intern-pdf-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="physics-hive-pdf-") as tmp:
         folder = Path(tmp)
         (folder / f"{name}.tex").write_text(tex, encoding="utf-8")
         (folder / "references.bib").write_text(bib, encoding="utf-8")

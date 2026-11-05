@@ -16,13 +16,13 @@ The dispatch gives you the session ID and the focus of this survey: either the w
 1. Read `project.md`, `conventions.md`, `literature/seeds.md`, `literature/overview.md` (if it exists) and `literature/ratings.yaml` (if it exists). The seed papers are the researcher's starting point. `ratings.yaml` holds the researcher's own rating of papers (high, medium, low, not relevant): expand first from the papers they rated high, lean toward papers like them, and do not expand from, or add papers like, those they rated not relevant.
 2. Expand from the seeds and the high-rated papers along citations, references first, then citing papers, one level unless the dispatch says otherwise. Following an expert's citations is more reliable than keyword search; use keyword search to fill gaps. Use the literature tools: the `literature` MCP server if your harness shows it, otherwise the same commands through the shell:
    ```
-   uv run .physics-intern/scripts/literature.py search-inspire "<query>"
-   uv run .physics-intern/scripts/literature.py search-arxiv "<query>"
-   uv run .physics-intern/scripts/literature.py references <arXiv id>
-   uv run .physics-intern/scripts/literature.py citations <arXiv id>
-   uv run .physics-intern/scripts/literature.py download <arXiv id>
-   uv run .physics-intern/scripts/literature.py card <arXiv id> --session S<n> > literature/P-<id>.md
-   uv run .physics-intern/scripts/literature.py search-cards "<query>"
+   uv run .physics-hive/scripts/literature.py search-inspire "<query>"
+   uv run .physics-hive/scripts/literature.py search-arxiv "<query>"
+   uv run .physics-hive/scripts/literature.py references <arXiv id>
+   uv run .physics-hive/scripts/literature.py citations <arXiv id>
+   uv run .physics-hive/scripts/literature.py download <arXiv id>
+   uv run .physics-hive/scripts/literature.py card <arXiv id> --session S<n> > literature/P-<id>.md
+   uv run .physics-hive/scripts/literature.py search-cards "<query>"
    ```
    `download` fetches the LaTeX source (preferred: equations come out exact) or the PDF into `literature/sources/<id>/`. `card` prints a paper-card skeleton with the bibliographic header filled in. `search-cards` searches the existing paper cards, the overview and the claim cards; check it before writing a card. A paper without an arXiv identifier is written `insp:<INSPIRE record number>`. Every command has `--help`.
 3. Read the papers that look useful, from their source when you can. For each, write a paper card (below). Skip papers that do not bear on the question; say how many you skipped.

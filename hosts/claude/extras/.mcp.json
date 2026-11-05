@@ -3,7 +3,7 @@
     "literature": {
       "type": "stdio",
       "command": "uv",
-      "args": ["run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"]
+      "args": ["run", "--quiet", ".physics-hive/scripts/literature.py", "mcp"]
     }
   }
 }

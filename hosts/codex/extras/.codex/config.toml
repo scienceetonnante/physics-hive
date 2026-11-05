@@ -1,4 +1,4 @@
-# PhysicsIntern workspace Codex config.
+# PhysicsHive workspace Codex config.
 #
 # Codex only loads this file after the user marks the project as trusted.
 # The first time you launch `codex` in this directory, accept the trust
@@ -20,7 +20,7 @@ network_access = true
 # and write under literature/sources/.
 [mcp_servers.literature]
 command = "uv"
-args = ["run", "--quiet", ".physics-intern/scripts/literature.py", "mcp"]
+args = ["run", "--quiet", ".physics-hive/scripts/literature.py", "mcp"]
 env_vars = ["SEMANTIC_SCHOLAR_API_KEY"]
 startup_timeout_sec = 120
 tool_timeout_sec = 180

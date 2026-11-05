@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# plugin-init.sh — run the bundled PhysicsIntern initializer through uv.
+# plugin-init.sh — run the bundled PhysicsHive initializer through uv.
 #
-# The plugin's init-physics-intern command asks the user its questions in the
+# The plugin's init-physics-hive command asks the user its questions in the
 # chat (what to do, which harnesses, where, the organisation and project name
 # or the repository to join) and calls this script once with the answers as
 # flags. The script runs scripts/init.py from the plugin's own copy of the
@@ -17,7 +17,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! command -v uv >/dev/null 2>&1; then
-  echo "ERROR: PhysicsIntern needs uv to run its scripts. Install it with:" >&2
+  echo "ERROR: PhysicsHive needs uv to run its scripts. Install it with:" >&2
   echo "  curl -LsSf https://astral.sh/uv/install.sh | sh     (or: brew install uv)" >&2
   exit 1
 fi

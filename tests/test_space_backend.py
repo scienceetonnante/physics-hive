@@ -123,7 +123,7 @@ def test_the_record_pages(toy):
 
 def test_the_method_comes_from_the_workspace_copy(toy):
     project(toy)
-    copy = toy.root / ".physics-intern" / "scripts"
+    copy = toy.root / ".physics-hive" / "scripts"
     copy.mkdir(parents=True)
     for name in sb.METHOD_MODULES:
         (copy / f"{name}.py").write_text((REPO / "scripts" / f"{name}.py").read_text())
@@ -136,10 +136,10 @@ def test_the_method_comes_from_the_workspace_copy(toy):
 
 
 def test_an_unreachable_workspace_is_a_message():
-    b = sb.Backend.from_env({"PHYSICS_INTERN_WORKSPACE": "org/x"})
+    b = sb.Backend.from_env({"PHYSICS_HIVE_WORKSPACE": "org/x"})
     with pytest.raises(sb.SpaceError, match="HF_TOKEN"):
         b.current()
-    assert "PHYSICS_INTERN_WORKSPACE" in sb.Backend.from_env({}).error
+    assert "PHYSICS_HIVE_WORKSPACE" in sb.Backend.from_env({}).error
 
 
 # ----- writing -----
@@ -254,8 +254,8 @@ def client(toy, monkeypatch):
     from fastapi.testclient import TestClient
 
     project(toy)
-    monkeypatch.setenv("PHYSICS_INTERN_LOCAL", str(toy.root))
-    monkeypatch.setenv("PHYSICS_INTERN_LOCAL_USER", "alice")
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL", str(toy.root))
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL_USER", "alice")
     sys.modules.pop("app", None)
     import app
 

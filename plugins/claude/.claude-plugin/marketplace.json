@@ -1,11 +1,11 @@
 {
-  "name": "physics-intern-claude",
+  "name": "physics-hive-claude",
   "owner": { "name": "David Louapre" },
   "plugins": [
     {
-      "name": "physics-intern",
+      "name": "physics-hive",
       "source": "./plugin",
-      "description": "Set up a PhysicsIntern research workspace in the current folder: local, or shared on the Hugging Face Hub (Claude Code)."
+      "description": "Set up a PhysicsHive research workspace in the current folder: local, or shared on the Hugging Face Hub (Claude Code)."
     }
   ]
 }

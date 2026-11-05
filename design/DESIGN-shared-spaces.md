@@ -1,7 +1,7 @@
-# Physics Intern — Shared Spaces on the Hugging Face Hub
+# Physics Hive — Shared Spaces on the Hugging Face Hub
 
 *Design proposal, revised in November 2026 after the first shared run (`workspaces/helmholtz-2`).*
-*Audience: people who know Physics Intern, and the coding agent that will implement the revision.*
+*Audience: people who know Physics Hive, and the coding agent that will implement the revision.*
 *A clickable mock-up of the Space described here is at https://claude.ai/artifact/JV27FRGWrAUhbDmFaA1pBX (private; share it from its page). Its session S1 is the real output of helmholtz-2; sessions S2 and S3 are invented to show the flow.*
 
 ## 1. Summary
@@ -30,7 +30,7 @@ A shared space is a private set of repositories on the Hugging Face Hub, plus a 
 | `/write-up` | The draft, `draft.tex`, compiled to PDF at any time |
 | The Status and Results pages | Five pages, each showing files: Latest, Project, Draft, Sessions, Literature |
 
-Unchanged: the card format for claims and dead ends, session-scoped IDs, computed status and propagation of doubt, blind and test-based review, sessions as draft pull requests, traces, the method copy in `.physics-intern/`, harness files out of git.
+Unchanged: the card format for claims and dead ends, session-scoped IDs, computed status and propagation of doubt, blind and test-based review, sessions as draft pull requests, traces, the method copy in `.physics-hive/`, harness files out of git.
 
 ## 3. Two layers
 
@@ -69,9 +69,9 @@ Adding people later costs little, because IDs embed the session number and every
 
 ## 5. Starting a project
 
-`init-physics-intern` asks a few questions, each with a default and a command-line flag: start a local workspace, create a shared space, or join one; which harnesses to render (Claude Code, Codex, OpenCode, Pi); where; and, to create, the Hugging Face organisation and the project name. The plugin commands ask the same questions in the chat and call the script with flags. This part of the October design is implemented and does not change.
+`init-physics-hive` asks a few questions, each with a default and a command-line flag: start a local workspace, create a shared space, or join one; which harnesses to render (Claude Code, Codex, OpenCode, Pi); where; and, to create, the Hugging Face organisation and the project name. The plugin commands ask the same questions in the chat and call the script with flags. This part of the October design is implemented and does not change.
 
-Two choices from the October draft stay. **Harness files are personal**: they are rendered locally and git-ignored, so researchers on different harnesses share only research files. **The method is copied into the workspace** (`.physics-intern/`, with its version in `project.toml`), so every session and the Space run the same prompts and scripts, and the prompts that produced a result sit in the git history next to it.
+Two choices from the October draft stay. **Harness files are personal**: they are rendered locally and git-ignored, so researchers on different harnesses share only research files. **The method is copied into the workspace** (`.physics-hive/`, with its version in `project.toml`), so every session and the Space run the same prompts and scripts, and the prompts that produced a result sit in the git history next to it.
 
 What changes is the skeleton. Init writes `project.md` (its sections with placeholders), `conventions.md`, `draft.tex` (title, empty abstract, an introduction to write) and `literature/seeds.md`. The researcher fills in the title and the goal of `project.md` before the first session, in the Space, in an editor, or by dictating them to the coordinator. Seeds may stay empty.
 
@@ -195,8 +195,6 @@ The researcher writes it. Agents change it in two cases only: to apply a line th
 
 **Established means: in the draft as a result.** This replaces promotion records. A claim is *established* when a `result` environment in `draft.tex` names its card; `regen` reads the draft to compute it. `check` refuses a `result` environment whose card has neither a supporting artefact with a confirming review nor a human verification, the same bar as the old promotion check. A session asked to copy a result that fails it copies nothing, and says why in its debrief, offering to copy it as a conjecture. If a claim in the draft is later refuted or revised, `regen` flags it, the Space marks it on the Draft page, and the next debrief proposes the change to the draft as a tick line.
 
-Under `/autoresearch` in local mode, which runs benchmarks without a person, the coordinator acts for the researcher: it applies its own suggestions and logs each one as a gate it skipped.
-
 ## 11. Results as cards (the record)
 
 The October card format stays, with one kind fewer. A card is one file in `claims/` with a small YAML header and a free prose body.
@@ -258,9 +256,7 @@ Unchanged and implemented. All repositories are private and belong to a Hugging 
 | `/research-plan` | No longer opens pull requests. It drafts an approach and next steps, which the session puts in its debrief as tick lines. |
 | `/survey` | Updates `literature/overview.md`; gives each paper card `why`, `topic` and `rating`; reads `literature/ratings.yaml`. |
 | `/derive`, `/compute`, `/review`, `/critique` | Unchanged. |
-| `/finalize` | Writes `answer.md` from the results in the draft, at the end of the project. |
 | `/write-up` | Removed: the draft is compiled to PDF at any time. |
-| `/autoresearch` | Local benchmark runs only; acts for the researcher (section 10). |
 | `session.py start` | Prints what the researcher sent since the previous session started (section 6). The old *What is waiting* sections (open questions, reactions, plan proposals, promotions) go. |
 | `session.py end` | Adds *Changed by this session* to the debrief from the git diff of the human files. |
 | `regen` | Computes `established` from the draft; generates `references.bib`. |

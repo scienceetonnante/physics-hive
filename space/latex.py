@@ -1,4 +1,4 @@
-r"""Convert the LaTeX subset of PhysicsIntern notes and drafts into an HTML fragment.
+r"""Convert the LaTeX subset of PhysicsHive notes and drafts into an HTML fragment.
 
 Agents write short research notes (sessions/S<n>/note.tex) and a shared draft paper
 (draft.tex) in plain LaTeX: amsmath, sections, lists, tables, footnotes, \cite, \ref,

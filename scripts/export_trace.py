@@ -15,7 +15,7 @@ The window starts a few minutes before the session started, so that the
 command that opened the session is included; it may therefore also include the
 end of an earlier conversation in the same harness session.
 
-Usage: uv run .physics-intern/scripts/export_trace.py --harness H --since ISO --out DIR [--workspace PATH]
+Usage: uv run .physics-hive/scripts/export_trace.py --harness H --since ISO --out DIR [--workspace PATH]
 """
 
 from __future__ import annotations

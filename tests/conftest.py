@@ -60,7 +60,7 @@ class ToyWorkspace:
         self.root = root
         hub = '[hub]\nworkspace = "org/toy"\ntraces = "org/toy-traces"\n' if shared else "[hub]\n"
         people = f"[people]\nleads = {list(leads)!r}\n".replace("'", '"')
-        (root / "project.toml").write_text(f'[method]\nphysics_intern_version = "test"\n\n{hub}\n{people}')
+        (root / "project.toml").write_text(f'[method]\nphysics_hive_version = "test"\n\n{hub}\n{people}')
         for folder in ("claims", "derivations", "computations", "critiques", "literature", "sessions"):
             (root / folder).mkdir(parents=True, exist_ok=True)
         (root / "project.md").write_text("# Toy question?\n\n## Goal\n\nAnswer it.\n\n## Next steps\n\n1. Derive X.\n")
