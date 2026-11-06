@@ -77,7 +77,7 @@ This clones the workspace and renders the harness files you selected from the wo
 
 If you rotate it, update the secret `HF_TOKEN` in each Space's settings; the variable only applies to Spaces created after it is set.
 
-To push your own edits from a terminal, use `uv run .physics-hive/scripts/hubgit.py push origin main` (git with the Hub token, nothing stored).
+If you edit `project.md`, `conventions.md` or `draft.tex` in your checkout rather than in the Space, the next session start commits your edits as yours and pushes them to `main`; to publish them now, run `uv run .physics-hive/scripts/session.py save` (or ask the coordinator to). For other git commands against the Hub, `uv run .physics-hive/scripts/hubgit.py <git arguments>` runs git with your Hub token, without storing it.
 
 
 ## Working locally
@@ -109,12 +109,41 @@ To read the notes and the draft rendered, and answer debriefs in a browser, run 
 **What "established" means.** A claim is *established* when a `result` environment of `draft.tex` names its card (`\card{CL-S2-1}`). Only the researchers decide what enters the draft, by ticking a line such as "Copy Result 1 of note S2 into the draft, as a result" or by editing it. `check` refuses a result whose claim has no confirming review of a supporting derivation or computation (or a verification by a researcher, reported in a debrief); such a claim goes in a `conjecture` environment instead.
 
 
-## Harness notes
+## Setting up your harness
 
-- **Claude Code** reads `CLAUDE.md`, a one-line import of `AGENTS.md`. Skills are slash commands.
-- **Codex CLI** reads `AGENTS.md`; skills are `$name`. Accept the project-trust prompt on first launch, otherwise `.codex/config.toml` (which allows the network access the session scripts need) is ignored.
-- **OpenCode** reads `AGENTS.md`; skills are slash commands. Dispatching custom sub-agents has depended on the OpenCode version ([opencode #29616](https://github.com/anomalyco/opencode/issues/29616)); `AGENTS.md` explains the fallback.
-- **Pi** reads `AGENTS.md`; skills are slash commands from `.pi/prompts/`. It installs `pi-subagents` and `pi-web-access` on first launch.
+A session runs on its own for hours, so a few minutes of setup before the first one saves interruptions later.
+
+**With every harness:**
+
+- Launch the harness from the workspace folder, after the installer has finished. A harness reads the workspace's settings when it starts, so restart it after you add a harness or upgrade the workspace.
+- Stay logged in to Hugging Face (`hf auth login`; the installer logs you in if needed). If the environment variable `HF_TOKEN` is set, the scripts use it instead of your login.
+- When a script fails, the coordinator stops and shows you the error instead of working around it. Fix the cause, or run the command yourself in a terminal, and then let the coordinator continue. Do not ask it to redo the script's work with git or the Hub by hand: the scripts keep the record consistent.
+- On macOS, the scripts check the Hub's certificates against the system file `/etc/ssl/cert.pem`, because a sandbox blocks the usual check through the keychain. If your network inspects encrypted traffic with a certificate installed in your keychain, set `SSL_CERT_FILE` to a file that includes it.
+
+**Claude Code** reads `CLAUDE.md`, a one-line import of `AGENTS.md`. Skills are slash commands.
+
+- Accept the trust prompt for the folder on first launch. It turns on the workspace's settings, including the literature tools.
+- Claude Code's sandbox can stay on. The workspace's `.claude/settings.json` lets commands reach the Hub and PyPI, which the scripts need. One setting is yours to add, in `~/.claude/settings.json`: the scripts run through uv, which writes its cache outside the workspace, so the sandbox must allow that folder. Merge this into your existing settings:
+
+  ```json
+  { "sandbox": { "filesystem": { "allowWrite": ["~/.cache/uv"] } } }
+  ```
+
+  Without it, no workspace script can run in the sandbox, and uv stops with "Failed to initialize cache". If you set `UV_CACHE_DIR`, allow that folder instead.
+- Do not let the agent run the workspace scripts outside the sandbox, and do not exclude them from it (`sandbox.excludedCommands`). The scripts live in the workspace, which the agent can edit, so they would let anything the agent writes there run unsandboxed.
+
+**Codex CLI** reads `AGENTS.md`. Skills are `$name` (`$session-run`).
+
+- Accept the project-trust prompt on first launch. Otherwise Codex ignores `.codex/config.toml`, which gives commands the network access the scripts need and starts the literature tools.
+
+**OpenCode** reads `AGENTS.md`. Skills are slash commands.
+
+- The workspace's `opencode.json` lets the agent run commands, edit files and search the web without asking, so that a session can work on its own. OpenCode does not confine those commands to the workspace.
+- Dispatching custom sub-agents has depended on the OpenCode version ([opencode #29616](https://github.com/anomalyco/opencode/issues/29616)); `AGENTS.md` explains the fallback.
+
+**Pi** reads `AGENTS.md`. Skills are slash commands from `.pi/prompts/`.
+
+- It installs `pi-subagents` and `pi-web-access` on first launch.
 
 A workspace rendered for several harnesses opens in any of them without running anything again. `AGENTS.md` holds the method and one short section per harness.
 
@@ -153,7 +182,7 @@ INDEX.md              generated: one line per card, artefact, paper and session 
 
 ## Scripts
 
-The deterministic work is done by scripts in `.physics-hive/scripts/`, which the skills call with `uv run`: `regen.py` (rebuild `INDEX.md` and `references.bib`), `check.py` (validate cards, references, immutability, the draft's results, notes and debriefs), `session.py` (start, status, next ID, record an answer or a tick given in the terminal, brief, end, abort), `pdf.py` (compile the draft or a note), `export_trace.py`, `literature.py` (arXiv and INSPIRE search, citations, sources; also an MCP server), and `hubgit.py`.
+The deterministic work is done by scripts in `.physics-hive/scripts/`, which the skills call with `uv run`: `regen.py` (rebuild `INDEX.md` and `references.bib`), `check.py` (validate cards, references, immutability, the draft's results, notes and debriefs), `session.py` (start, save, status, next ID, record an answer or a tick given in the terminal, brief, end, abort), `pdf.py` (compile the draft or a note), `export_trace.py`, `literature.py` (arXiv and INSPIRE search, citations, sources; also an MCP server), and `hubgit.py`.
 
 
 ## Where the project is going

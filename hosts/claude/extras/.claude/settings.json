@@ -14,5 +14,17 @@
       "Bash(ls:*)",
       "mcp__literature"
     ]
+  },
+  "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "huggingface.co",
+        "*.huggingface.co",
+        "hf.co",
+        "*.hf.co",
+        "pypi.org",
+        "files.pythonhosted.org"
+      ]
+    }
   }
 }

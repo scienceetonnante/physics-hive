@@ -17,6 +17,9 @@ commit.
 
 Git talks to the Hub with the token of `hf auth login`, passed in an HTTP
 header for each command; it is never written to the repository's config.
+The session commands never write that config at all, because a harness's
+sandbox may refuse it (Claude Code's does): branches are created with
+`--no-track`, and every push names its target.
 The Space gets its own copy of a token, the secret HF_TOKEN: the one in the
 environment variable PHYSICS_HIVE_SPACE_TOKEN if it is set, else the
 creator's login token.
@@ -32,11 +35,11 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from huggingface_hub import HfApi, get_token
-from huggingface_hub import constants as hf_constants
-from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars
-
+# common before huggingface_hub: importing common sets the environment that huggingface_hub reads on import.
 from common import INSTALL_COMMAND, ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
+from huggingface_hub import HfApi, get_token  # isort: skip
+from huggingface_hub import constants as hf_constants  # isort: skip
+from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars  # isort: skip
 
 DATASET = "dataset"
 SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
@@ -320,21 +323,46 @@ def fetch(root: Path, env: dict | None = None) -> None:
     git(root, "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main", env=env or git_env())
 
 
+def push_researcher_edits(root: Path, is_researcher_path, env: dict | None = None) -> list[str]:
+    """Push to main the commits of local main that are not on the Hub, if they only change the researcher's files.
+
+    They are the researcher's edits, committed by `session.py`. If main moved on the Hub meanwhile (for instance
+    an edit in the Space), they are rebased on it first. Returns the files pushed.
+    """
+    env = env if env is not None else git_env()
+    fetch(root, env)
+    if git_out(root, "rev-parse", "--abbrev-ref", "HEAD") != "main" or is_ancestor(root, "HEAD", "origin/main"):
+        return []
+    changed = [p for p in git_out(root, "diff", "--name-only", "origin/main...HEAD").splitlines() if p]
+    others = [p for p in changed if not is_researcher_path(p)]
+    if others:
+        listing = ", ".join(others[:8]) + (", …" if len(others) > 8 else "")
+        raise ScriptError(f"main has commits that are not on the Hub and change files other than the researcher's "
+                          f"({listing}); move them to a pull request, or drop them with "
+                          "`git reset --hard origin/main`")
+    if not is_ancestor(root, "origin/main"):
+        proc = git(root, "rebase", "-q", "origin/main", check=False)
+        if proc.returncode != 0:
+            git(root, "rebase", "--abort", check=False)
+            raise ScriptError(f"the researcher's edits of {', '.join(changed)} conflict with changes made on the Hub "
+                              f"since (for instance in the Space):\n{(proc.stderr or proc.stdout).strip()}\n"
+                              "Nothing was pushed and the checkout is unchanged. Tell the operator; resolving it "
+                              "needs their decision.")
+    git(root, "push", "-q", "origin", "HEAD:main", env=env)
+    fetch(root, env)
+    say(f"Pushed your edits of {', '.join(changed)} to main on the Hub.")
+    return changed
+
+
 def open_session(ws, root: Path, harness: str, model: str) -> dict:
     repos = hub_repos(ws)
     user = username()
     env = git_env()
     fetch(root, env)
-    branch = git_out(root, "rev-parse", "--abbrev-ref", "HEAD")
-    if branch == "main":
-        ahead = git_out(root, "rev-list", "--count", "origin/main..HEAD")
-        if ahead != "0":
-            raise ScriptError(f"main has {ahead} commit(s) that are not on the Hub; push them first "
-                              "(git push origin main) or move them to a pull request")
     upstream = git(root, "show", "origin/main:.physics-hive/VERSION", check=False).stdout.strip()
     rendered = rendered_version(root)
     if upstream and rendered and upstream != rendered:
-        git(root, "checkout", "-q", "-B", "main", "origin/main")
+        git(root, "checkout", "-q", "--no-track", "-B", "main", "origin/main")
         rerender(root)
         raise ScriptError(
             f"the method on main is now version {upstream}, but this harness was loaded with prompts from "
@@ -350,7 +378,7 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
     session = f"S{number}"
     hf.rename_discussion(repos["workspace"], number, f"[{session}] (brief pending) by {user}", repo_type=DATASET)
     branch = f"session/{session}"
-    git(root, "checkout", "-q", "-B", branch, "origin/main")
+    git(root, "checkout", "-q", "--no-track", "-B", branch, "origin/main")
     base = git_out(root, "rev-parse", "origin/main")
     sync_sources_down(root, repos)
     update_space_card(repos, project_question(root))
@@ -496,7 +524,7 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
     meta["merge_commit"] = git_out(root, "rev-parse", "origin/main")
     upload_trace()
 
-    git(root, "checkout", "-q", "-B", "main", "origin/main")
+    git(root, "checkout", "-q", "--no-track", "-B", "main", "origin/main")
     git(root, "branch", "-q", "--set-upstream-to=origin/main", check=False)
     clear_active(root)
     regenerate(root)
@@ -517,7 +545,7 @@ def abort_session(root: Path, active: dict) -> None:
         warn("note: uncommitted changes stay in the working tree")
     else:
         fetch(root)
-        git(root, "checkout", "-q", "-B", "main", "origin/main")
+        git(root, "checkout", "-q", "--no-track", "-B", "main", "origin/main")
     say(f"Closed pull request #{active['pr']}. The branch {active['branch']} stays in this checkout.")
 
 
@@ -566,7 +594,7 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
                                             "Merge it, then re-render in every checkout with init.",
                                 repo_type=DATASET)
     previous = git_out(target, "rev-parse", "--abbrev-ref", "HEAD")
-    git(target, "checkout", "-q", "-B", f"upgrade/{new}", "origin/main")
+    git(target, "checkout", "-q", "--no-track", "-B", f"upgrade/{new}", "origin/main")
     copy_method(target)
     toml = (target / "project.toml").read_text()
     import re

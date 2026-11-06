@@ -45,7 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ScriptError, git, git_out, is_git_repo, rendered_harnesses, rerender, say  # noqa: E402
+from common import ScriptError, git, git_out, is_git_repo, rendered_harnesses, rerender, run_main, say  # noqa: E402
 from human import TITLE_PLACEHOLDER, parse_project  # noqa: E402
 
 METHOD_ROOT = Path(__file__).resolve().parents[1]  # holds commons/, hosts/, scripts/, VERSION
@@ -522,4 +522,4 @@ def ask_project(args: argparse.Namespace, asking: bool, target: Path) -> tuple[s
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main))

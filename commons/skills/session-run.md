@@ -12,7 +12,9 @@ Run one session from start to end. The operator's part is: start it, answer open
 uv run .physics-hive/scripts/session.py start --harness <your harness> --model <your model id>
 ```
 
-It refuses to start when `project.md` has no title or goal yet, when the checkout has uncommitted changes that are not the researcher's, or when a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
+It first commits the researcher's uncommitted edits of their files as theirs and, in shared mode, pushes them to `main`.
+
+If `project.md` has no title or goal yet, it refuses: ask the operator for the question and the goal, write them in `project.md` (the question in one line as its title, the goal under `## Goal`), show them to the operator, and run `start` again. It also refuses when the checkout has uncommitted changes that are not the researcher's, or when a session is already active; tell the operator why and stop (`session.py status` shows the active session; `session.py abort` abandons it).
 
 It prints the session ID, the operator name to put in cards, and **what the researcher sent since the previous session started**: per debrief, the answers, the lines ticked (to apply) and not ticked (not applied), and the note; their edits of `project.md`, `conventions.md` and `draft.tex`, with diffs; changed ratings; and the first next step of `project.md`. Then the *Handoff* of the earlier session, the cards that need a re-check, and the draft's flags. Read all of it: it is the researcher's instruction for this session.
 

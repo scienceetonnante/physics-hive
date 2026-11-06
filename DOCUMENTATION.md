@@ -65,10 +65,10 @@ physics-hive/
 │   ├── export_trace.py           harness records → trace.jsonl
 │   ├── literature.py             arXiv / INSPIRE / Semantic Scholar CLI and MCP server
 │   ├── init.py                   create, join, refresh, upgrade
-│   └── common.py                 git helpers, the active-session file
+│   └── common.py                 git helpers, the active-session file, the Hub settings for sandboxes
 ├── space/                        the Space app (FastAPI pages, LaTeX converter), deployed by init --mode create
 ├── bench/reviewer/               reviewer benchmark: cases with planted errors, runner
-├── tests/                        pytest suite; hub_e2e.py (live, manual)
+├── tests/                        pytest suite; hub_e2e.py and clean_hub.py (live, manual)
 ├── .claude/skills/investigate-run/   the audit skill (repo-level)
 ├── design/                       design documents
 └── workspaces/, problems/, references/, results/   sample runs and benchmark corpus (git-ignored)
@@ -151,21 +151,25 @@ The authoritative description, as agents see it, is `commons/workspace-doc.md`. 
 
 All run with `uv run .physics-hive/scripts/<script>` from a workspace, with PEP 723 inline dependencies (PyYAML; `huggingface_hub` for those that talk to the Hub). They print what they did and fail with one `ERROR:` line rather than guess; the skills tell the coordinator to stop and report such failures.
 
+**Network and sandboxes.** The scripts that talk to the Hub need `huggingface.co`, `hf.co` and their subdomains, and `uv` needs `pypi.org` and `files.pythonhosted.org` the first time it installs a script's dependencies. The agents run them inside their harness's sandbox, never outside it: the scripts live in the workspace, which the agents can edit. uv itself writes its cache outside the workspace (`~/.cache/uv`). The workspace settings do not open that folder to the sandbox, since a sandboxed command could then change packages that later run outside it; the README's [Setting up your harness](README.md#setting-up-your-harness) asks Claude Code users to allow it in their own settings. A sandbox lets the scripts write only in the workspace and the temporary folder, so importing `common.py` points `huggingface_hub`'s download cache (`HF_HUB_CACHE`) to `physics-hive-hf-cache` in the temporary folder; the login token stays in `~/.cache/huggingface`. Claude Code's sandbox on macOS blocks the system service that checks TLS certificates, which `huggingface_hub`'s HTTP client and `hf_xet` use. So on macOS, importing `common.py` sets `SSL_CERT_FILE=/etc/ssl/cert.pem` (unless `SSL_CERT_FILE` or `SSL_CERT_DIR` is already set) and `HF_HUB_DISABLE_XET=1` (files then move over plain HTTP), in and out of a sandbox; every script imports `common` before `huggingface_hub`, which reads `HF_HUB_DISABLE_XET` when it is first imported. Git reads a certificate file and is not affected. The same sandbox refuses writes to `.git/config` and `.git/hooks`, so the session commands create branches with `--no-track` and set no git configuration (`tests/test_researcher_edits.py` checks that starting and abandoning a session leave `.git/config` unchanged). `init.py` runs `git init` or `git clone`, which write both, so it runs in a terminal, outside any sandbox. `common.run_main` turns a Hub that cannot be reached into one `ERROR:` line naming the hosts to allow.
+
 | Script | Role |
 |---|---|
 | `cards.py` | Library, no side effects: `Workspace` (loading, `status`, `in_draft`, `evidence`, `needs_recheck`, `draft_flags`), `result_problems`, front-matter helpers. Imported by every other script and by the Space. |
 | `human.py` | Library: the parsers and writers of the human files, `History` (git access to a checkout), `received` and `format_received`, `received_record`, `previous_start`, `read_by`, `handoff`, `changed_by_session`. Stdlib and PyYAML only. |
 | `regen.py` | Writes `INDEX.md` and `references.bib`. |
 | `check.py` | Validates headers, ID formats, references and their kinds, cycles, artefact authorship, reviews, paper cards and ratings, the draft (`draft_problems`), the `\card` names of notes, and debriefs. With a base commit (default: the active session's): no record file edited or deleted; `.physics-hive/` and `project.toml` untouched; and for the paths the session changed itself (its `[S<n>]` commits and uncommitted changes, `common.session_paths`), no other session's folder, no seeds or ratings, new IDs that belong to the session. Problems in the draft are errors only when the session changed the draft and named the card at fault itself; problems in a debrief are errors for the session's own debrief. |
-| `session.py` | `start`, `status`, `next <prefix>` / `next review <artefact>`, `answer <S> <n|note> <text>`, `tick <S> <k>…`, `brief`, `end [--no-merge]`, `abort`. State in `.active-session` (JSON, git-ignored). |
+| `session.py` | `start`, `save`, `status`, `next <prefix>` / `next review <artefact>`, `answer <S> <n|note> <text>`, `tick <S> <k>…`, `brief`, `end [--no-merge]`, `abort`. State in `.active-session` (JSON, git-ignored). |
 | `pdf.py` | `build_pdf(tex, bib, name)` compiles in a temporary folder with `latexmk` (dropping `\bibliography` when nothing is cited, since BibTeX fails then); the CLI writes `draft.pdf` or `sessions/S<n>/note.pdf`. |
 | `hub.py` | Create and join, the session pull request lifecycle, other open sessions, sources sync, upgrades. |
-| `hubgit.py` | Runs a git command with the Hub token passed in a header (for the researcher's own pushes). |
+| `hubgit.py` | Runs a git command with the Hub token passed in a header, for git commands a person runs by hand against the Hub. The method itself never calls it. |
 | `export_trace.py` | Collects the harness's record of a session: OpenCode's SQLite store, Claude Code's JSONL files including sub-agent transcripts; Codex rollouts and Pi sessions as raw files, best effort. Returns the models found. |
 | `literature.py` | Literature tools; see below. |
 | `init.py` | Create, join, refresh, upgrade; see below. |
 
-**`session.py start`.** Refuses when a session is active, when `project.md` has no title or goal, or when the checkout has uncommitted changes; in local mode it first commits the researcher's uncommitted edits of their own files (`project.md`, `conventions.md`, `draft.tex`, seeds, ratings, debriefs) as "Researcher's edits", and refuses only for other files. It also refuses when the harness files were rendered from another method version (it re-renders and asks for a restart). It then opens the session (shared: the pull request and the branch), computes what the session receives (from the previous session's `received.md` base), writes `sessions/S<n>/received.md`, and prints it, followed by the *Handoff* of each session whose debrief it reads in full, the cards that need a re-check, the draft's flags, other open sessions (shared), and the questions without an answer.
+**`session.py start`.** First saves the researcher's edits, as `session.py save` does (below). Refuses when a session is active, when `project.md` has no title or goal (in shared mode, read on `origin/main`, so that a goal written in the Space counts), or when the checkout has uncommitted changes to other files. It also refuses when the harness files were rendered from another method version (it re-renders and asks for a restart). It then opens the session (shared: the pull request and the branch), computes what the session receives (from the previous session's `received.md` base), writes `sessions/S<n>/received.md`, and prints it, followed by the *Handoff* of each session whose debrief it reads in full, the cards that need a re-check, the draft's flags, other open sessions (shared), and the questions without an answer.
+
+**`session.py save`** (outside a session; `start` runs the same steps) commits the researcher's uncommitted edits of their own files (`project.md`, `conventions.md`, `draft.tex`, seeds, ratings, debriefs) as "Researcher's edits", and refuses if other files have uncommitted changes. In shared mode it then pushes to `main` the commits of local `main` that are not on the Hub (`hub.push_researcher_edits`), provided they change only the researcher's files; if `main` moved on the Hub meanwhile, it rebases them first, and on a conflict it stops with nothing pushed. This is how an edit the researcher dictates to the coordinator (typically the question and the goal before the first session) reaches the Hub without the coordinator running git: in the Claude Code auto mode, a direct `git push` to `main` by the agent is refused by the permission classifier.
 
 **`session.py answer` and `tick`** write what the researcher said in the terminal into a debrief, commit it as theirs (a message without the session prefix, so that `check` does not count it as the session's), and add it to the active session's `received.md`, so that no later session receives it again.
 
@@ -178,7 +182,7 @@ A shared space is five private repositories in one organisation, named by `hub.r
 
 **Session lifecycle in shared mode** (`scripts/hub.py`):
 
-1. `start`: fetch `main`; refuse if local `main` has unpushed commits; `create_pull_request` (a draft; its number is the session number); rename it `[S<n>] (brief pending) by <user>`; `git checkout -B session/S<n> origin/main`; download paper sources.
+1. `start`: fetch `main`; push the researcher's commits on local `main` (refuse if local `main` has other unpushed commits); `create_pull_request` (a draft; its number is the session number); rename it `[S<n>] (brief pending) by <user>`; `git checkout -B session/S<n> origin/main`; download paper sources.
 2. `brief`: commit the brief and `received.md`; push to `refs/pr/<n>`; rename the pull request `[S<n>] <goal>`; replace its description with the brief.
 3. `end`: rebase on `origin/main` if it moved (stop on conflict, branch unchanged); write *Changed by this session* and run `check` against `origin/main`; force-push to `refs/pr/<n>`; upload sources; export the trace and upload `S<n>/trace.jsonl` and `S<n>/meta.json`; mark the draft ready; merge (one retry after a fresh rebase); record the merge commit in `meta.json`; reset the checkout to the new `main`.
 
@@ -245,7 +249,7 @@ The body is the coordinator's workflow for that skill: get the IDs (`session.py 
 - `[tools_map]` (capability → tool; informational for Codex and OpenCode, which have no per-role allowlist, but it must be complete).
 - `[file_backed]`: `section = "section.md"` (the harness's part of `AGENTS.md`: name for `--harness`, how skills are invoked, tool discipline, dispatch syntax with an example, how to pass the model ID), and for Pi `preamble` and `skill_stub_template`.
 
-`hosts/<host>/extras/` holds settings files copied verbatim: Claude `.mcp.json` and `.claude/settings.json` (permissions, and only the `literature` MCP server approved through `enabledMcpjsonServers`, which takes effect once the folder's trust prompt is accepted); Codex `.codex/config.toml` (workspace-write sandbox with network access, web search, the `literature` MCP server with a long startup timeout); OpenCode `opencode.json` (permissions, the MCP server with a 180-second timeout); Pi `.pi/settings.json` (`pi-subagents`, `pi-web-access`).
+`hosts/<host>/extras/` holds settings files copied verbatim: Claude `.mcp.json` and `.claude/settings.json` (permissions, only the `literature` MCP server approved through `enabledMcpjsonServers`, which takes effect once the folder's trust prompt is accepted, and the domains the sandbox lets commands reach: the Hub and PyPI, see [the workspace scripts](#the-workspace-scripts)); Codex `.codex/config.toml` (workspace-write sandbox with network access, web search, the `literature` MCP server with a long startup timeout); OpenCode `opencode.json` (permissions, the MCP server with a 180-second timeout); Pi `.pi/settings.json` (`pi-subagents`, `pi-web-access`).
 
 
 ## The Space
@@ -300,6 +304,7 @@ Without `fastapi` and `httpx`, the test of the Space's pages is skipped.
 - `tests/test_export_trace.py`, `tests/test_literature.py`, `tests/test_reviewer_bench.py`: the trace exporter, the literature tools without network, the benchmark in dry-run mode.
 - `tests/ACCEPTANCE.md` maps each acceptance test of the design's build plan to how it is checked, and gives the steps of those that need real agents.
 - `tests/hub_e2e.py` (manual, live, not collected by pytest): creates scratch repositories under your account and runs the shared-mode flow with two operators: parallel sessions adding evidence to the same claim, a rebase, merges, a debrief answered through the API and received by the next session, an abort. It deletes the repositories at the end. `uv run tests/hub_e2e.py [--keep]`.
+- `tests/clean_hub.py` (manual, live, not collected by pytest): deletes the Hub repositories of test projects, after asking for each project. `uv run tests/clean_hub.py <workspace folder or owner/physics-hive-name> [--local]` deletes one project (the four datasets and the Space; `--local` also deletes the folder). `uv run tests/clean_hub.py --owner <user or org>` finds every project under an account, including those created with Physics Intern (no `physics-hive-` prefix, Space named `<name>-space`). `--yes` skips the questions; without it and without a terminal, the script only lists.
 
 
 ## Design choices worth remembering

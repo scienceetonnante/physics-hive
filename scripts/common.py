@@ -28,6 +28,65 @@ class ScriptError(SystemExit):
         super().__init__(f"ERROR: {message}")
 
 
+def prepare_hub_environment() -> None:
+    """Let the scripts use the Hub from inside a harness's sandbox.
+
+    A sandbox lets the scripts write only in the workspace and the temporary
+    folder, so huggingface_hub keeps its downloads (the Space's card, the
+    paper sources) in a cache under the temporary folder (HF_HUB_CACHE), not
+    in ~/.cache/huggingface. The login token stays where it is.
+
+    On macOS, huggingface_hub's HTTP client and hf_xet check TLS certificates
+    through the system's trust service, which the sandbox of Claude Code
+    blocks. The HTTP client then reads the system's certificate file instead
+    (SSL_CERT_FILE). hf_xet cannot, so huggingface_hub moves files over plain
+    HTTP (HF_HUB_DISABLE_XET), which is fast enough for a workspace's files.
+    Certificates added to the macOS keychain are not used; set SSL_CERT_FILE
+    yourself to use other ones.
+
+    All of this applies in and out of a sandbox, so that a run from a terminal
+    takes the same path as an agent's. It runs when this module is imported,
+    before huggingface_hub is: that library reads these variables once, when
+    it is first imported.
+    """
+    import tempfile
+
+    os.environ.setdefault("HF_HUB_CACHE", str(Path(tempfile.gettempdir()) / "physics-hive-hf-cache"))
+    if sys.platform != "darwin":
+        return
+    if not os.environ.get("SSL_CERT_FILE") and not os.environ.get("SSL_CERT_DIR") and Path("/etc/ssl/cert.pem").is_file():
+        os.environ["SSL_CERT_FILE"] = "/etc/ssl/cert.pem"
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
+
+prepare_hub_environment()
+
+
+def network_errors() -> tuple[type[BaseException], ...]:
+    """The exceptions with which huggingface_hub reports that it could not reach the Hub."""
+    import importlib
+
+    found = []
+    for name in ("httpx2", "httpx"):  # the HTTP client of huggingface_hub 2, then of huggingface_hub 1
+        try:
+            found.append(importlib.import_module(name).TransportError)
+        except ImportError:
+            pass
+    return tuple(found)
+
+
+def run_main(main) -> int:
+    """Run a script's main function, and report in one line a Hub that cannot be reached."""
+    try:
+        return main()
+    except network_errors() as exc:
+        raise ScriptError(
+            f"could not reach the Hugging Face Hub ({type(exc).__name__}: {exc}). Check the network connection. "
+            "If this command runs in a sandbox, the sandbox must let it reach huggingface.co and hf.co, and their "
+            "subdomains."
+        ) from None
+
+
 def now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 

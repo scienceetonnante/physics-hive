@@ -51,7 +51,7 @@ INDEX.md              generated view: one line per card, artefact, paper and ses
 | `literature/seeds.md`, `literature/ratings.yaml` | the researcher | read them only |
 | the record | you and the sub-agents | as §3–§6 say |
 
-Nobody edits `.physics-hive/` or the generated files. When the researcher asks you, outside any session, to write or change one of their files with them (for instance to state the question before the first session), do it and commit it as their edit, with a message that does not start with a session ID; in shared mode, push it to `main` with `uv run .physics-hive/scripts/hubgit.py push origin main`.
+Nobody edits `.physics-hive/` or the generated files. When the researcher asks you, outside any session, to write or change one of their files with them (for instance to state the question before the first session), do it and leave it uncommitted: `session.py start` commits it as their edit when the next session opens and, in shared mode, pushes it to `main`. If no session follows, run `session.py save`, which does the same now.
 
 Files are durable state; your context is not. After a context clear, run `session.py status`, read the session's `received.md`, `brief.md` and `log.md` and `INDEX.md`, and continue from there.
 
@@ -189,11 +189,9 @@ Deterministic work is done by scripts in `.physics-hive/scripts/`, run with `uv 
 
 - `uv run .physics-hive/scripts/regen.py` — rebuild `INDEX.md` and `references.bib`.
 - `uv run .physics-hive/scripts/check.py` — validate the cards, artefacts, draft, notes and debriefs, and the changes of the active session.
-- `uv run .physics-hive/scripts/session.py start --harness <name> --model <model id>` — open a session. Also `session.py status`, `session.py next <prefix>` (next free ID), `session.py answer <S> <n|note> <text>` and `session.py tick <S> <k>…` (record in a debrief, as theirs, what the researcher answered or ticked in the terminal), `session.py brief` (commit the brief and, in shared mode, copy it to the pull request), `session.py end` (close the session), and `session.py abort`.
+- `uv run .physics-hive/scripts/session.py start --harness <name> --model <model id>` — open a session. Also `session.py save` (outside a session: commit the researcher's edits of their files as theirs and, in shared mode, push them to `main`), `session.py status`, `session.py next <prefix>` (next free ID), `session.py answer <S> <n|note> <text>` and `session.py tick <S> <k>…` (record in a debrief, as theirs, what the researcher answered or ticked in the terminal), `session.py brief` (commit the brief and, in shared mode, copy it to the pull request), `session.py end` (close the session), and `session.py abort`.
 - `uv run .physics-hive/scripts/pdf.py [draft.tex | S<n>]` — compile the draft or a note to PDF.
 - `uv run .physics-hive/scripts/literature.py <command>` — search arXiv and INSPIRE, follow citations, download sources (also available as the `literature` MCP server).
-- `uv run .physics-hive/scripts/hubgit.py <git arguments>` — run git with the Hub token (shared mode), for the researcher's own edits pushed to `main`; sessions never need it.
-
 
 ## Harness notes
 

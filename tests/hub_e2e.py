@@ -123,18 +123,18 @@ try:
     assert variables["PHYSICS_HIVE_WORKSPACE"].value == WS, variables
     print("Space deployed with", sorted(files))
 
-    # 2. The researcher writes the title and the goal of project.md, and pushes to main.
+    # 2. The researcher writes the title and the goal of project.md in A, without committing them:
+    #    A's session start commits them as theirs and pushes them to main.
     text = (A / "project.md").read_text().replace("# <the question in one line>", "# What is X?")
     (A / "project.md").write_text(text.replace("## Goal\n", "## Goal\n\nFind the leading correction to X.\n"))
-    commit(A, "Write the question")
-    hubgit(A, "push", "-q", "origin", "main")
 
     # 3. A second checkout joins in another folder.
     run(S, REPO / "scripts/init.py", "--mode", "join", "--repo", WS, "--harness", "opencode", "--dir", B, "--yes")
     assert (B / ".opencode/agents/deriver.md").is_file()
 
-    # 4. Two sessions in parallel; B sees A's.
-    run(A, ".physics-hive/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
+    # 4. Two sessions in parallel; B sees A's. B joined before the goal was pushed: its start reads it on main.
+    ra = run(A, ".physics-hive/scripts/session.py", "start", "--harness", "claude", "--model", "model-a")
+    assert "Pushed your edits of project.md to main" in ra.stdout, ra.stdout
     rb = run(B, ".physics-hive/scripts/session.py", "start", "--harness", "opencode", "--model", "model-b")
     sa = json.loads((A / ".active-session").read_text())["id"]
     sb = json.loads((B / ".active-session").read_text())["id"]

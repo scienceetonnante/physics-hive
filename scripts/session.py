@@ -5,15 +5,16 @@
 """Open, follow and close a research session.
 
 Subcommands:
-  start --harness H --model M   Open a session. Refuses if a session is already active, if
-                                project.md has no title and goal yet, or if the checkout has
-                                uncommitted changes (in local mode, uncommitted edits of the
-                                researcher's files are first committed as theirs). Shared mode:
-                                opens a draft pull request (its number is the session number)
-                                and moves the checkout to the session's branch. Local mode: takes
-                                the next free number in sessions/. Prints what the researcher
-                                sent since the previous session started, and records it in
-                                sessions/S<n>/received.md.
+  start --harness H --model M   Open a session. First saves the researcher's edits (as `save`
+                                does). Refuses if a session is already active, if project.md
+                                has no title and goal yet, or if the checkout has uncommitted
+                                changes to other files. Shared mode: opens a draft pull request
+                                (its number is the session number) and moves the checkout to
+                                the session's branch. Local mode: takes the next free number in
+                                sessions/. Prints what the researcher sent since the previous
+                                session started, and records it in sessions/S<n>/received.md.
+  save                          Outside a session: commit the researcher's uncommitted edits of
+                                their files as theirs; shared mode: push them to main.
   status                        Where the active session stands; without one, what a session
                                 started now would receive.
   next <CL|DE|D|C|CR>           Print the next free ID of that prefix in the active session.
@@ -56,6 +57,7 @@ from common import (  # noqa: E402
     operator_name,
     rendered_version,
     rerender,
+    run_main,
     save_active,
     say,
 )
@@ -103,11 +105,11 @@ def researcher_path(path: str) -> bool:
     return path in HUMAN_FILES or path in RESEARCHER_FILES or bool(re.match(r"^sessions/S\d+/debrief\.md$", path))
 
 
-def commit_researcher_edits(root: Path, when: str) -> None:
-    """Local mode: commit the researcher's uncommitted edits of their files as theirs, or refuse."""
+def commit_researcher_edits(root: Path, when: str) -> list[str]:
+    """Commit the researcher's uncommitted edits of their files as theirs, or refuse. Returns the files committed."""
     dirty = dirty_paths(root)
     if not dirty:
-        return
+        return []
     others = [p for p in dirty if not researcher_path(p)]
     if others:
         listing = ", ".join(others[:8]) + (", …" if len(others) > 8 else "")
@@ -115,13 +117,36 @@ def commit_researcher_edits(root: Path, when: str) -> None:
     git(root, "add", "--", *dirty)
     git(root, "commit", "-q", "-m", f"Researcher's edits ({when})", "-m", "Committed by session.py: " + ", ".join(dirty))
     say(f"Committed your edits of {', '.join(dirty)} as yours.")
+    return dirty
 
 
-def project_is_template(root: Path) -> bool:
+def save_researcher_edits(root: Path, ws: Workspace, when: str) -> bool:
+    """Commit the researcher's edits of their files as theirs; in shared mode, push them to main on the Hub.
+
+    Returns whether there was anything to save."""
+    if ws.mode == "shared":
+        import hub
+
+        branch = git_out(root, "rev-parse", "--abbrev-ref", "HEAD")
+        if branch != "main" and dirty_paths(root):
+            raise ScriptError(f"the checkout is on {branch}, not main, and has uncommitted changes "
+                              f"({', '.join(dirty_paths(root)[:8])}); commit or discard them first")
+        committed = commit_researcher_edits(root, when)
+        return bool(hub.push_researcher_edits(root, researcher_path)) or bool(committed)
+    return bool(commit_researcher_edits(root, when))
+
+
+def project_is_template(root: Path, ref: str | None = None) -> bool:
+    """Whether project.md still lacks its title or goal, in the working tree or at a git ref."""
     from human import parse_project
 
-    path = root / "project.md"
-    return not path.is_file() or parse_project(path.read_text(encoding="utf-8")).is_template
+    if ref:
+        proc = git(root, "show", f"{ref}:project.md", check=False)
+        text = proc.stdout if proc.returncode == 0 else None
+    else:
+        path = root / "project.md"
+        text = path.read_text(encoding="utf-8") if path.is_file() else None
+    return text is None or parse_project(text).is_template
 
 
 def compute_received(root: Path, ws: Workspace):
@@ -178,18 +203,14 @@ def cmd_start(root: Path, args) -> None:
     if not is_git_repo(root):
         raise ScriptError("the workspace is not a git repository")
     ws = Workspace(root)
-    if ws.mode == "local":
-        commit_researcher_edits(root, "before a session")
-    elif dirty_paths(root):
-        dirty = dirty_paths(root)
-        raise ScriptError(f"the checkout has uncommitted changes ({', '.join(dirty[:8])}); commit or discard them "
-                          "first (in a shared space, the researcher edits their files in the Space)")
-    if project_is_template(root):
+    save_researcher_edits(root, ws, "before a session")
+    # In shared mode the session starts from main on the Hub, where the goal may have been written in the Space.
+    if project_is_template(root, "origin/main" if ws.mode == "shared" else None):
         raise ScriptError(
             "project.md has no title or goal yet. The researcher writes the question in one line as its title and "
-            "the goal under ## Goal (in the Space, in an editor, or by dictating them to the coordinator outside a "
-            "session), and commits it; in shared mode it is pushed to main "
-            "(`uv run .physics-hive/scripts/hubgit.py push origin main`)."
+            "the goal under ## Goal, in the Space or by dictating them to the coordinator, who writes them in "
+            "project.md. Then run `session.py start` again: it commits them as the researcher's edit and, in "
+            "shared mode, pushes them to main."
         )
     if ws.mode == "local":
         refuse_if_stale(root, (root / ".physics-hive" / "VERSION").read_text().strip())
@@ -237,6 +258,17 @@ def cmd_start(root: Path, args) -> None:
     say("")
     say(f"Next: apply the ticked lines (one commit: `[{info['id']}] apply the lines ticked in the S<m> debrief`), "
         f"then propose a brief, write sessions/{info['id']}/brief.md and run `session.py brief`.")
+
+
+def cmd_save(root: Path, args) -> None:
+    active = load_active(root)
+    if active:
+        raise ScriptError(f"session {active['id']} is active in this checkout; save the researcher's edits after "
+                          "it ends (the next `session.py start` also saves them)")
+    if not is_git_repo(root):
+        raise ScriptError("the workspace is not a git repository")
+    if not save_researcher_edits(root, Workspace(root), "outside a session"):
+        say("Nothing to save: the researcher's files have no new edits.")
 
 
 def refuse_if_stale(root: Path, method: str) -> None:
@@ -480,6 +512,7 @@ def main() -> int:
     p = sub.add_parser("start")
     p.add_argument("--harness", help="claude, codex, opencode or pi (default: detected)")
     p.add_argument("--model", help="the coordinator's model ID")
+    sub.add_parser("save")
     sub.add_parser("status")
     p = sub.add_parser("next")
     p.add_argument("what", help="CL, DE, D, C, CR, or review")
@@ -497,11 +530,11 @@ def main() -> int:
     sub.add_parser("abort")
     args = parser.parse_args()
     root = args.root.resolve() if args.root else find_root()
-    commands = {"start": cmd_start, "status": cmd_status, "next": cmd_next, "answer": cmd_answer, "tick": cmd_tick,
-                "brief": cmd_brief, "end": cmd_end, "abort": cmd_abort}
+    commands = {"start": cmd_start, "save": cmd_save, "status": cmd_status, "next": cmd_next, "answer": cmd_answer,
+                "tick": cmd_tick, "brief": cmd_brief, "end": cmd_end, "abort": cmd_abort}
     commands[args.command](root, args)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main))
