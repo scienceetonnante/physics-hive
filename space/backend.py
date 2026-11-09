@@ -164,6 +164,26 @@ def evidence_text(ws, card_id: str) -> tuple[str, str]:
     return text[0].upper() + text[1:], tone
 
 
+def material_text(ws, card_id: str) -> str | None:
+    """What a claim's card page shows behind it, for the link to that page: 'Derivation, computation and
+    reviews'. None if no derivation or computation supports the claim."""
+    items = ws.evidence(card_id)
+    if not items:
+        return None
+    order = list(ARTEFACT_WORDS)  # derivations first
+    kinds: dict[str, int] = {}
+    for item in sorted(items, key=lambda i: order.index(k) if (k := ws.artefacts[i.artefact].kind) in order else len(order)):
+        kind = ws.artefacts[item.artefact].kind
+        kinds[kind] = kinds.get(kind, 0) + 1
+    parts = [kind if n == 1 else f"{NUMBER_WORDS.get(n, str(n))} {ARTEFACT_WORDS.get(kind, ('', kind + 's'))[1]}"
+             for kind, n in kinds.items()]
+    reviews = sum(len(item.reviews) for item in items)
+    if reviews:
+        parts.append("review" if reviews == 1 else "reviews")
+    text = joined(parts)
+    return text[0].upper() + text[1:]
+
+
 def place_text(ws, card_id: str) -> str:
     return {"result": "In the draft, as a result",
             "conjecture": "In the draft, as a conjecture"}.get(ws.in_draft(card_id), "Not in the draft")
@@ -783,6 +803,7 @@ class Backend:
                 "statement": card.statement, "draft": ws.in_draft(card.id),
                 "evidence": regen.evidence_parts(ws, card.id) if claim else None,
                 "evidence_text": evidence, "tone": tone, "place": place_text(ws, card.id) if claim else None,
+                "material": material_text(ws, card.id) if claim else None,
                 "warning": warning_text(ws, card.id) if claim else None, "refutes": card.refutes}
 
     def card(self, card_id: str) -> dict:

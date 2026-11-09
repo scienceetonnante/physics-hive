@@ -147,6 +147,9 @@ def test_what_the_pages_say_about_a_claim(toy):
     assert row["tone"] == "ok" and row["place"] == "Not in the draft" and row["warning"] is None
     assert b.row("CL-S1-2")["evidence_text"].startswith("No evidence yet") and b.row("CL-S1-2")["tone"] == "open"
     assert b.row("CL-S1-3")["evidence_text"] == "Two derivations, each confirmed by a blind review (agent)"
+    # The link to a card's page names what the page shows.
+    assert row["material"] == "Derivation, computation and reviews"
+    assert b.row("CL-S1-3")["material"] == "Two derivations and reviews" and b.row("CL-S1-2")["material"] is None
     refuted = b.row("CL-S1-4")
     assert refuted["evidence_text"] == "A derivation, refuted by a review" and refuted["tone"] == "bad"
     assert refuted["warning"] == "Refuted by DE-S1-1."
@@ -370,12 +373,14 @@ def test_the_pages_and_the_forms(client):
     assert '<span class="count">1</span>' in page
     # The note's abstract and results, each result with its card's evidence; the session's other cards; the
     # record, folded; the response beside them. The debrief's summary is not shown: the abstract replaces it.
-    assert page.index("Walk-on-spheres works below") < page.index("Result 1 (Barrier).") \
-        < page.index("A derivation, confirmed by a blind review (agent)</span> · Not in the draft") \
+    assert page.index('<label for="whole-S1">Whole note</label>') < page.index("Walk-on-spheres works below") \
+        < page.index("Result 1 (Barrier).") < page.index('<a href="/card/CL-S1-1">Derivation and review ↗</a>') \
         < page.index("Other cards from this session") < page.index("An unreviewed claim.") \
-        < page.index('<details class="record" id="record">') < page.index("Your response")
+        < page.index('<details class="record" id="record">') < page.index('<form class="response"')
+    assert "A derivation, confirmed by a blind review" not in page  # under a result, only the link to the card
     assert "<p>Summary of what the session found.</p>" not in page
-    assert '<input type="checkbox" class="note-whole" id="whole-S1"  hidden>' in page and "Read the whole note" in page
+    assert 'id="cut-S1" checked>' in page and 'id="whole-S1" >' in page
+    assert ">Tick what you accept</h3>" not in page and '<h2 class="response-title">' not in page
     assert ">Save my response</button>" in page and "Saving does not start a session." in page
     assert '<input type="hidden" name="back" value="/">' in page
     assert page.index("Draft (draft.tex)") < page.index("Copy Result 1") < page.index("Research plan (project.md)") \
@@ -387,7 +392,7 @@ def test_the_pages_and_the_forms(client):
     session = c.get("/session/S1").text
     assert "Walks stop at the first eigenvalue</h1>" in session and '<input type="hidden" name="back" value="/session/S1">' in session
     r = c.get("/note/S1")
-    assert str(r.url).endswith("/session/S1?note=whole") and 'id="whole-S1" checked hidden' in r.text
+    assert str(r.url).endswith("/session/S1?note=whole") and 'id="whole-S1" checked>' in r.text
     assert str(c.get("/note/S1?source=1").url).endswith("/file/sessions/S1/note.tex")
     assert "<dt>Evidence</dt><dd class=\"tone-ok\">A derivation, confirmed by a blind review (agent)</dd>" in c.get("/card/CL-S1-1").text
     assert "Nothing is in the draft yet." in c.get("/draft").text

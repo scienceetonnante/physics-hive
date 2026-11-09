@@ -115,15 +115,21 @@ details > summary { cursor: pointer; }
 .note-body .ltx-document { font: 17px/1.6 var(--font-doc); }
 .note-body .ltx-title, .note-body .ltx-authors, .note-body .ltx-date { display: none; }
 .note-body .ltx-abstract { margin: 0 0 1.2em; font-size: 1em; }
-.note-body .ltx-abstract h6 { text-align: left; font: 600 11.5px var(--font-ui); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 0 0 .4em; }
+.note-body .ltx-abstract h6 { text-align: left; font: 600 14px var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .4em; }
 .note-body .ltx-thm-result, .note-body .ltx-thm-conjecture, .note-body .ltx-has-card { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; }
 .note-whole:not(:checked) ~ .note-body .ltx-document > :not(.ltx-abstract, .ltx-thm-result, .ltx-thm-conjecture, .ltx-has-card) {
   /* hidden but laid out, so that MathJax typesets it at the right size for when it shows */
   max-height: 0; overflow: hidden; visibility: hidden; margin: 0; padding: 0; border: 0; }
-.note-whole:checked ~ .note-tools .if-cut, .note-whole:not(:checked) ~ .note-tools .if-whole { display: none; }
+/* the switch between the two views: the radio buttons are kept for the keyboard but not shown */
+.note-cut, .note-whole { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.note-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; padding: 2px; margin: 0 0 18px; background: var(--panel); }
+.note-switch label { font: 500 13.5px var(--font-ui); padding: 5px 12px; border-radius: 5px; cursor: pointer; color: var(--muted); }
+.note-cut:checked ~ .note-switch label[for^="cut-"], .note-whole:checked ~ .note-switch label[for^="whole-"] {
+  background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 30, 50, .12); }
+.note-cut:focus-visible ~ .note-switch label[for^="cut-"], .note-whole:focus-visible ~ .note-switch label[for^="whole-"] {
+  outline: 2px solid var(--accent); outline-offset: 1px; }
 .note-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
-.note-tools label { cursor: pointer; }
-.ltx-thm-foot { font: 13.5px/1.6 var(--font-ui); color: var(--muted); margin-top: 6px; font-style: normal; }
+.ltx-thm-foot { font: 13.5px/1.6 var(--font-ui); margin-top: 6px; font-style: normal; }
 .ltx-thm-foot .warn { margin: 4px 0; }
 .record { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 4px; }
 .record > summary.section-label { margin: 12px 0 8px; }
@@ -139,7 +145,6 @@ pre.diff .add { color: var(--ok); }
 pre.diff .del { color: var(--bad); }
 form.response { position: sticky; top: 108px; max-height: calc(100vh - 124px); overflow-y: auto; background: var(--panel);
   border-radius: 8px; padding: 18px 20px 16px; }
-.response-title { font-size: 1.15rem; font-weight: 600; margin: 0 0 10px; }
 .response-h { font-size: 15px; font-weight: 600; margin: 20px 0 4px; }
 .response .question { font-size: 15px; margin: 4px 0 6px; }
 .response textarea { margin-bottom: 4px; }

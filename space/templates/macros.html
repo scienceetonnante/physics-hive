@@ -23,10 +23,12 @@
     <div class="review-text">
       {% if v.note %}
       <div class="note-view">
-        <input type="checkbox" class="note-whole" id="whole-{{ v.id }}" {{ 'checked' if whole }} hidden>
+        {# Two views of the note, switched by two radio buttons and CSS: the abstract and the results, or all of it. #}
+        <input type="radio" name="note-{{ v.id }}" class="note-cut" id="cut-{{ v.id }}" {{ 'checked' if not whole }}>
+        <input type="radio" name="note-{{ v.id }}" class="note-whole" id="whole-{{ v.id }}" {{ 'checked' if whole }}>
+        <div class="note-switch"><label for="cut-{{ v.id }}">Abstract and results</label><label for="whole-{{ v.id }}">Whole note</label></div>
         <div class="note-body">{{ v.note | latex_doc }}</div>
         <div class="note-tools">
-          <label for="whole-{{ v.id }}" class="btn"><span class="if-cut">Read the whole note</span><span class="if-whole">Show only the abstract and the results</span></label>
           <a class="btn" href="/note/{{ v.id }}/pdf">PDF</a>
           <a class="btn" href="/file/{{ v.note_path }}">LaTeX source</a>
         </div>
@@ -93,16 +95,13 @@
 
 {# The researcher's response to a debrief: answers, ticks and a note, saved together. #}
 {% macro response_form(d, user, local, sign_in, csrf, back) -%}
-<form class="response" method="post" action="/debrief/{{ d.id }}" data-save>
-  <h2 class="response-title">Your response</h2>
+<form class="response" method="post" action="/debrief/{{ d.id }}" data-save aria-label="Your response">
   {% for q in d.d.questions %}
   <div class="md question">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
   <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="3" aria-label="Your answer to question {{ q.number }}"
     placeholder="Your answer" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
   {% endfor %}
   {% if d.d.ticks %}
-  <h3 class="response-h">Tick what you accept</h3>
-  <p class="fmeta" style="margin:0 0 6px">The next session applies the ticked lines, exactly as written.</p>
   {% for label, items in d.groups %}
   <div class="tick-group">{{ label }}</div>
   <ul class="ticks md">
@@ -128,14 +127,13 @@
 </form>
 {%- endmacro %}
 
-{# Under a result of a note, on a session page: what supports its card, and whether the card is in the draft. #}
+{# Under a result of a note, on a session page: a link to its card, named by what the card page shows
+   ("Derivation, computation and reviews"), and a warning when the card is in doubt. #}
 {% macro evidence_line(row) -%}
 <div class="evidence-line">
   {% if row.warning %}<div class="warn small">{{ row.warning | md_inline }}</div>{% endif %}
-  {% if row.kind == "claim" %}<span class="tone-{{ row.tone }}">{{ row.evidence_text }}</span> · {{ row.place }} · <a href="/card/{{ row.id }}">Inspect the evidence ↗</a>
-  {% elif row.kind == "dead-end" %}Dead end{% if row.refutes %}: refutes {{ row.refutes | join(", ") }}{% endif %} · <a href="/card/{{ row.id }}">Open the card ↗</a>
-  {% else %}<span class="tone-bad">There is no card {{ row.id }}.</span>{% endif %}
-  {% if row.kind %}<span class="faint">{{ row.id }}</span>{% endif %}
+  {% if not row.kind %}<span class="tone-bad">There is no card {{ row.id }}.</span>
+  {% else %}{% if row.kind == "claim" and not row.material %}<span class="tone-open">No derivation or computation supports it yet.</span> {% endif %}<a href="/card/{{ row.id }}">{{ row.material or "The card" }} ↗</a>{% endif %}
 </div>
 {%- endmacro %}
 
@@ -147,7 +145,7 @@
   {% if row.warning %}<div class="warn small">{{ row.warning | md_inline }}</div>{% endif %}
   <div class="fmeta">
     {% if row.kind == "claim" %}<span class="tone-{{ row.tone }}">{{ row.evidence_text }}</span> · {{ row.place }} · {% endif %}
-    <a href="/card/{{ row.id }}">Inspect the evidence ↗</a> <span class="faint">{{ row.id }}</span>
+    <a href="/card/{{ row.id }}">{{ row.material or "The card" }} ↗</a> <span class="faint">{{ row.id }}</span>
   </div>
 </div>
 {%- endmacro %}

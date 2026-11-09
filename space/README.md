@@ -19,9 +19,10 @@ run sessions in a terminal and the researcher follows and steers them from here.
 Face account (you must be a member of the organisation that owns the project).
 
 - **Review** (the page the Space opens on): the page of the session waiting for your response, marked
-  *Awaiting your response* until you answer. On the left, the session's note, cut to its abstract and results;
-  under each result, what supports it and whether it is in the draft, with a link to the evidence. *Read the
-  whole note* shows the rest in place. Below: what the session changed in your files, and its record, folded.
+  *Awaiting your response* until you answer. On the left, the session's note: a switch shows either the
+  abstract and the results or the whole note. Under each result, a link to its evidence says what you will find
+  there (for example *Derivation, computation and reviews*). Below: what the session changed in your files,
+  and its record, folded.
   On the right, your response, which stays in view: answer the questions, tick the lines you accept, and write
   anything else in the note box; the next session applies what you ticked.
 - **Project**: `project.md` (the question, goal, approach and next steps) and `conventions.md`, each with an
