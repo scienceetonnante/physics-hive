@@ -7,6 +7,9 @@
   <div class="sheet md">
     <details open><summary class="label">Overview of the field, updated by each survey</summary>{{ overview | md }}</details>
   </div>
+  {% elif not count %}
+  <div class="empty-note">No paper yet. List starting papers in <a href="/edit/literature/seeds.md">literature/seeds.md</a>,
+    or <a href="/edit/project.md">add a next step</a> asking for a survey. Nothing starts by itself: a session runs the survey.</div>
   {% else %}
   <p class="muted">No survey yet: the overview of the field appears here after the first one.</p>
   {% endif %}

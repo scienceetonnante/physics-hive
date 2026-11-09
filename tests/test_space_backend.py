@@ -121,6 +121,63 @@ def test_the_record_pages(toy):
         assert b.file_path(bad) is None
 
 
+def test_what_the_pages_say_about_a_claim(toy):
+    project(toy)
+    toy.computation("C-S1-1", ["CL-S1-1"])
+    toy.review("C-S1-1_R-S1-1", "confirmed", ["CL-S1-1"], human="alice")
+    toy.card("CL-S1-3", statement="Two derivations support it.")
+    for art in ("D-S1-2", "D-S1-3"):
+        toy.derivation(art, ["CL-S1-3"])
+        toy.review(f"{art}_R-S1-1", "confirmed", ["CL-S1-3"])
+    toy.card("CL-S1-4", statement="A refuted claim.")
+    toy.derivation("D-S1-4", ["CL-S1-4"])
+    toy.review("D-S1-4_R-S1-1", "refuted", ["CL-S1-4"])
+    toy.card("DE-S1-1", kind="dead-end", statement="It fails.", refutes=["CL-S1-4"])
+    b = local(toy)
+    row = b.row("CL-S1-1")
+    assert row["evidence_text"] == "A derivation, confirmed by a blind review (agent); a computation, checked by alice"
+    assert row["tone"] == "ok" and row["place"] == "Not in the draft" and row["warning"] is None
+    assert b.row("CL-S1-2")["evidence_text"].startswith("No evidence yet") and b.row("CL-S1-2")["tone"] == "open"
+    assert b.row("CL-S1-3")["evidence_text"] == "Two derivations, each confirmed by a blind review (agent)"
+    refuted = b.row("CL-S1-4")
+    assert refuted["evidence_text"] == "A derivation, refuted by a review" and refuted["tone"] == "bad"
+    assert refuted["warning"] == "Refuted by DE-S1-1."
+    assert b.row("DE-S1-1")["evidence_text"] is None and b.row("DE-S1-1")["refutes"] == ["CL-S1-4"]
+    # The findings of the session's debrief are its cards.
+    [d] = b.debriefs()
+    assert [f["id"] for f in d["findings"]] == ["CL-S1-1", "CL-S1-2", "CL-S1-3", "CL-S1-4", "DE-S1-1"]
+
+
+def test_tick_lines_are_grouped_by_the_file_they_change():
+    lines = ["Set the approach in the project: correlation matrices.", "Copy Result 1 of note S1 into `draft.tex`.",
+             'Add to *Next steps* in `project.md`: "Write the abstract of `draft.tex`."',
+             "Fix the sign of k in `conventions.md`.", "Run more walks."]
+    groups = sb.tick_groups([SimpleNamespace(text=t) for t in lines])
+    assert [(label, [i for i, _ in items]) for label, items in groups] == [
+        ("Draft (draft.tex)", [1]), ("Research plan (project.md)", [0, 2]), ("Conventions (conventions.md)", [3]),
+        ("Other", [4])]
+
+
+CHANGED = """- `project.md`: unchanged.
+- `conventions.md` (+2 −1 lines): derive(D-S1-1): c = 1/16 from the period; as you ticked in S1.
+
+```diff
++- θ is the angle.
+-- An older line.
+```
+
+- `draft.tex`: unchanged."""
+
+
+def test_the_changes_of_a_session_are_summed_up():
+    changes = sb.parse_changed(CHANGED)
+    [f] = changes["files"]
+    assert f["name"] == "Notation and conventions" and f["path"] == "conventions.md" and f["ticked"] == ["S1"]
+    assert f["counts"] == "2 lines added and 1 line removed" and [kind for kind, _ in f["diff"]] == ["add", "del"]
+    assert changes["unchanged"] == "Research plan and draft: unchanged."
+    assert sb.parse_changed("(Written by session.py end, from git.)") is None  # shown as it is
+
+
 def test_the_method_comes_from_the_workspace_copy(toy):
     project(toy)
     copy = toy.root / ".physics-hive" / "scripts"
@@ -282,15 +339,29 @@ def test_the_pages_and_the_forms(client):
 
     page = c.get("/").text
     assert "Must the method use walks only?" in page and "What the next session will receive" not in page
-    assert "sessions/*/debrief.md" not in page and 'class="brand"' not in page and 'target="_top"' not in page
-    assert "Latest session debrief</h1>" in page and '<span class="chip open">active</span>' in page
+    assert "sessions/*/debrief.md" not in page and 'target="_top"' not in page
+    assert "Review the session</h1>" in page and '<span class="chip open">Awaiting your response</span>' in page
+    assert "Session 1 · 20 October 2026" in page
     assert "Toy question?" not in page  # the question is on the Project page, not here
     assert '<span class="count">1</span>' in page
+    # Findings first, from the cards; the response beside them; the note's line becomes a button.
+    assert "A derivation, confirmed by a blind review (agent)</span> · Not in the draft" in page
+    assert page.index("Findings") < page.index("Summary of what the session found") < page.index("Your response")
+    assert "Read the full note: <a" not in page and 'href="/note/S1">Read the full note' in page
+    assert ">Save my response</button>" in page and "Saving does not start a session." in page
+    assert page.index("Draft (draft.tex)") < page.index("Copy Result 1") < page.index("Research plan (project.md)") \
+        < page.index("Set the approach")
+    sessions = c.get("/sessions").text
+    assert "Session 1 · 20 October 2026 · Awaiting your response" in sessions and "Survey the field" not in sessions
+    assert "<dt>Evidence</dt><dd class=\"tone-ok\">A derivation, confirmed by a blind review (agent)</dd>" in c.get("/card/CL-S1-1").text
+    assert "Nothing is in the draft yet." in c.get("/draft").text
     token = csrf_of(page)
     base = (toy.root / "sessions/S1/debrief.md").read_text()
     r = c.post("/debrief/S1", data={"answer-1": "Walks only.", "tick-2": "on", "note": "Disk.", "base": base,
                                     "csrf": token})
     assert r.status_code == 200 and "Saved your answers" in r.text
+    # Answered: the debrief waits for the next session, and the Review tab no longer counts it.
+    assert "Answered, waiting for the next session" in r.text and 'class="count"' not in r.text
     saved = parse_debrief((toy.root / "sessions/S1/debrief.md").read_text())
     assert saved.questions[0].answer == "Walks only." and [t.checked for t in saved.ticks] == [False, False, True]
     assert "out of date" in c.post("/debrief/S1", data={"note": "x", "base": base, "csrf": "forged"}).text

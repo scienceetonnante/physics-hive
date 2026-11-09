@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 import yaml
+from huggingface_hub.errors import EntryNotFoundError
 from huggingface_hub.utils import HfHubHTTPError
 
 import hub
@@ -33,6 +34,7 @@ class FakeHub:
     calls: list = []
     uploads: list = []  # (path in the repository, text) of each README.md sent
     space_readme = ""
+    stamp = None  # the METHOD file of the Space, None while it has none
     valid = {LOGIN, SPACE}
     readable = {LOGIN, SPACE}
 
@@ -56,10 +58,13 @@ class FakeHub:
 
     def upload_folder(self, folder_path, **kwargs):
         FakeHub.uploads.append(("README.md", (Path(folder_path) / "README.md").read_text()))
+        FakeHub.stamp = (Path(folder_path) / hub.SPACE_STAMP).read_text()
 
     def hf_hub_download(self, repo_id, filename, repo_type=None):
-        path = Path(FakeHub.tmp) / "downloaded-README.md"
-        path.write_text(FakeHub.space_readme)
+        if filename == hub.SPACE_STAMP and FakeHub.stamp is None:
+            raise EntryNotFoundError(f"{filename} not found")
+        path = Path(FakeHub.tmp) / f"downloaded-{filename}"
+        path.write_text(FakeHub.stamp if filename == hub.SPACE_STAMP else FakeHub.space_readme)
         return str(path)
 
     def upload_file(self, path_or_fileobj, path_in_repo, **kwargs):
@@ -74,7 +79,7 @@ class FakeHub:
 
 @pytest.fixture
 def fake_hub(monkeypatch, tmp_path):
-    FakeHub.calls, FakeHub.uploads, FakeHub.tmp = [], [], tmp_path
+    FakeHub.calls, FakeHub.uploads, FakeHub.tmp, FakeHub.stamp = [], [], tmp_path, None
     FakeHub.valid = {LOGIN, SPACE}
     FakeHub.readable = {LOGIN, SPACE}
     monkeypatch.setattr(hub, "HfApi", FakeHub)
@@ -168,6 +173,23 @@ def test_a_session_start_updates_the_card_only_when_the_question_changed(fake_hu
     FakeHub.space_readme = readme
     hub.update_space_card(REPOS, "Is X finite?")
     assert len(FakeHub.uploads) == 1
+
+
+def test_a_session_start_gives_the_space_the_app_of_the_method_copy(fake_hub, capsys):
+    (fake_hub / ".physics-hive" / "VERSION").write_text("0.5.4\n")
+    hub.sync_space(fake_hub, REPOS)  # a Space deployed before stamps existed gets the app once
+    assert len(FakeHub.uploads) == 1 and FakeHub.stamp.startswith("0.5.4 ")
+    assert "now runs the app of method 0.5.4" in capsys.readouterr().out
+    hub.sync_space(fake_hub, REPOS)  # the same app: nothing to do
+    assert len(FakeHub.uploads) == 1
+    (fake_hub / ".physics-hive" / "space" / "app.py").write_text("# changed\n")
+    (fake_hub / ".physics-hive" / "space" / "__pycache__").mkdir()
+    (fake_hub / ".physics-hive" / "space" / "__pycache__" / "app.pyc").write_bytes(b"x")  # not part of the app
+    hub.sync_space(fake_hub, REPOS)
+    assert len(FakeHub.uploads) == 2 and FakeHub.stamp.strip() == hub.space_app_stamp(fake_hub / ".physics-hive" / "space")
+    hub.deploy_space(fake_hub, REPOS, None)  # a new Space is deployed with its stamp
+    hub.sync_space(fake_hub, REPOS)
+    assert len(FakeHub.uploads) == 3
 
 
 @pytest.mark.parametrize("env, flag, expected", [

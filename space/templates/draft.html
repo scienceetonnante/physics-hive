@@ -3,9 +3,13 @@
 {% block title %}Draft{% endblock %}
 {% block content %}
 <div class="filebar">
-  <div class="fleft"><span class="fname">draft.tex</span><span class="fmeta">What you decided to keep: {{ results }} result{{ 's' if results != 1 }}, {{ conjectures }} conjecture{{ 's' if conjectures != 1 }}. A claim is established when a result here names it.</span></div>
+  <div class="fleft"><span class="fname">draft.tex</span><span class="fmeta">What you decided to keep: {{ results }} result{{ 's' if results != 1 }}, {{ conjectures }} conjecture{{ 's' if conjectures != 1 }}. Agents call a claim established when a result here names it.</span></div>
   <div class="ftools"><a class="btn" href="/draft.pdf">PDF</a><a class="btn" href="/draft/edit">Edit source</a></div>
 </div>
+{% if not results and not conjectures %}
+<div class="empty-note">Nothing is in the draft yet. A result enters it when you tick it in a debrief.
+  {% if awaiting %}{{ "A session is" if awaiting == 1 else awaiting ~ " sessions are" }} waiting for your response on the <a href="/">Review page</a>.{% endif %}</div>
+{% endif %}
 {% if flags %}
 <div class="warn"><b>To look at.</b> {% for f in flags %}{{ f | md_inline }}{{ "; " if not loop.last else "." }}{% endfor %} The next debrief proposes the change.</div>
 {% endif %}

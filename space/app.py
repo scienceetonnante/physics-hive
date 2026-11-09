@@ -2,9 +2,9 @@
 
 Five pages, each showing files (design, section 14):
 
-- Latest: the debriefs, newest first (open ones in full, as forms: answers,
-  ticks, the note; closed ones folded);
 - Project: project.md and conventions.md, each with an editor;
+- Review (the first page, at /): the debriefs, newest first (open ones in full,
+  as forms: answers, ticks, the note; closed ones folded);
 - Draft: draft.tex rendered like an arXiv HTML paper, an editor with a preview
   beside it, and the PDF;
 - Sessions: one line per session; each opens its note, rendered the same way;
@@ -179,7 +179,7 @@ def check_form(request: Request, token: str) -> str | None:
 def page(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
     here = quote(request.url.path)
     context.update(request=request, user=signed_in(request), local=backend.local, name=backend.project_name(),
-                   status=backend.status_line(), csrf=csrf_token(request), open_count=backend.open_count(),
+                   status=backend.status_line(), csrf=csrf_token(request), awaiting=backend.awaiting_count(),
                    flash=request.session.pop("flash", None), here=request.url.path, latex_css=LATEX_CSS,
                    sign_in=f"/oauth/huggingface/login?_target_url={here}",
                    sign_out=f"/oauth/huggingface/logout?_target_url={here}")

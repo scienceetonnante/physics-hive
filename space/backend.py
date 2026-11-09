@@ -98,6 +98,151 @@ def first_sentence(text: str, limit: int = 220) -> str:
     return sentence if len(sentence) <= limit else sentence[: limit - 1] + "…"
 
 
+# ----- what the pages say about claims and debriefs, computed from the record -----
+
+ARTEFACT_WORDS = {"derivation": ("a derivation", "derivations"), "computation": ("a computation", "computations")}
+NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+# Tick lines are grouped by the file they change: the first of these patterns found in the line; "Other" if none.
+TICK_GROUPS = ((re.compile(r"draft\.tex|\bthe draft\b", re.I), "Draft (draft.tex)"),
+               (re.compile(r"project\.md|\bnext steps?\b|\bthe approach\b", re.I), "Research plan (project.md)"),
+               (re.compile(r"conventions\.md|\bthe conventions\b", re.I), "Conventions (conventions.md)"))
+FILE_NAMES = {"project.md": "Research plan", "conventions.md": "Notation and conventions", "draft.tex": "Draft"}
+# A file line of "Changed by this session", as session.py end writes it (human.changed_by_session).
+CHANGED_LINE_RE = re.compile(r"^- `([^`]+)`(?: \(\+(\d+) −(\d+) lines?\))?: (.*)$")
+
+
+def joined(parts: list[str]) -> str:
+    """'a', 'a and b', 'a, b and c'."""
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def counted(n: int, one: str, many: str) -> str:
+    return one if n == 1 else f"{NUMBER_WORDS.get(n, str(n))} {many}"
+
+
+def review_outcome(reviews) -> tuple[str, str]:
+    """What the reviews of one artefact say about a claim, in words, with a tone: ok, open or bad."""
+    if not reviews:
+        return "not reviewed yet", "open"
+    verdicts = {r.verdict for r in reviews}
+    if "refuted" in verdicts:
+        return ("with reviews that disagree", "bad") if "confirmed" in verdicts else ("refuted by a review", "bad")
+    confirmed = [r for r in reviews if r.verdict == "confirmed"]
+    if not confirmed:
+        return "with an inconclusive review", "open"
+    people = [str(r.by.get("user") or "a person") for r in confirmed if r.by_human]
+    agents = len(confirmed) - len(people)
+    parts = ([f"confirmed by {counted(agents, 'a blind review (agent)', 'blind reviews (agent)')}"] if agents else []) + \
+            ([f"checked by {joined(people)}"] if people else [])
+    return " and ".join(parts), "ok"
+
+
+def evidence_text(ws, card_id: str) -> tuple[str, str]:
+    """One sentence, without its full stop, on what supports a claim ('A derivation and a computation, each
+    confirmed by a blind review (agent)'), and its tone: ok (confirmed), open (not confirmed yet) or bad
+    (a review refutes it)."""
+    items = ws.evidence(card_id)
+    if not items:
+        return "No evidence yet: no derivation or computation supports it", "open"
+    groups: dict[str, dict[str, int]] = {}
+    tones = []
+    order = list(ARTEFACT_WORDS)  # derivations first
+    items = sorted(items, key=lambda i: order.index(k) if (k := ws.artefacts[i.artefact].kind) in order else len(order))
+    for item in items:
+        outcome, tone = review_outcome(item.reviews)
+        kind = ws.artefacts[item.artefact].kind
+        groups.setdefault(outcome, {}).setdefault(kind, 0)
+        groups[outcome][kind] += 1
+        tones.append(tone)
+    phrases = []
+    for outcome, kinds in groups.items():
+        things = joined([counted(n, *ARTEFACT_WORDS.get(k, (f"a {k}", f"{k}s"))) for k, n in kinds.items()])
+        each = "each " if sum(kinds.values()) > 1 and outcome.startswith(("confirmed", "checked", "refuted")) else ""
+        phrases.append(f"{things}, {each}{outcome}")
+    text = "; ".join(phrases)
+    tone = "bad" if "bad" in tones else "ok" if "ok" in tones else "open"
+    return text[0].upper() + text[1:], tone
+
+
+def place_text(ws, card_id: str) -> str:
+    return {"result": "In the draft, as a result",
+            "conjecture": "In the draft, as a conjecture"}.get(ws.in_draft(card_id), "Not in the draft")
+
+
+def warning_text(ws, card_id: str) -> str | None:
+    """Why a claim is in doubt: refuted, revised, or depending on a claim that is."""
+    status = ws.status(card_id)
+    if status == "refuted":
+        return f"Refuted by {', '.join(ws.refuters(card_id))}."
+    if status == "revised":
+        return f"Revised by {', '.join(ws.revisers(card_id))}: the newer claim replaces it."
+    causes = ws.needs_recheck(card_id)
+    if causes:
+        return "Needs a re-check: it depends on " + ", ".join(f"{c} ({ws.status(c)})" for c in causes) + "."
+    return None
+
+
+def tick_groups(ticks) -> list[tuple[str, list]]:
+    """The tick lines grouped by the file they change (the first one they name), each with its index."""
+    groups: dict[str, list] = {label: [] for _, label in TICK_GROUPS}
+    groups["Other"] = []
+    for index, tick in enumerate(ticks):
+        found = sorted((m.start(), label) for pattern, label in TICK_GROUPS if (m := pattern.search(tick.text)))
+        groups[found[0][1] if found else "Other"].append((index, tick))
+    return [(label, items) for label, items in groups.items() if items]
+
+
+def line_counts(added: int, removed: int) -> str:
+    parts = ([f"{added} line{'s' if added != 1 else ''} added"] if added else []) + \
+            ([f"{removed} line{'s' if removed != 1 else ''} removed"] if removed else [])
+    return " and ".join(parts) or "changed"
+
+
+def parse_changed(text: str) -> dict | None:
+    """'Changed by this session' as written by session.py end: the changed files (name, path, line counts,
+    the debriefs whose ticks it applied, the diff) and a sentence for the unchanged ones. None if the text
+    does not have that shape, so that the page shows it as it is."""
+    files, diff, in_diff = [], [], False
+    for line in text.splitlines():
+        if in_diff:
+            if line.strip().startswith("```"):
+                in_diff = False
+                files[-1]["diff"] += diff
+                diff = []
+            else:
+                diff.append(("add" if line.startswith("+") else "del" if line.startswith("-") else "", line))
+            continue
+        if line.strip().startswith("```") and files:
+            in_diff = True
+            continue
+        m = CHANGED_LINE_RE.match(line.strip())
+        if m:
+            path, added, removed, rest = m.groups()
+            files.append({"path": path, "name": FILE_NAMES.get(path, path), "changed": added is not None,
+                          "counts": line_counts(int(added or 0), int(removed or 0)),
+                          "ticked": re.findall(r"as you ticked in (S\d+)", rest), "diff": []})
+    if not files:
+        return None
+    same = [f["name"] for f in files if not f["changed"]]
+    unchanged = (joined([same[0]] + [n.lower() for n in same[1:]]) + ": unchanged.") if same else ""
+    return {"files": [f for f in files if f["changed"]], "unchanged": unchanged}
+
+
+def answered(debrief) -> bool:
+    """The researcher has written an answer or a note, or ticked a line, in this debrief."""
+    return bool(debrief.note.strip() or any(q.answer.strip() for q in debrief.questions)
+                or any(t.checked for t in debrief.ticks))
+
+
+def long_date(stamp) -> str:
+    """A time stamp such as '2026-11-06T15:56:48Z' as '6 November 2026' ('' if there is none)."""
+    try:
+        day = dt.date.fromisoformat(str(stamp or "")[:10])
+    except ValueError:
+        return ""
+    return f"{day.day} {day:%B %Y}"
+
+
 def is_session_pr(pr: dict) -> bool:
     """A session's pull request is titled `[S12] …`, 12 being its own number; just after the claim, `[draft] session by …`."""
     return pr["title"].startswith((f"[S{pr['num']}]", "[draft] session"))
@@ -402,16 +547,22 @@ class Backend:
             return None
         return "/".join([f"{HUB}/datasets/{repo}", *parts])
 
-    def open_count(self) -> int:
+    def awaiting_count(self) -> int:
+        """Open debriefs in which the researcher has not answered, ticked or written anything yet."""
         try:
-            return sum(1 for d in self.debriefs() if d["open"])
+            snap = self.current()
+            readers = snap.m.human.read_by(snap.ws.sessions.values())
+            return sum(1 for s in snap.ws.sessions.values()
+                       if s.debrief is not None and s.id not in readers and not answered(s.debrief))
         except SpaceError:
             return 0
 
-    # --- Latest ---
+    # --- Review ---
 
     def debriefs(self) -> list[dict]:
-        """Every debrief, newest first, with its state: open until a later session has read it."""
+        """Every debrief, newest first, with its state: open until a later session has read it.
+
+        `answered`: the researcher has written an answer or a note, or ticked a line, in it."""
         snap = self.current()
         ws, human = snap.ws, snap.m.human
         readers = human.read_by(ws.sessions.values())
@@ -421,7 +572,14 @@ class Backend:
                 continue
             reader = readers.get(session.id)
             rel = f"{session.path}/debrief.md"
-            rows.append({"id": session.id, "path": rel, "text": self.read(rel), "d": session.debrief,
+            d = session.debrief
+            # The template's "Read the full note: `sessions/S<n>/note.tex`." line: the page has a button for it.
+            summary = re.sub(r"^Read the full note: `sessions/S\d+/note\.tex`\.?[ \t]*$", "", d.summary, flags=re.M).strip()
+            rows.append({"id": session.id, "number": session.number, "path": rel, "text": self.read(rel), "d": d,
+                         "summary_text": summary,
+                         "date": long_date((session.received or {}).get("started")), "answered": answered(d),
+                         "findings": [self.row(c.id) for c in ws.sorted_cards() if c.session == session.id],
+                         "groups": tick_groups(d.ticks), "changes": parse_changed(d.changed) if d.changed else None,
                          "open": reader is None, "read_by": reader[0] if reader else None,
                          "read_on": reader[1] if reader else None, "summary": first_sentence(session.debrief.summary),
                          "goal": session.goal, "note": session.has_note})
@@ -447,7 +605,8 @@ class Backend:
         snap = self.current()
         doc = snap.ws.project_doc
         return {"project": self.read("project.md"), "conventions": self.read("conventions.md"),
-                "title": doc.title if doc and not doc.is_template else None}
+                "title": doc.title if doc and not doc.is_template else None,
+                "no_next_step": doc is not None and not doc.next_steps}
 
     # --- LaTeX: the draft and the notes ---
 
@@ -502,12 +661,15 @@ class Backend:
         for session in sorted(snap.ws.sessions.values(), key=lambda s: -s.number):
             rendered = self.render_tex(self.read(f"{session.path}/note.tex")) if session.has_note else None
             if session.id in running:
-                state = "running"
+                state = "Running now"
             elif session.debrief is None:
-                state = "no debrief"
+                state = "No debrief"
+            elif session.id in readers:
+                state = f"Read by {readers[session.id][0]}"
             else:
-                state = f"read by {readers[session.id][0]}" if session.id in readers else "debrief open"
-            rows.append({"id": session.id, "goal": session.goal, "state": state, "has_note": session.has_note,
+                state = "Answered, waiting for the next session" if answered(session.debrief) else "Awaiting your response"
+            rows.append({"id": session.id, "number": session.number, "goal": session.goal, "state": state,
+                         "date": long_date((session.received or {}).get("started")), "has_note": session.has_note,
                          "title": rendered.title if rendered else "",
                          "abstract": first_sentence(re.sub(r"<[^>]+>", "", rendered.abstract), 300) if rendered else ""})
         return rows
@@ -577,10 +739,14 @@ class Backend:
             return {"id": card_id, "kind": None, "status": "missing", "status_text": "missing", "recheck": [],
                     "statement": "", "evidence": None, "draft": None}
         recheck = [] if ws.status(card_id) in ("refuted", "revised") else ws.needs_recheck(card_id)
+        claim = card.kind == "claim"
+        evidence, tone = evidence_text(ws, card.id) if claim else (None, None)
         return {"id": card.id, "kind": card.kind, "status": ws.status(card.id),
                 "status_text": regen.status_text(ws, card.id), "recheck": [(c, ws.status(c)) for c in recheck],
                 "statement": card.statement, "draft": ws.in_draft(card.id),
-                "evidence": regen.evidence_parts(ws, card.id) if card.kind == "claim" else None}
+                "evidence": regen.evidence_parts(ws, card.id) if claim else None,
+                "evidence_text": evidence, "tone": tone, "place": place_text(ws, card.id) if claim else None,
+                "warning": warning_text(ws, card.id) if claim else None, "refutes": card.refutes}
 
     def card(self, card_id: str) -> dict:
         snap = self.current()

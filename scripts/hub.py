@@ -28,6 +28,7 @@ creator's login token.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,7 @@ from pathlib import Path
 from common import INSTALL_COMMAND, ScriptError, git, git_out, now_iso, rendered_version, rerender, say, warn
 from huggingface_hub import HfApi, get_token  # isort: skip
 from huggingface_hub import constants as hf_constants  # isort: skip
+from huggingface_hub.errors import EntryNotFoundError  # isort: skip
 from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars  # isort: skip
 
 DATASET = "dataset"
@@ -46,6 +48,7 @@ SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, ins
 REPO_PREFIX = "physics-hive-"  # the repositories of project <name> are <org>/physics-hive-<name>[-traces, ...]
 CARD_TITLE = "[Physics Hive] {name}"
 CARD_DESCRIPTION_LIMIT = 60  # the Hub refuses a longer short_description
+SPACE_STAMP = "METHOD"  # in the Space repository: the stamp of the app it runs (space_app_stamp)
 
 disable_progress_bars()  # the scripts' output is read by agents; keep it to what they need
 
@@ -262,15 +265,55 @@ def space_card(readme: str, name: str, question: str | None) -> str:
     return "---\n" + "\n".join(lines) + "\n---\n" + readme[m.end():]
 
 
+def space_app_stamp(app: Path) -> str:
+    """What identifies a Space app: the method version of its copy and a hash of its files ('0.5.4 1a2b…')."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in app.rglob("*") if p.is_file() and "__pycache__" not in p.parts
+                       and p.suffix != ".pyc" and p.name != ".DS_Store"):
+        digest.update(path.relative_to(app).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    version_file = app.parent / "VERSION"
+    version = version_file.read_text().strip() if version_file.is_file() else "?"
+    return f"{version} {digest.hexdigest()[:16]}"
+
+
 def upload_space_app(app: Path, repos: dict, question: str | None, message: str) -> None:
-    """Upload the Space app from a method copy, with the project's card in its README.md, in one commit."""
+    """Upload the Space app from a method copy, with the project's card in its README.md and its stamp in
+    SPACE_STAMP, in one commit."""
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp) / "space"
-        shutil.copytree(app, folder, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        shutil.copytree(app, folder, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
         readme = folder / "README.md"
         name = project_name(repos["workspace"])
         readme.write_text(space_card(readme.read_text(encoding="utf-8"), name, question), encoding="utf-8")
+        (folder / SPACE_STAMP).write_text(space_app_stamp(app) + "\n", encoding="utf-8")
         api().upload_folder(repo_id=repos["space"], repo_type="space", folder_path=folder, commit_message=message)
+
+
+def sync_space(root: Path, repos: dict) -> None:
+    """Make the Space run the app of this checkout's method copy, if it runs another one.
+
+    The Space reads the workspace with the scripts of the method copy on main, so its app must come from the
+    same copy: after an upgrade is merged, the next session start uploads it. Only the session start calls
+    this, because it has just checked out origin/main; another checkout may be behind main and would put an
+    older app back. A Space deployed before stamps existed has none, and gets the app once. A failure only warns.
+    """
+    space = repos.get("space")
+    app = root / ".physics-hive" / "space"
+    if not space or not (app / "app.py").is_file():
+        return
+    stamp = space_app_stamp(app)
+    version = stamp.split()[0]
+    try:
+        try:
+            deployed = Path(api().hf_hub_download(space, SPACE_STAMP, repo_type="space")).read_text().strip()
+        except EntryNotFoundError:
+            deployed = ""
+        if deployed == stamp:
+            return
+        upload_space_app(app, repos, project_question(root), f"Run the Space app of method {version}")
+        say(f"The Space {space} now runs the app of method {version}; it rebuilds, which takes a few minutes.")
+    except (HfHubHTTPError, EntryNotFoundError, OSError, ScriptError) as exc:
+        warn(f"warning: could not update the app of the Space {space} ({exc}); it keeps the app it has.")
 
 
 def space_host(space: str) -> str | None:
@@ -382,6 +425,7 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
     base = git_out(root, "rev-parse", "origin/main")
     sync_sources_down(root, repos)
     update_space_card(repos, project_question(root))
+    sync_space(root, repos)
     return {"id": session, "number": number, "pr": number, "pr_url": pr_url(repos["workspace"], number),
             "branch": branch, "base": base, "operator": user}
 
@@ -614,4 +658,5 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     hf.change_discussion_status(repos["workspace"], pr.num, "open", repo_type=DATASET)
     git(target, "checkout", "-q", previous)
     say(f"Opened pull request #{pr.num} to upgrade the method: {pr_url(repos['workspace'], pr.num)}")
-    say("Merge it from the Hub, then pull main and run init inside each checkout to re-render.")
+    say("Merge it from the Hub, then pull main and run init inside each checkout to re-render. The Space switches "
+        "to the new app at the next session start.")

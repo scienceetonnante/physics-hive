@@ -18,7 +18,7 @@ This Space is the browser view of one PhysicsHive shared space: a private resear
 run sessions in a terminal and the researcher follows and steers them from here. Sign in with your Hugging
 Face account (you must be a member of the organisation that owns the project).
 
-- **Latest**: the debriefs of the sessions, newest first; the ones no session has read yet are marked *active*. Answer the questions, tick the lines you accept,
+- **Review** (the page the Space opens on): the debriefs of the sessions, newest first; an open one is marked *Awaiting your response* until you answer in it. The session's findings come first, each with what supports it and whether it is in the draft; your response stays in view on the right. Answer the questions, tick the lines you accept,
   and write anything else in the note box; the next session applies what you ticked.
 - **Project**: `project.md` (the question, goal, approach and next steps) and `conventions.md`, each with an
   editor.

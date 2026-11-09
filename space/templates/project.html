@@ -6,7 +6,9 @@
     <div class="fleft"><span class="fname">project.md</span><span class="fmeta">Yours. Agents change it only to apply what you ticked, and to remove a step their session finished.</span></div>
     <div class="ftools"><a class="btn" href="/edit/project.md">Edit</a></div>
   </div>
-  <div class="sheet md">{{ project | md }}</div>
+  <div class="sheet md">{{ project | md }}
+    {% if no_next_step %}<div class="empty-note">No next step. The next session will propose a brief and ask the operator to confirm it in the terminal; <a href="/edit/project.md">add a step</a> to choose it yourself.</div>{% endif %}
+  </div>
 
   <div class="filebar">
     <div class="fleft"><span class="fname">conventions.md</span><span class="fmeta">Agents may edit it. Every change they make is shown in their session's debrief.</span></div>

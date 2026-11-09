@@ -1,16 +1,20 @@
 {% extends "base.html" %}
-{% from "macros.html" import badge, card_row %}
+{% from "macros.html" import card_row %}
 {% block title %}{{ card.id }}{% endblock %}
 {% block content %}
 <div class="narrow">
   <p class="record-note">Session record{% if card.session %} · <a href="/session/{{ card.session }}">{{ card.session }}</a>{% endif %}</p>
   <div class="sheet">
-    <div class="filebar"><div class="fleft"><span class="fname">{{ card.id }}</span> {{ badge(row.status) }}
-      {% if row.draft %}<span class="chip">in the draft as a {{ row.draft }}</span>{% endif %}
-      {% if row.status_text != row.status %}<span class="fmeta">{{ row.status_text | md_inline }}</span>{% endif %}</div></div>
+    <div class="filebar"><div class="fleft"><span class="fname">{{ card.id }}</span>
+      {% if card.kind == "dead-end" %}<span class="chip">dead end</span>{% endif %}</div></div>
     <div class="claim-box">{{ card.statement | md_inline }}</div>
-    {% if row.recheck %}<div class="warn"><b>Needs re-check.</b> It depends, directly or not, on
-      {% for cid, st in row.recheck %}{{ cid | md_inline }} ({{ st }}){{ ", " if not loop.last }}{% endfor %}.</div>{% endif %}
+    {% if row.warning %}<div class="warn">{{ row.warning | md_inline }}</div>{% endif %}
+    {% if card.kind == "claim" %}
+    <dl class="facts" style="margin:0 0 16px">
+      <dt>Evidence</dt><dd class="tone-{{ row.tone }}">{{ row.evidence_text }}</dd>
+      <dt>Draft</dt><dd>{{ row.place }}</dd>
+    </dl>
+    {% endif %}
     {% if card.body.strip() %}<div class="md">{{ card.body | md }}</div>{% endif %}
     <p class="fmeta" style="margin-top:14px">Origin: {{ origin | md_inline }}{% if trace %} · <a href="{{ trace }}">trace of {{ card.session }}</a>{% endif %}</p>
   </div>

@@ -6,42 +6,80 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro debrief_form(d, user, local, sign_in, csrf) -%}
-<form method="post" action="/debrief/{{ d.id }}" data-save>
-  <div class="md">{{ d.d.summary | md }}</div>
-  {% if d.d.changed %}
-  <h4 class="section-label">Changed by this session</h4>
-  <div class="md">{{ d.d.changed | md }}</div>
-  {% endif %}
-  {% for q in d.d.questions %}
-  <div class="md" style="margin-top:18px">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
-  <div class="answer {{ 'filled' if q.answer }}">
-    <label for="a-{{ d.id }}-{{ q.number }}">Answer</label>
-    <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="2" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
+{# A debrief: what the session found and did on the left; the researcher's response, a form, on the right. #}
+{% macro debrief_view(d, user, local, sign_in, csrf) -%}
+<div class="review-grid">
+  <div class="review-text">
+    {% if d.findings %}
+    <h2 class="section-label">Findings</h2>
+    {% for row in d.findings %}{{ finding(row) }}{% endfor %}
+    {% endif %}
+    <h2 class="section-label">Summary</h2>
+    <div class="md">{{ d.summary_text | md }}</div>
+    {% if d.note %}<p><a class="btn" href="/note/{{ d.id }}">Read the full note ↗</a></p>{% endif %}
+    {% if d.d.changed %}
+    <h2 class="section-label">Changed by this session</h2>
+    {% if d.changes %}
+    <ul class="changes">
+      {% for f in d.changes.files %}
+      <li><b>{{ f.name }}</b> (<code>{{ f.path }}</code>): {{ f.counts }}{% if f.ticked %}, as you ticked in {{ f.ticked | join(", ") }}{% endif %}.
+        {% if f.diff %}<details><summary>Show the changes</summary><pre class="diff">{% for kind, text in f.diff %}<span class="{{ kind }}">{{ text }}</span>
+{% endfor %}</pre></details>{% endif %}</li>
+      {% endfor %}
+      {% if d.changes.unchanged %}<li class="muted">{{ d.changes.unchanged }}</li>{% endif %}
+    </ul>
+    {% else %}
+    <div class="md">{{ d.d.changed | md }}</div>
+    {% endif %}
+    {% endif %}
   </div>
-  {% endfor %}
-  {% if d.d.ticks %}
-  <p class="md" style="margin-top:18px"><b>Tick what you accept.</b> The next session applies the ticked lines.</p>
-  <ul class="ticks md">
-    {% for t in d.d.ticks %}
-    <li><label><input type="checkbox" name="tick-{{ loop.index0 }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
+
+  <form class="response" method="post" action="/debrief/{{ d.id }}" data-save>
+    <h2 class="response-title">Your response</h2>
+    {% for q in d.d.questions %}
+    <div class="md question">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
+    <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="3" aria-label="Your answer to question {{ q.number }}"
+      placeholder="Your answer" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
     {% endfor %}
-  </ul>
-  {% endif %}
-  <h4 class="section-label">Anything else for the next session</h4>
-  <div class="answer note-box {{ 'filled' if d.d.note }}">
-    <textarea name="note" rows="3" placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
+    {% if d.d.ticks %}
+    <h3 class="response-h">Tick what you accept</h3>
+    <p class="fmeta" style="margin:0 0 6px">The next session applies the ticked lines, exactly as written.</p>
+    {% for label, items in d.groups %}
+    <div class="tick-group">{{ label }}</div>
+    <ul class="ticks md">
+      {% for index, t in items %}
+      <li><label><input type="checkbox" name="tick-{{ index }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
+      {% endfor %}
+    </ul>
+    {% endfor %}
+    {% endif %}
+    <h3 class="response-h">Anything else for the next session</h3>
+    <textarea name="note" rows="3" aria-label="Anything else for the next session"
+      placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
+    <input type="hidden" name="base" value="{{ d.text }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="actions">
+      {% if user %}<button class="primary" data-label="Save my response">Save my response</button>{% endif %}
+      <span class="save-state" aria-live="polite"></span>
+    </div>
+    <p class="fmeta">Saved choices take effect when the next session starts. Saving does not start a session.</p>
+    {% if not user %}{{ sign_in_first(local, sign_in, "answer") }}{% endif %}
+    <p class="small" style="margin:0"><a href="/edit/{{ d.path }}">Edit the markdown</a></p>
+  </form>
+</div>
+{%- endmacro %}
+
+{# A finding of a session on the Review page: a claim or a dead end, with what supports it. #}
+{% macro finding(row) -%}
+<div class="finding">
+  {% if row.kind == "dead-end" %}<div class="tick-group" style="margin-top:0">Dead end{% if row.refutes %}: refutes {{ row.refutes | join(", ") | md_inline }}{% endif %}</div>{% endif %}
+  <div class="finding-statement">{{ row.statement | md_inline }}</div>
+  {% if row.warning %}<div class="warn small">{{ row.warning | md_inline }}</div>{% endif %}
+  <div class="fmeta">
+    {% if row.kind == "claim" %}<span class="tone-{{ row.tone }}">{{ row.evidence_text }}</span> · {{ row.place }} · {% endif %}
+    <a href="/card/{{ row.id }}">Inspect the evidence ↗</a> <span class="faint">{{ row.id }}</span>
   </div>
-  <input type="hidden" name="base" value="{{ d.text }}">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <div class="actions">
-    {% if user %}<button class="primary">Save</button>{% endif %}
-    <span class="save-state" aria-live="polite"></span>
-    {% if d.note %}<a href="/note/{{ d.id }}">Read note {{ d.id }}</a>{% endif %}
-    <a href="/edit/{{ d.path }}" class="small">Edit the markdown</a>
-  </div>
-  {% if not user %}{{ sign_in_first(local, sign_in, "answer") }}{% endif %}
-</form>
+</div>
 {%- endmacro %}
 
 {% macro paper_box(html) -%}
@@ -72,16 +110,13 @@
 </form>
 {%- endmacro %}
 
-{% macro badge(status) -%}
-<span class="chip {{ status }}">{{ status }}</span>
-{%- endmacro %}
-
+{# A card in a list: its statement, then what supports it and whether it is in the draft. #}
 {% macro card_row(row) -%}
 <li>
-  <a class="fname" href="/card/{{ row.id }}">{{ row.id }}</a> {{ badge(row.status) }}
-  {% if row.draft %}<span class="chip">in the draft as a {{ row.draft }}</span>{% endif %}
-  {% if row.recheck %}<span class="chip open">needs re-check</span>{% endif %}
+  <a class="fname" href="/card/{{ row.id }}">{{ row.id }}</a>
+  {% if row.kind == "dead-end" %}<span class="chip">dead end</span>{% elif row.kind is none %}<span class="chip bad">missing</span>{% endif %}
   <div>{{ row.statement | md_inline }}</div>
-  {% if row.evidence is not none %}<div class="fmeta">evidence: {{ (row.evidence | join(", ") if row.evidence else "none yet") | md_inline }}</div>{% endif %}
+  {% if row.warning %}<div class="warn small" style="margin:4px 0">{{ row.warning | md_inline }}</div>{% endif %}
+  {% if row.kind == "claim" %}<div class="fmeta"><span class="tone-{{ row.tone }}">{{ row.evidence_text }}</span> · {{ row.place }}</div>{% endif %}
 </li>
 {%- endmacro %}
