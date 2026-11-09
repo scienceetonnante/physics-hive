@@ -88,6 +88,12 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
                                                      "references.bib"))]
     assert git(ws, "status", "--porcelain") == ""
 
+    # An upgrade to the same copy of the method has nothing to commit, and says so.
+    head = git(ws, "rev-parse", "HEAD")
+    r = run(REPO / "scripts/init.py", "--upgrade", "--dir", ws, "--yes", cwd=tmp_path)
+    assert r.returncode == 0 and "nothing to upgrade" in r.stdout, r.stderr + r.stdout
+    assert git(ws, "rev-parse", "HEAD") == head and git(ws, "status", "--porcelain") == ""
+
     # Adding a harness keeps the others.
     r = run(REPO / "scripts/init.py", "--harness", "codex", "--dir", ws, "--yes", cwd=tmp_path)
     assert r.returncode == 0, r.stderr + r.stdout

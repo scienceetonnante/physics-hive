@@ -588,13 +588,10 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     repos = hub_repos(Workspace(target))
     env = git_env()
     fetch(target, env)
-    hf = api()
-    pr = hf.create_pull_request(repos["workspace"], title=f"Upgrade the method from {old} to {new}",
-                                description="Replaces .physics-hive/ with a newer copy of the method. "
-                                            "Merge it, then re-render in every checkout with init.",
-                                repo_type=DATASET)
     previous = git_out(target, "rev-parse", "--abbrev-ref", "HEAD")
-    git(target, "checkout", "-q", "--no-track", "-B", f"upgrade/{new}", "origin/main")
+    # The upgrade is made on main as it is on the Hub, without a local branch (deleting one writes .git/config,
+    # which Claude Code's sandbox refuses); its commit is kept by the pull request.
+    git(target, "checkout", "-q", "--detach", "origin/main")
     copy_method(target)
     toml = (target / "project.toml").read_text()
     import re
@@ -602,7 +599,17 @@ def upgrade_shared(target: Path, old: str, new: str, copy_method, harnesses: lis
     toml = re.sub(r'(physics_hive_version\s*=\s*)"[^"]*"', lambda m: f'{m.group(1)}"{new}"', toml)
     (target / "project.toml").write_text(toml)
     git(target, "add", "-A", "--", ".physics-hive", "project.toml")
+    if not git_out(target, "diff", "--cached", "--name-only"):
+        git(target, "checkout", "-q", previous)
+        say(f"main on the Hub already has this copy of the method ({new}); there is nothing to upgrade.")
+        return
     git(target, "commit", "-q", "-m", f"Upgrade the method copy from {old} to {new}")
+    # The pull request is opened only now, so that an upgrade that stops above leaves none behind.
+    hf = api()
+    pr = hf.create_pull_request(repos["workspace"], title=f"Upgrade the method from {old} to {new}",
+                                description="Replaces .physics-hive/ with a newer copy of the method. "
+                                            "Merge it, then re-render in every checkout with init.",
+                                repo_type=DATASET)
     push_pr(target, pr.num, env)
     hf.change_discussion_status(repos["workspace"], pr.num, "open", repo_type=DATASET)
     git(target, "checkout", "-q", previous)

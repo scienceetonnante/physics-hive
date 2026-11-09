@@ -6,7 +6,7 @@
   <div class="fleft"><a href="/draft" class="fmeta">← Draft</a><span class="fname">draft.tex</span><span class="fmeta">Plain LaTeX. A result needs a claim with a confirming review; put the others in a conjecture.</span></div>
 </div>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
-<form method="post" action="/edit/draft.tex" id="draft-form">
+<form method="post" action="/edit/draft.tex" id="draft-form" data-save {{ 'data-unsaved' if error }}>
   <div class="split">
     <textarea class="code" name="text" id="draft-text" spellcheck="false" {{ 'readonly' if not user }}>{{ text }}</textarea>
     <div id="draft-preview">{{ paper_box(html) }}</div>
@@ -15,7 +15,8 @@
   <input type="hidden" name="csrf" value="{{ csrf }}" id="csrf">
   <div class="actions">
     {% if user %}<button class="primary">Save</button>{% endif %}
-    <a href="/draft" class="small">Discard my changes</a>
+    <span class="save-state" aria-live="polite"></span>
+    <a href="/draft" class="small" data-discard>Discard my changes</a>
   </div>
   {% if not user %}{{ sign_in_first(local, sign_in, "edit the draft") }}{% endif %}
 </form>

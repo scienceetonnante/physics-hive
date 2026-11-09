@@ -24,6 +24,7 @@ Run it on a local workspace folder, without the Hub and without sign-in:
     PHYSICS_HIVE_LOCAL=/path/to/workspace PHYSICS_HIVE_LOCAL_USER=alice uvicorn app:app --reload
 """
 
+import logging
 import re
 import secrets
 from html import escape
@@ -41,7 +42,7 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 from starlette.middleware.sessions import SessionMiddleware
 
 import latex
-from backend import Backend, SpaceError
+from backend import Backend, SpaceError, log
 
 HERE = Path(__file__).resolve().parent
 # Workspace paths, card, paper, artefact and critique IDs, and session numbers. Only those that exist become links.
@@ -130,6 +131,12 @@ def md_inline(text) -> Markup:
 # ----- the app -----
 
 backend = Backend.from_env()
+# How long each load and write takes, in the Space's logs: where a save spends its few seconds.
+if not log.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
 
 
 def fresh(request: Request) -> None:

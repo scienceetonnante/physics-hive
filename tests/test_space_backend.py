@@ -217,6 +217,8 @@ class FakeApi:
             path.write_bytes(op.path_or_fileobj)
         git(self.remote, "add", "-A")
         git(self.remote, "commit", "-q", "-m", commit_message)
+        sha = git(self.remote, "rev-parse", "HEAD")
+        return SimpleNamespace(oid=sha, commit_url=f"https://huggingface.co/datasets/{repo_id}/commit/{sha}")
 
     def get_repo_discussions(self, repo_id, repo_type, discussion_type):
         return [SimpleNamespace(num=4, title="[S4] Compute X", status="draft", author="bob", created_at=None,
@@ -235,8 +237,10 @@ def test_the_hub_store_reads_a_clone_and_commits_through_the_api(toy, tmp_path):
     assert [r["id"] for r in b.running()] == ["S4"]
 
     [d] = b.debriefs()
-    b.save_debrief("alice", "S1", {1: "Yes."}, {1}, "", d["text"])
+    message = b.save_debrief("alice", "S1", {1: "Yes."}, {1}, "", d["text"])
     [commit] = api.commits
+    sha = git(toy.root, "rev-parse", "HEAD")
+    assert f"debrief (commit [{sha[:7]}](https://huggingface.co/datasets/org/toy/commit/{sha}))." in message
     assert commit["parent"] == revision and commit["message"] == "Answer the S1 debrief (alice, from the Space)"
     assert b.snap.revision != revision and parse_debrief(b.read("sessions/S1/debrief.md")).questions[0].answer == "Yes."
     for _ in range(4):  # old worktrees are removed
@@ -305,13 +309,22 @@ def test_the_pages_and_the_forms(client):
     bad = draft.replace("\\end{document}", result("CL-S1-2") + "\\end{document}")
     r = c.post("/edit/draft.tex", data={"text": bad, "base": draft, "csrf": token})
     assert "was not saved" in r.text and (toy.root / "draft.tex").read_text() == draft
+    assert "data-save data-unsaved" in r.text  # the refused text shows as unsaved
+
+
+def test_the_save_forms_say_when_they_have_unsaved_changes(client):
+    c, _ = client
+    for url in ("/", "/edit/project.md", "/draft/edit", "/literature"):
+        page = c.get(url).text
+        assert "data-save" in page and 'class="save-state' in page and "data-save data-unsaved" not in page, url
+    assert "this.form.requestSubmit()" in c.get("/literature").text  # a rating shows that it is saving
 
 
 def test_discarding_an_edit_goes_back(client):
     c, _ = client
     for url, back in (("/edit/project.md", "/project"), ("/edit/sessions/S1/debrief.md", "/#S1"),
                       ("/edit/literature/seeds.md", "/literature"), ("/draft/edit", "/draft")):
-        assert f'<a href="{back}" class="small">Discard my changes</a>' in c.get(url).text, url
+        assert f'<a href="{back}" class="small" data-discard>Discard my changes</a>' in c.get(url).text, url
 
 
 def test_signing_in_from_a_new_tab(client):

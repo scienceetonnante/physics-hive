@@ -332,6 +332,10 @@ def upgrade(target: Path, harnesses: list[str] | None) -> None:
     (target / "project.toml").write_text(text)
     render(target, harnesses or rendered_harnesses(target))
     git(target, "add", "-A", "--", ".physics-hive", "project.toml")
+    if not git_out(target, "diff", "--cached", "--name-only"):
+        say(f"This workspace already has this copy of the method ({new}); there is nothing to upgrade. "
+            "The harness files were rendered again.")
+        return
     git(target, "commit", "-q", "-m", f"Upgrade the method copy from {old} to {new}")
     regen(target)
     say(f"Upgraded the method copy from {old} to {new} and re-rendered the harness files.")

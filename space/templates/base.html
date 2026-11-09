@@ -47,6 +47,11 @@ footer.status { max-width: 1180px; margin: 0 auto; padding: 0 16px 30px; color: 
 .btn, button { font: inherit; font-weight: 500; font-size: 13.5px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
 .btn:hover, button:hover { border-color: var(--faint); text-decoration: none; }
 .btn.primary, button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: .45; cursor: default; }
+.save-state { font-size: 13px; color: var(--attn-ink); }
+form.saving { pointer-events: none; }
+form.saving textarea, form.saving .ticks, form.saving select { opacity: .6; }
+form.saving .save-state { color: var(--muted); }
 .small { font-size: 12.5px; }
 .muted { color: var(--muted); }
 .flash { background: var(--ok-bg); color: var(--ok); border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; }
@@ -141,6 +146,7 @@ ul.ticks input { margin-top: 6px; width: 16px; height: 16px; accent-color: var(-
 .rate select.r-high { background: var(--ok-bg); color: var(--ok); }
 .rate select.r-medium { background: var(--accent-soft); color: var(--accent); }
 .rate .agent { display: block; font-size: 11.5px; color: var(--muted); text-align: right; margin-top: 3px; }
+.rate .save-state { display: block; font-size: 11.5px; text-align: right; }
 .topic-h { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 6px; font-weight: 600; }
 .record-note { font-size: 13px; color: var(--muted); margin: -4px 0 14px; }
 .claim-box { font: 1.12rem/1.55 var(--font-doc); border-left: 4px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 14px; }
@@ -223,6 +229,10 @@ window.MathJax = {
         });
       });
     }
+    // Links to other sites (the Hub) open in a new tab rather than inside the Space's frame.
+    document.querySelectorAll("a[href^='http']").forEach(function (a) {
+      if (a.host !== location.host) { a.target = "_blank"; a.rel = "noopener"; }
+    });
     // A footnote marker shows its text in place when clicked.
     document.addEventListener("click", function (e) {
       var fn = e.target.closest("sup.ltx-fn");
@@ -231,6 +241,57 @@ window.MathJax = {
       fn.classList.toggle("ltx-open");
     });
   });
+</script>
+<script>
+  // Forms that save to the workspace (data-save): Save is active only when something changed, "Unsaved changes"
+  // shows next to it, the browser asks before leaving such changes, Ctrl+S or Cmd+S saves, and while the save
+  // runs (a commit to the Hub takes a few seconds) the form says so and takes no input.
+  (function () {
+    var forms = Array.prototype.slice.call(document.querySelectorAll("form[data-save]")), discarding = false;
+    if (!forms.length) return;
+    function changed(form) {  // compared with the page as the server sent it; data-unsaved: a save was refused
+      return form.hasAttribute("data-unsaved") || Array.prototype.some.call(form.elements, function (e) {
+        if (e.disabled) return false;
+        if (e.type === "checkbox") return e.checked !== e.defaultChecked;
+        return e.tagName === "TEXTAREA" && e.value !== e.defaultValue;
+      });
+    }
+    function show(form) {
+      var dirty = changed(form), saving = form.classList.contains("saving");
+      var button = form.querySelector("button.primary"), state = form.querySelector(".save-state");
+      if (button) { button.disabled = !dirty && !saving; button.textContent = saving ? "Saving…" : "Save"; }
+      if (state) state.textContent = saving ? (button ? "This takes a few seconds." : "Saving…") : dirty ? "Unsaved changes" : "";
+    }
+    forms.forEach(function (form) {
+      show(form);
+      form.addEventListener("input", function () { show(form); });
+      form.addEventListener("change", function () { show(form); });
+      form.addEventListener("submit", function (e) {
+        if (form.classList.contains("saving")) return e.preventDefault();
+        form.classList.add("saving");
+        form.querySelectorAll("textarea").forEach(function (t) { t.readOnly = true; });
+        show(form);
+      });
+    });
+    document.addEventListener("click", function (e) { if (e.target.closest("[data-discard]")) discarding = true; });
+    window.addEventListener("beforeunload", function (e) {
+      if (discarding || document.querySelector("form.saving") || !forms.some(changed)) return;
+      e.preventDefault();
+      e.returnValue = "";
+    });
+    document.addEventListener("keydown", function (e) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key || "").toLowerCase() !== "s") return;
+      var focused = document.activeElement, form = focused && focused.closest && focused.closest("form[data-save]");
+      if (!form && forms.length === 1) form = forms[0];
+      if (!form || !form.querySelector("button.primary")) return;
+      e.preventDefault();
+      if (changed(form)) form.requestSubmit();
+    });
+    // Back to a page left while it was saving: load it again, so that it shows what was saved.
+    window.addEventListener("pageshow", function (e) {
+      if (e.persisted && document.querySelector("form.saving")) location.reload();
+    });
+  })();
 </script>
 {% block scripts %}{% endblock %}
 </body>

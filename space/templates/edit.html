@@ -8,13 +8,14 @@
       <span class="fmeta">Markdown, with equations in LaTeX between $…$. Saving commits the file under your name.</span></div>
   </div>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
-  <form method="post" action="/edit/{{ path }}">
+  <form method="post" action="/edit/{{ path }}" data-save {{ 'data-unsaved' if error }}>
     <textarea class="code" name="text" spellcheck="false" {{ 'readonly' if not user }}>{{ text }}</textarea>
     <input type="hidden" name="base" value="{{ base }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="actions">
       {% if user %}<button class="primary">Save</button>{% endif %}
-      <a href="{{ back }}" class="small">Discard my changes</a>
+      <span class="save-state" aria-live="polite"></span>
+      <a href="{{ back }}" class="small" data-discard>Discard my changes</a>
     </div>
     {% if not user %}{{ sign_in_first(local, sign_in, "edit") }}{% endif %}
   </form>

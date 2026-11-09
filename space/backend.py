@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import functools
 import hashlib
 import importlib
+import logging
 import os
 import re
 import shutil
@@ -52,6 +54,7 @@ from huggingface_hub.utils import disable_progress_bars
 import latex
 
 disable_progress_bars()
+log = logging.getLogger("physics_hive")  # how long loads and writes take (app.py prints it)
 
 DATASET = "dataset"
 HUB = hf_constants.ENDPOINT
@@ -159,6 +162,7 @@ class LocalStore:
         return self.root, None
 
     def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
+        """Write the files; there is no commit to point to."""
         for rel, content in files.items():
             path = self.root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -217,11 +221,13 @@ class HubStore:
             subprocess.run(["git", "worktree", "remove", "--force", str(old)], cwd=clone, capture_output=True)
             shutil.rmtree(old, ignore_errors=True)
 
-    def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
+    def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> str | None:
+        """Commit the files to main; returns the address of the commit on the Hub."""
         operations = [CommitOperationAdd(path_in_repo=rel, path_or_fileobj=content.encode("utf-8"))
                       for rel, content in files.items()]
-        self.api.create_commit(self.repo_id, operations, commit_message=message, repo_type=DATASET,
-                               parent_commit=parent)
+        info = self.api.create_commit(self.repo_id, operations, commit_message=message, repo_type=DATASET,
+                                      parent_commit=parent)
+        return getattr(info, "commit_url", None)
 
     def pull_requests(self) -> list[dict]:
         rows = []
@@ -232,6 +238,20 @@ class HubStore:
 
 
 # ----- the backend -----
+
+
+def timed(write):
+    """Log how long a write took in all; its steps (git, reading, commit) are logged as they happen."""
+
+    @functools.wraps(write)
+    def run(*args, **kwargs):
+        start = time.perf_counter()
+        try:
+            return write(*args, **kwargs)
+        finally:
+            log.info("%s took %.2f s in all", write.__name__, time.perf_counter() - start)
+
+    return run
 
 
 @dataclass
@@ -287,9 +307,13 @@ class Backend:
     def _load(self) -> Snapshot:
         if self.store is None:
             raise SpaceError(self.error or "The Space has no workspace configured.")
+        start = time.perf_counter()
         root, revision = self.store.snapshot()
+        fetched = time.perf_counter()
         m = load_method(method_scripts(root))
         self.snap = Snapshot(root, revision, m, m.cards.Workspace(root), time.time())
+        log.info("Loaded the workspace%s: git %.2f s, reading it %.2f s", f" at {revision[:7]}" if revision else "",
+                 fetched - start, time.perf_counter() - fetched)
         return self.snap
 
     def _fresh(self) -> Snapshot:
@@ -313,7 +337,9 @@ class Backend:
                 return
             self.error, self.notes = None, []
             try:
+                start = time.perf_counter()
                 self.pull_requests = self.store.pull_requests()
+                log.info("Listed the pull requests: %.2f s", time.perf_counter() - start)
             except Exception as exc:
                 self.notes.append(f"the pull requests could not be listed ({type(exc).__name__})")
 
@@ -622,15 +648,19 @@ class Backend:
         if not user:
             raise SpaceError(f"Sign in with your Hugging Face account to {action}.")
 
-    def _commit(self, snap: Snapshot, files: dict[str, str], message: str) -> None:
+    def _commit(self, snap: Snapshot, files: dict[str, str], message: str) -> str:
+        """Commit on the snapshot, then reload. Returns the commit as the confirmation names it (empty in local mode)."""
+        start = time.perf_counter()
         try:
-            self.store.commit(files, message, snap.revision)
+            url = self.store.commit(files, message, snap.revision)
         except SpaceError:
             raise
         except Exception as exc:
             raise SpaceError(f"The Hub refused the commit ({type(exc).__name__}: {exc}). If main moved meanwhile, "
                              "reload the page and save again.") from exc
+        log.info("Committed %r: %.2f s", message, time.perf_counter() - start)
         self.refresh()
+        return f" (commit [{url.rstrip('/').rsplit('/', 1)[-1][:7]}]({url}))" if url else ""
 
     def _unchanged_since(self, rel: str, base: str | None) -> str:
         """The file's current text, after checking that it is still the text the editor started from."""
@@ -643,6 +673,7 @@ class Backend:
     def editable(self, rel: str) -> bool:
         return rel in EDITABLE or bool(DEBRIEF_RE.match(rel))
 
+    @timed
     def save_file(self, user: str | None, rel: str, content: str, base: str | None = None) -> str:
         """Save one of the researcher's files as they typed it."""
         self._require(user, "save")
@@ -656,8 +687,8 @@ class Backend:
                 raise SpaceError("Nothing to save: the text is the same.")
             if rel == "draft.tex":
                 self._check_draft(snap, current, content)
-            self._commit(snap, {rel: content}, f"Edit {rel} ({user}, from the Space)")
-        return f"Saved {rel}."
+            commit = self._commit(snap, {rel: content}, f"Edit {rel} ({user}, from the Space)")
+        return f"Saved {rel}{commit}."
 
     def _check_draft(self, snap: Snapshot, old: str, new: str) -> None:
         """Refuse a draft that adds a result the workspace's check refuses (or names a card that does not exist)."""
@@ -669,6 +700,7 @@ class Backend:
                              "confirming review; put the others in a conjecture environment, or say in a debrief "
                              "that you checked the work by hand.")
 
+    @timed
     def save_debrief(self, user: str | None, session_id: str, answers: dict[int, str], ticked: set[int],
                      note: str, base: str | None = None) -> str:
         """Write the researcher's answers, ticks and note into a debrief. The next session applies what is ticked."""
@@ -693,9 +725,10 @@ class Backend:
             new = normalise(new)
             if new == normalise(text):
                 return "Nothing changed."
-            self._commit(snap, {rel: new}, f"Answer the {session_id} debrief ({user}, from the Space)")
-        return f"Saved your answers to the {session_id} debrief. The next session reads them."
+            commit = self._commit(snap, {rel: new}, f"Answer the {session_id} debrief ({user}, from the Space)")
+        return f"Saved your answers to the {session_id} debrief{commit}. The next session reads them."
 
+    @timed
     def rate(self, user: str | None, paper_id: str, rating: str) -> str:
         """Set (or clear, with '') the researcher's rating of a paper, in literature/ratings.yaml."""
         self._require(user, "rate papers")
@@ -714,6 +747,6 @@ class Backend:
                 ratings[paper_id] = rating
             else:
                 ratings.pop(paper_id, None)
-            self._commit(snap, {human.RATINGS_FILE: human.dump_ratings(ratings)},
-                         f"Rate {paper_id} {rating or 'unrated'} ({user}, from the Space)")
-        return f"Rated {paper_id} **{rating}**." if rating else f"Removed your rating of {paper_id}."
+            commit = self._commit(snap, {human.RATINGS_FILE: human.dump_ratings(ratings)},
+                                  f"Rate {paper_id} {rating or 'unrated'} ({user}, from the Space)")
+        return f"Rated {paper_id} **{rating}**{commit}." if rating else f"Removed your rating of {paper_id}{commit}."

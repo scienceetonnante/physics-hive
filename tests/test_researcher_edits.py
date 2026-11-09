@@ -152,3 +152,49 @@ def test_starting_and_abandoning_a_session_never_writes_the_git_config(hub_repo,
     hub.abort_session(a, info)
     assert git(a, "branch", "--show-current") == "main"
     assert (a / ".git" / "config").read_bytes() == config
+
+
+class UpgradeApi:
+    """Records the pull requests an upgrade opens."""
+
+    def __init__(self):
+        self.opened = []
+
+    def create_pull_request(self, repo_id, title, **kwargs):
+        self.opened.append(title)
+        return SimpleNamespace(num=len(self.opened))
+
+    def change_discussion_status(self, *args, **kwargs):
+        pass
+
+
+def upgrade(origin: Path, a: Path, monkeypatch, new: str, copy_method) -> UpgradeApi:
+    monkeypatch.setattr(hub, "hub_repos", lambda ws: {"workspace": "org/physics-hive-x"})
+    api = UpgradeApi()
+    monkeypatch.setattr(hub, "api", lambda: api)
+    (a / "project.toml").write_text('[method]\nphysics_hive_version = "0.5.3"\n')
+    (a / ".physics-hive").mkdir()
+    (a / ".physics-hive/VERSION").write_text("0.5.3\n")
+    git(a, "add", "-A")
+    git(a, "commit", "-qm", "method 0.5.3")
+    git(a, "push", "-q", "origin", "main")
+    config = (a / ".git" / "config").read_bytes()
+    hub.upgrade_shared(a, "0.5.3", new, copy_method, [])
+    assert (a / ".git" / "config").read_bytes() == config  # Claude Code's sandbox refuses writes to it
+    assert git(a, "branch", "--show-current") == "main" and git(a, "branch") == "* main"
+    return api
+
+
+def test_an_upgrade_with_nothing_new_opens_no_pull_request(hub_repo, monkeypatch):
+    origin, a = hub_repo
+    api = upgrade(origin, a, monkeypatch, "0.5.3", lambda target: None)
+    assert api.opened == []
+
+
+def test_an_upgrade_opens_a_pull_request_with_the_new_method(hub_repo, monkeypatch):
+    origin, a = hub_repo
+    api = upgrade(origin, a, monkeypatch, "0.5.4", lambda target: (target / ".physics-hive/VERSION").write_text("0.5.4\n"))
+    assert api.opened == ["Upgrade the method from 0.5.3 to 0.5.4"]
+    assert git(origin, "show", "refs/pr/1:.physics-hive/VERSION") == "0.5.4"
+    assert 'physics_hive_version = "0.5.4"' in git(origin, "show", "refs/pr/1:project.toml")
+    assert hub_main(origin, ".physics-hive/VERSION") == "0.5.3"
