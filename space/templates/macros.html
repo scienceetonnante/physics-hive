@@ -6,70 +6,140 @@
 {% endif %}
 {%- endmacro %}
 
-{# A debrief: what the session found and did on the left; the researcher's response, a form, on the right. #}
-{% macro debrief_view(d, user, local, sign_in, csrf) -%}
-<div class="review-grid">
-  <div class="review-text">
-    {% if d.findings %}
-    <h2 class="section-label">Findings</h2>
-    {% for row in d.findings %}{{ finding(row) }}{% endfor %}
-    {% endif %}
-    <h2 class="section-label">Summary</h2>
-    <div class="md">{{ d.summary_text | md }}</div>
-    {% if d.note %}<p><a class="btn" href="/note/{{ d.id }}">Read the full note ↗</a></p>{% endif %}
-    {% if d.d.changed %}
-    <h2 class="section-label">Changed by this session</h2>
-    {% if d.changes %}
-    <ul class="changes">
-      {% for f in d.changes.files %}
-      <li><b>{{ f.name }}</b> (<code>{{ f.path }}</code>): {{ f.counts }}{% if f.ticked %}, as you ticked in {{ f.ticked | join(", ") }}{% endif %}.
-        {% if f.diff %}<details><summary>Show the changes</summary><pre class="diff">{% for kind, text in f.diff %}<span class="{{ kind }}">{{ text }}</span>
-{% endfor %}</pre></details>{% endif %}</li>
-      {% endfor %}
-      {% if d.changes.unchanged %}<li class="muted">{{ d.changes.unchanged }}</li>{% endif %}
-    </ul>
-    {% else %}
-    <div class="md">{{ d.d.changed | md }}</div>
-    {% endif %}
-    {% endif %}
-  </div>
-
-  <form class="response" method="post" action="/debrief/{{ d.id }}" data-save>
-    <h2 class="response-title">Your response</h2>
-    {% for q in d.d.questions %}
-    <div class="md question">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
-    <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="3" aria-label="Your answer to question {{ q.number }}"
-      placeholder="Your answer" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
-    {% endfor %}
-    {% if d.d.ticks %}
-    <h3 class="response-h">Tick what you accept</h3>
-    <p class="fmeta" style="margin:0 0 6px">The next session applies the ticked lines, exactly as written.</p>
-    {% for label, items in d.groups %}
-    <div class="tick-group">{{ label }}</div>
-    <ul class="ticks md">
-      {% for index, t in items %}
-      <li><label><input type="checkbox" name="tick-{{ index }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
-      {% endfor %}
-    </ul>
-    {% endfor %}
-    {% endif %}
-    <h3 class="response-h">Anything else for the next session</h3>
-    <textarea name="note" rows="3" aria-label="Anything else for the next session"
-      placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
-    <input type="hidden" name="base" value="{{ d.text }}">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="actions">
-      {% if user %}<button class="primary" data-label="Save my response">Save my response</button>{% endif %}
-      <span class="save-state" aria-live="polite"></span>
+{# A session on one page: on the left, what it found (the note, cut to its abstract and results until the reader
+   asks for all of it), what it changed, and its record, folded; on the right, the researcher's response. #}
+{% macro session_view(v, user, local, sign_in, csrf, back, whole, error) -%}
+{% set d = v.debrief %}
+<section class="review" id="{{ v.id }}">
+  <div class="review-head">
+    <div>
+      <p class="eyebrow">Session {{ v.number }}{% if v.date %} · {{ v.date }}{% endif %}</p>
+      <h1 class="page-title">{% if v.note and v.note.title %}{{ v.note.title | safe }}{% else %}{{ (v.goal or "Session " ~ v.number) | md_inline }}{% endif %}</h1>
     </div>
-    <p class="fmeta">Saved choices take effect when the next session starts. Saving does not start a session.</p>
-    {% if not user %}{{ sign_in_first(local, sign_in, "answer") }}{% endif %}
-    <p class="small" style="margin:0"><a href="/edit/{{ d.path }}">Edit the markdown</a></p>
-  </form>
+    <span class="chip {{ 'open' if v.state == 'Awaiting your response' }}">{{ v.state }}{% if v.read_on %} on {{ v.read_on }}{% endif %}</span>
+  </div>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <div class="{{ 'review-grid' if d else 'review-solo' }}">
+    <div class="review-text">
+      {% if v.note %}
+      <div class="note-view">
+        <input type="checkbox" class="note-whole" id="whole-{{ v.id }}" {{ 'checked' if whole }} hidden>
+        <div class="note-body">{{ v.note | latex_doc }}</div>
+        <div class="note-tools">
+          <label for="whole-{{ v.id }}" class="btn"><span class="if-cut">Read the whole note</span><span class="if-whole">Show only the abstract and the results</span></label>
+          <a class="btn" href="/note/{{ v.id }}/pdf">PDF</a>
+          <a class="btn" href="/file/{{ v.note_path }}">LaTeX source</a>
+        </div>
+      </div>
+      {% elif d %}
+      <h2 class="section-label">Summary</h2>
+      <div class="md">{{ d.summary_text | md }}</div>
+      <p class="fmeta">This session wrote no note.</p>
+      {% else %}
+      <p class="fmeta">This session wrote no note and no debrief.</p>
+      {% endif %}
+
+      {% if v.other_cards %}
+      <h2 class="section-label">{{ "Other cards from this session" if v.note else "Cards from this session" }}</h2>
+      {% for row in v.other_cards %}{{ finding(row) }}{% endfor %}
+      {% endif %}
+
+      {% if d and d.d.changed %}
+      <h2 class="section-label">Changed by this session</h2>
+      {% if d.changes %}
+      <ul class="changes">
+        {% for f in d.changes.files %}
+        <li><b>{{ f.name }}</b> (<code>{{ f.path }}</code>): {{ f.counts }}{% if f.ticked %}, as you ticked in {{ f.ticked | join(", ") }}{% endif %}.
+          {% if f.diff %}<details><summary>Show the changes</summary><pre class="diff">{% for kind, text in f.diff %}<span class="{{ kind }}">{{ text }}</span>
+{% endfor %}</pre></details>{% endif %}</li>
+        {% endfor %}
+        {% if d.changes.unchanged %}<li class="muted">{{ d.changes.unchanged }}</li>{% endif %}
+      </ul>
+      {% else %}
+      <div class="md">{{ d.d.changed | md }}</div>
+      {% endif %}
+      {% endif %}
+
+      {{ record_view(v) }}
+    </div>
+    {% if d %}{{ response_form(d, user, local, sign_in, csrf, back) }}{% endif %}
+  </div>
+</section>
+{%- endmacro %}
+
+{# What a session page folds away: what the agents read and wrote, for checking a step. #}
+{% macro record_view(v) -%}
+{% set r = v.record %}
+<details class="record" id="record">
+  <summary class="section-label">Session record</summary>
+  <p class="fmeta" style="margin-top:0">Everything the agents of {{ v.id }} read and wrote, for checking a step. Each card above links to its evidence.</p>
+  <ul class="small record-links">
+    {% if r.debrief %}<li><a href="/file/{{ r.debrief }}">The debrief, as the session wrote it</a> (with your answers)</li>{% endif %}
+    {% if r.log %}<li><a href="/file/{{ r.log }}">The coordinator's log</a>, with its handoff</li>{% endif %}
+    {% if r.pr %}<li><a href="{{ r.pr }}">Its pull request on the Hub</a></li>{% endif %}
+    {% if r.trace %}<li><a href="{{ r.trace }}">Its full trace on the Hub</a></li>{% endif %}
+  </ul>
+  {% if r.received %}<details><summary class="small">What it received from you</summary><pre>{{ r.received }}</pre></details>{% endif %}
+  {% if r.brief %}<details><summary class="small">Its brief</summary><div class="md">{{ r.brief | md }}</div></details>{% endif %}
+  {% if r.artefacts or r.critiques %}
+  <div class="small" style="margin-top:10px">Artefacts and critiques</div>
+  <ul class="small record-links">
+    {% for a in r.artefacts %}<li><a href="/file/{{ a.path }}">{{ a.id }}</a> ({{ a.kind }}){% if a.supports %} · supports {{ a.supports | join(", ") | md_inline }}{% endif %}</li>{% endfor %}
+    {% for c in r.critiques %}<li><a href="/file/{{ c }}">{{ c }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+</details>
+{%- endmacro %}
+
+{# The researcher's response to a debrief: answers, ticks and a note, saved together. #}
+{% macro response_form(d, user, local, sign_in, csrf, back) -%}
+<form class="response" method="post" action="/debrief/{{ d.id }}" data-save>
+  <h2 class="response-title">Your response</h2>
+  {% for q in d.d.questions %}
+  <div class="md question">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
+  <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="3" aria-label="Your answer to question {{ q.number }}"
+    placeholder="Your answer" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
+  {% endfor %}
+  {% if d.d.ticks %}
+  <h3 class="response-h">Tick what you accept</h3>
+  <p class="fmeta" style="margin:0 0 6px">The next session applies the ticked lines, exactly as written.</p>
+  {% for label, items in d.groups %}
+  <div class="tick-group">{{ label }}</div>
+  <ul class="ticks md">
+    {% for index, t in items %}
+    <li><label><input type="checkbox" name="tick-{{ index }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+  {% endif %}
+  <h3 class="response-h">Anything else for the next session</h3>
+  <textarea name="note" rows="3" aria-label="Anything else for the next session"
+    placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
+  <input type="hidden" name="base" value="{{ d.text }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="actions">
+    {% if user %}<button class="primary" data-label="Save my response">Save my response</button>{% endif %}
+    <span class="save-state" aria-live="polite"></span>
+  </div>
+  <p class="fmeta">Saved choices take effect when the next session starts. Saving does not start a session.</p>
+  {% if not user %}{{ sign_in_first(local, sign_in, "answer") }}{% endif %}
+  <p class="small" style="margin:0"><a href="/edit/{{ d.path }}">Edit the markdown</a></p>
+</form>
+{%- endmacro %}
+
+{# Under a result of a note, on a session page: what supports its card, and whether the card is in the draft. #}
+{% macro evidence_line(row) -%}
+<div class="evidence-line">
+  {% if row.warning %}<div class="warn small">{{ row.warning | md_inline }}</div>{% endif %}
+  {% if row.kind == "claim" %}<span class="tone-{{ row.tone }}">{{ row.evidence_text }}</span> · {{ row.place }} · <a href="/card/{{ row.id }}">Inspect the evidence ↗</a>
+  {% elif row.kind == "dead-end" %}Dead end{% if row.refutes %}: refutes {{ row.refutes | join(", ") }}{% endif %} · <a href="/card/{{ row.id }}">Open the card ↗</a>
+  {% else %}<span class="tone-bad">There is no card {{ row.id }}.</span>{% endif %}
+  {% if row.kind %}<span class="faint">{{ row.id }}</span>{% endif %}
 </div>
 {%- endmacro %}
 
-{# A finding of a session on the Review page: a claim or a dead end, with what supports it. #}
+{# A card of a session that no result of its note names: a claim or a dead end, with what supports it. #}
 {% macro finding(row) -%}
 <div class="finding">
   {% if row.kind == "dead-end" %}<div class="tick-group" style="margin-top:0">Dead end{% if row.refutes %}: refutes {{ row.refutes | join(", ") | md_inline }}{% endif %}</div>{% endif %}

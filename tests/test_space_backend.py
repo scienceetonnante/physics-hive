@@ -75,12 +75,17 @@ def test_latest_shows_open_debriefs(toy):
     b = local(toy)
     [d] = b.debriefs()
     assert d["id"] == "S1" and d["open"] and d["summary"] == "Summary of what the session found."
-    # Once S2 has started and read it, it is closed, and the line says so.
+    review = b.review()
+    assert review["view"]["id"] == "S1" and review["also"] == [] and review["latest"] is None
+    assert b.review_session() == "S1"
+    # Once S2 has started and read it, it is closed, and the Review page only points to it.
     toy.received("S2", git(toy.root, "rev-parse", "HEAD"), "2026-10-22T09:00:00Z",
                  {"S1": {"note": ""}})
     b.refresh()
     [d] = b.debriefs()
     assert not d["open"] and d["read_by"] == "S2" and d["read_on"] == "2026-10-22"
+    review = b.review()
+    assert review["view"] is None and review["latest"]["id"] == "S1" and b.review_session() is None
 
 
 def test_draft_notes_and_literature(toy):
@@ -98,10 +103,12 @@ def test_draft_notes_and_literature(toy):
 
     [row] = b.sessions()
     assert row["title"] == "Walks stop at the first eigenvalue" and row["abstract"].startswith("Walk-on-spheres works")
-    note = b.note("S1")
-    assert "/card/CL-S1-1" in note["html"].body
+    view = b.session_page("S1", card_footer=lambda c: f"<b>{c}</b>")
+    assert "/card/CL-S1-1" in view["note"].body and "<b>CL-S1-1</b>" in view["note"].body
+    assert view["state"] == "Awaiting your response" and view["debrief"]["open"]
+    assert view["record"]["log"] == "sessions/S1/log.md" and view["record"]["debrief"] == "sessions/S1/debrief.md"
     with pytest.raises(sb.SpaceError):
-        b.note("S9")
+        b.session_page("S9")
 
     lit = b.literature()
     [(topic, [paper])] = lit["groups"]
@@ -114,8 +121,9 @@ def test_the_record_pages(toy):
     b = local(toy)
     card = b.card("CL-S1-1")
     assert card["evidence"][0]["title"].startswith("D-S1-1") and card["row"]["status"] == "working"
-    session = b.session("S1")
-    assert [r["id"] for r in session["cards"]] == ["CL-S1-1", "CL-S1-2"] and session["log"] == "sessions/S1/log.md"
+    session = b.session_page("S1")
+    assert [r["id"] for r in session["other_cards"]] == ["CL-S1-2"] and session["record"]["log"] == "sessions/S1/log.md"
+    assert [a.id for a in session["record"]["artefacts"]] == ["D-S1-1"]
     assert b.file("sessions/S1/log.md")["body"].startswith("# Log")
     for bad in ("../etc/passwd", "/etc/passwd", ".git/config"):
         assert b.file_path(bad) is None
@@ -143,9 +151,24 @@ def test_what_the_pages_say_about_a_claim(toy):
     assert refuted["evidence_text"] == "A derivation, refuted by a review" and refuted["tone"] == "bad"
     assert refuted["warning"] == "Refuted by DE-S1-1."
     assert b.row("DE-S1-1")["evidence_text"] is None and b.row("DE-S1-1")["refutes"] == ["CL-S1-4"]
-    # The findings of the session's debrief are its cards.
-    [d] = b.debriefs()
-    assert [f["id"] for f in d["findings"]] == ["CL-S1-1", "CL-S1-2", "CL-S1-3", "CL-S1-4", "DE-S1-1"]
+    # The session page shows the note's results, then the session's cards that no result names.
+    view = b.session_page("S1")
+    assert [(blk.kind, blk.cards) for blk in view["note"].blocks] == [("result", ["CL-S1-1"])]
+    assert [r["id"] for r in view["other_cards"]] == ["CL-S1-2", "CL-S1-3", "CL-S1-4", "DE-S1-1"]
+
+
+def test_two_sessions_waiting_and_a_session_without_a_note(client):
+    c, toy = client
+    toy.card("CL-S2-1", statement="A claim of the second session.")
+    toy.debrief("S2", DEBRIEF.format(s="S2").replace("Summary of what the session found.", "Little was found."))
+    toy.commit("[S2] the session")
+    page = c.get("/refresh", follow_redirects=True).text
+    # The Review page shows the newest session waiting and points to the other one.
+    assert 'Also waiting for your response: <a href="/session/S1">session 1</a> (Walks stop at the first eigenvalue).' in page
+    assert '<section class="review" id="S2">' in page and '<span class="count">2</span>' in page
+    # Without a note, the page shows the debrief's summary and all the session's cards.
+    assert "<p>Little was found.</p>" in page and "This session wrote no note." in page
+    assert page.index("Cards from this session") < page.index("A claim of the second session.")
 
 
 def test_tick_lines_are_grouped_by_the_file_they_change():
@@ -340,19 +363,32 @@ def test_the_pages_and_the_forms(client):
     page = c.get("/").text
     assert "Must the method use walks only?" in page and "What the next session will receive" not in page
     assert "sessions/*/debrief.md" not in page and 'target="_top"' not in page
-    assert "Review the session</h1>" in page and '<span class="chip open">Awaiting your response</span>' in page
+    # The Review page is the page of the session waiting for a response, titled by its note.
+    assert "Walks stop at the first eigenvalue</h1>" in page and '<span class="chip open">Awaiting your response</span>' in page
     assert "Session 1 · 20 October 2026" in page
     assert "Toy question?" not in page  # the question is on the Project page, not here
     assert '<span class="count">1</span>' in page
-    # Findings first, from the cards; the response beside them; the note's line becomes a button.
-    assert "A derivation, confirmed by a blind review (agent)</span> · Not in the draft" in page
-    assert page.index("Findings") < page.index("Summary of what the session found") < page.index("Your response")
-    assert "Read the full note: <a" not in page and 'href="/note/S1">Read the full note' in page
+    # The note's abstract and results, each result with its card's evidence; the session's other cards; the
+    # record, folded; the response beside them. The debrief's summary is not shown: the abstract replaces it.
+    assert page.index("Walk-on-spheres works below") < page.index("Result 1 (Barrier).") \
+        < page.index("A derivation, confirmed by a blind review (agent)</span> · Not in the draft") \
+        < page.index("Other cards from this session") < page.index("An unreviewed claim.") \
+        < page.index('<details class="record" id="record">') < page.index("Your response")
+    assert "<p>Summary of what the session found.</p>" not in page
+    assert '<input type="checkbox" class="note-whole" id="whole-S1"  hidden>' in page and "Read the whole note" in page
     assert ">Save my response</button>" in page and "Saving does not start a session." in page
+    assert '<input type="hidden" name="back" value="/">' in page
     assert page.index("Draft (draft.tex)") < page.index("Copy Result 1") < page.index("Research plan (project.md)") \
         < page.index("Set the approach")
     sessions = c.get("/sessions").text
     assert "Session 1 · 20 October 2026 · Awaiting your response" in sessions and "Survey the field" not in sessions
+    assert 'href="/session/S1"' in sessions
+    # The session page is the same view; the old note address opens it with the whole note.
+    session = c.get("/session/S1").text
+    assert "Walks stop at the first eigenvalue</h1>" in session and '<input type="hidden" name="back" value="/session/S1">' in session
+    r = c.get("/note/S1")
+    assert str(r.url).endswith("/session/S1?note=whole") and 'id="whole-S1" checked hidden' in r.text
+    assert str(c.get("/note/S1?source=1").url).endswith("/file/sessions/S1/note.tex")
     assert "<dt>Evidence</dt><dd class=\"tone-ok\">A derivation, confirmed by a blind review (agent)</dd>" in c.get("/card/CL-S1-1").text
     assert "Nothing is in the draft yet." in c.get("/draft").text
     token = csrf_of(page)
@@ -365,6 +401,11 @@ def test_the_pages_and_the_forms(client):
     saved = parse_debrief((toy.root / "sessions/S1/debrief.md").read_text())
     assert saved.questions[0].answer == "Walks only." and [t.checked for t in saved.ticks] == [False, False, True]
     assert "out of date" in c.post("/debrief/S1", data={"note": "x", "base": base, "csrf": "forged"}).text
+    # A save from the session page comes back to it.
+    base = (toy.root / "sessions/S1/debrief.md").read_text()
+    r = c.post("/debrief/S1", data={"answer-1": "Walks only.", "note": "Disk, then the square.", "base": base,
+                                    "back": "/session/S1", "csrf": token})
+    assert str(r.url).endswith("/session/S1") and "Saved your answers" in r.text
 
     r = c.post("/rate", data={"paper_id": "P-1512.07725", "rating": "medium", "csrf": token})
     assert r.status_code == 200 and (toy.root / "literature/ratings.yaml").read_text().endswith("medium\n")
@@ -385,7 +426,7 @@ def test_the_pages_and_the_forms(client):
 
 def test_the_save_forms_say_when_they_have_unsaved_changes(client):
     c, _ = client
-    for url in ("/", "/edit/project.md", "/draft/edit", "/literature"):
+    for url in ("/", "/session/S1", "/edit/project.md", "/draft/edit", "/literature"):
         page = c.get(url).text
         assert "data-save" in page and 'class="save-state' in page and "data-save data-unsaved" not in page, url
     assert "this.form.requestSubmit()" in c.get("/literature").text  # a rating shows that it is saving
@@ -393,7 +434,7 @@ def test_the_save_forms_say_when_they_have_unsaved_changes(client):
 
 def test_discarding_an_edit_goes_back(client):
     c, _ = client
-    for url, back in (("/edit/project.md", "/project"), ("/edit/sessions/S1/debrief.md", "/#S1"),
+    for url, back in (("/edit/project.md", "/project"), ("/edit/sessions/S1/debrief.md", "/"),
                       ("/edit/literature/seeds.md", "/literature"), ("/draft/edit", "/draft")):
         assert f'<a href="{back}" class="small" data-discard>Discard my changes</a>' in c.get(url).text, url
 

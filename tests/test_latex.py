@@ -123,7 +123,7 @@ def test_draft_renders_without_problems(draft):
 
 
 def test_draft_result_is_numbered_with_its_title(draft):
-    assert ('<div class="ltx-thm ltx-thm-result ltx-thm-it" id="result-1">' in draft.body)
+    assert ('<div class="ltx-thm ltx-thm-result ltx-thm-it ltx-has-card" id="result-1">' in draft.body)
     assert '<span class="ltx-thm-head">Result 1 (Per-ball weights).</span> Started at' in draft.body
 
 
@@ -138,6 +138,18 @@ def test_draft_card_note_flags_the_result(draft):
     result = re.search(r'id="result-1">(.*?)</div>', draft.body, re.S).group(1)
     assert result == f'<div class="ltx-flag">{REFUTED}'
     assert draft.body.count("ltx-flag") == 1
+
+
+def test_blocks_list_the_cards_they_name_and_take_a_footer_per_card():
+    tex = (r"\begin{result}A.\card{CL-S1-1}\footnote{See \card{CL-S1-2}.}\end{result}"
+           r"\begin{remark}No card.\end{remark}\begin{conjecture}B.\card{CL-S1-1}\end{conjecture}")
+    r = latex.render(tex, card_footer=lambda c: f"<i>{c}</i>" if c == "CL-S1-1" else None)
+    assert [(b.kind, b.number, b.anchor, b.cards) for b in r.blocks] == [
+        ("result", "1", "result-1", ["CL-S1-1", "CL-S1-2"]), ("remark", "1", "remark-1", []),
+        ("conjecture", "1", "conjecture-1", ["CL-S1-1"])]
+    assert r.body.count('<div class="ltx-thm-foot"><i>CL-S1-1</i></div></div>') == 2
+    assert '<div class="ltx-thm ltx-thm-remark" id="remark-1">' in r.body
+    assert "ltx-thm-foot" not in latex.render(tex).body
 
 
 def test_draft_subsections_and_appendix(draft):
@@ -310,7 +322,7 @@ def test_card_note_outside_a_theorem_marks_only_the_tag():
                      card_note=lambda c: f"{c} is stale" if c == "B" else None)
     assert r.cards == ["A", "B"]
     assert '<code class="ltx-card">A</code> <code class="ltx-card ltx-card-flagged" title="B is stale">B</code>' in r.body
-    assert '<div class="ltx-thm ltx-thm-conjecture ltx-thm-it" id="conjecture-1"><div class="ltx-flag">B is stale</div>' in r.body
+    assert '<div class="ltx-thm ltx-thm-conjecture ltx-thm-it ltx-has-card" id="conjecture-1"><div class="ltx-flag">B is stale</div>' in r.body
     assert r.body.count("ltx-flag\"") == 1
 
 

@@ -3,7 +3,7 @@
 {% block title %}{{ card.id }}{% endblock %}
 {% block content %}
 <div class="narrow">
-  <p class="record-note">Session record{% if card.session %} · <a href="/session/{{ card.session }}">{{ card.session }}</a>{% endif %}</p>
+  <p class="record-note">{% if card.session %}<a href="/session/{{ card.session }}">← Session {{ card.session }}</a> · {% endif %}a card of the session record</p>
   <div class="sheet">
     <div class="filebar"><div class="fleft"><span class="fname">{{ card.id }}</span>
       {% if card.kind == "dead-end" %}<span class="chip">dead end</span>{% endif %}</div></div>

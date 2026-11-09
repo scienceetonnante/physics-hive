@@ -110,6 +110,25 @@ details > summary { cursor: pointer; }
 /* the two columns: what the session found and did, and the researcher's response (stays in view) */
 .review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); gap: 36px; align-items: start; }
 .review-text > .section-label:first-child { margin-top: 0; }
+.review-solo { max-width: 860px; }
+/* the note on a session page: its abstract and results, until the reader ticks "Read the whole note" */
+.note-body .ltx-document { font: 17px/1.6 var(--font-doc); }
+.note-body .ltx-title, .note-body .ltx-authors, .note-body .ltx-date { display: none; }
+.note-body .ltx-abstract { margin: 0 0 1.2em; font-size: 1em; }
+.note-body .ltx-abstract h6 { text-align: left; font: 600 11.5px var(--font-ui); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 0 0 .4em; }
+.note-body .ltx-thm-result, .note-body .ltx-thm-conjecture, .note-body .ltx-has-card { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; }
+.note-whole:not(:checked) ~ .note-body .ltx-document > :not(.ltx-abstract, .ltx-thm-result, .ltx-thm-conjecture, .ltx-has-card) {
+  /* hidden but laid out, so that MathJax typesets it at the right size for when it shows */
+  max-height: 0; overflow: hidden; visibility: hidden; margin: 0; padding: 0; border: 0; }
+.note-whole:checked ~ .note-tools .if-cut, .note-whole:not(:checked) ~ .note-tools .if-whole { display: none; }
+.note-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+.note-tools label { cursor: pointer; }
+.ltx-thm-foot { font: 13.5px/1.6 var(--font-ui); color: var(--muted); margin-top: 6px; font-style: normal; }
+.ltx-thm-foot .warn { margin: 4px 0; }
+.record { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 4px; }
+.record > summary.section-label { margin: 12px 0 8px; }
+.record details { margin: 6px 0; }
+.record-links { padding-left: 18px; margin: 6px 0; }
 .finding { padding: 4px 0 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
 .finding-statement { font: 18px/1.55 var(--font-doc); margin-bottom: 6px; }
 .finding .fmeta { line-height: 1.6; }
@@ -126,14 +145,6 @@ form.response { position: sticky; top: 108px; max-height: calc(100vh - 124px); o
 .response textarea { margin-bottom: 4px; }
 .response ul.ticks { font-size: 14.5px; line-height: 1.5; }
 .tick-group { font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 2px; }
-.deb { margin-bottom: 14px; scroll-margin-top: 112px; }
-.deb summary .sid { font: 500 16px var(--font-mono); color: var(--muted); }
-.deb.closed { border-top: 1px solid var(--line); margin: 0; }
-.deb.closed:last-child { border-bottom: 1px solid var(--line); }
-.deb.closed > summary { list-style: none; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; align-items: baseline; padding: 12px 0; }
-.deb.closed > summary::-webkit-details-marker { display: none; }
-.deb.closed > summary .t { font: 16.5px var(--font-doc); }
-.deb.closed > summary .fmeta { grid-column: 2; }
 .label { display: block; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
 ul.ticks { list-style: none; padding: 0; margin: .2em 0 .6em; }
 ul.ticks li { margin: .2em 0; }
@@ -268,6 +279,13 @@ window.MathJax = {
     document.querySelectorAll("a[href^='http']").forEach(function (a) {
       if (a.host !== location.host) { a.target = "_blank"; a.rel = "noopener"; }
     });
+    // On a session page, links open in a new tab, so that an answer being written stays where it is;
+    // a link to #record opens the folded session record.
+    document.querySelectorAll(".review a[href]").forEach(function (a) {
+      if (a.getAttribute("href").charAt(0) !== "#") { a.target = "_blank"; a.rel = "noopener"; }
+    });
+    var record = location.hash === "#record" && document.getElementById("record");
+    if (record) { record.open = true; record.scrollIntoView(); }
     // A footnote marker shows its text in place when clicked.
     document.addEventListener("click", function (e) {
       var fn = e.target.closest("sup.ltx-fn");

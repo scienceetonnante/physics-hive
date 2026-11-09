@@ -3,19 +3,21 @@
 Five pages, each showing files (design, section 14):
 
 - Project: project.md and conventions.md, each with an editor;
-- Review (the first page, at /): the debriefs, newest first (open ones in full,
-  as forms: answers, ticks, the note; closed ones folded);
+- Review (the first page, at /): the session waiting for the researcher's
+  response, as its session page;
 - Draft: draft.tex rendered like an arXiv HTML paper, an editor with a preview
   beside it, and the PDF;
-- Sessions: one line per session; each opens its note, rendered the same way;
+- Sessions: one line per session; each opens its session page;
 - Literature: the overview, then the papers by topic with their one-line reason
   and a rating menu.
 
-The session record (cards, artefacts, reviews, logs) keeps its own pages,
-reached from the notes, the draft and the Sessions page. Nobody is sent there by
-default. The Space applies nothing: it writes files, and the next session
-applies what the researcher ticked. This file is the user interface only;
-reading and writing the workspace is in backend.py.
+A session page (/session/<S>) shows one session at three depths: the note's
+abstract and results, each result with what supports its card (the whole note
+opens in place); the debrief as a form beside it; and, folded, the session
+record (what the session received, its brief, artefacts, log, trace). The cards
+keep their own pages. The Space applies nothing: it writes files, and the next
+session applies what the researcher ticked. This file is the user interface
+only; reading and writing the workspace is in backend.py.
 
 Every write takes the signed-in user from the sign-in session itself
 (`parse_huggingface_oauth`), never from a value the page sends.
@@ -63,12 +65,12 @@ def href_of(word: str) -> str | None:
     if word in ws.papers:
         return f"/paper/{word}"
     if word in ws.sessions:
-        return f"/note/{word}" if ws.sessions[word].has_note else f"/session/{word}"
+        return f"/session/{word}"
     if word in ws.artefacts:
         return f"/file/{ws.artefacts[word].path}"
     m = NOTE_RE.match(word)
     if m and m.group(1) in ws.sessions:
-        return f"/note/{m.group(1)}"
+        return f"/session/{m.group(1)}?note=whole"
     for rel in (word, f"critiques/{word}.md"):
         if "/" in rel and backend.file_path(rel):
             return f"/file/{rel}"
@@ -152,6 +154,15 @@ else:
     attach_huggingface_oauth(app)  # adds the session, and the sign-in and sign-out pages
 templates = Jinja2Templates(directory=HERE / "templates")
 templates.env.filters.update(md=md, md_inline=md_inline, latex_doc=lambda rendered: Markup(latex.document_html(rendered)))
+MACROS = templates.env.get_template("macros.html").module
+
+
+def evidence_line(card_id: str) -> str:
+    """What a session page shows under a result of its note: what supports the result's card, and whether the
+    card is in the draft."""
+    return str(MACROS.evidence_line(backend.row(card_id)))
+
+
 LATEX_CSS = (HERE / "latex.css").read_text(encoding="utf-8") if (HERE / "latex.css").is_file() else ""
 
 
@@ -199,13 +210,13 @@ def show_problem(request: Request, exc: SpaceError) -> HTMLResponse:
 # ----- the five pages -----
 
 
-def latest_page(request: Request, **extra) -> HTMLResponse:
-    return page(request, "latest.html", debriefs=backend.debriefs(), running=backend.running(), **extra)
+def review_page(request: Request, **extra) -> HTMLResponse:
+    return page(request, "latest.html", whole=False, back="/", **backend.review(evidence_line), **extra)
 
 
 @app.get("/", response_class=HTMLResponse)
-def latest(request: Request):
-    return latest_page(request)
+def review(request: Request):
+    return review_page(request)
 
 
 @app.get("/project", response_class=HTMLResponse)
@@ -242,9 +253,22 @@ def sessions(request: Request):
     return page(request, "sessions.html", sessions=backend.sessions(), running=backend.running())
 
 
-@app.get("/note/{session_id}", response_class=HTMLResponse)
+def session_page(request: Request, session_id: str, whole: bool = False, **extra) -> HTMLResponse:
+    return page(request, "session.html", view=backend.session_page(session_id, evidence_line), whole=whole,
+                back=f"/session/{session_id}", **extra)
+
+
+@app.get("/session/{session_id}", response_class=HTMLResponse)
+def session(request: Request, session_id: str, note: str = ""):
+    return session_page(request, session_id, whole=note == "whole")
+
+
+@app.get("/note/{session_id}")
 def note(request: Request, session_id: str, source: int = 0):
-    return page(request, "note.html", source=bool(source), **backend.note(session_id))
+    """The note had its own page before the session page showed it."""
+    if source:
+        return RedirectResponse(f"/file/sessions/{quote(session_id)}/note.tex", status_code=303)
+    return RedirectResponse(f"/session/{quote(session_id)}?note=whole", status_code=303)
 
 
 @app.get("/note/{session_id}/pdf")
@@ -258,7 +282,7 @@ def literature(request: Request):
     return page(request, "literature.html", **backend.literature())
 
 
-# ----- the session record -----
+# ----- the record -----
 
 
 @app.get("/card/{card_id}", response_class=HTMLResponse)
@@ -269,11 +293,6 @@ def card(request: Request, card_id: str):
 @app.get("/paper/{paper_id}", response_class=HTMLResponse)
 def paper(request: Request, paper_id: str):
     return page(request, "paper.html", **backend.paper(paper_id))
-
-
-@app.get("/session/{session_id}", response_class=HTMLResponse)
-def session(request: Request, session_id: str):
-    return page(request, "session.html", **backend.session(session_id))
 
 
 @app.get("/file/{rel:path}", response_class=HTMLResponse)
@@ -319,7 +338,9 @@ def back_of(rel: str) -> str:
     if rel == "draft.tex":
         return "/draft"
     m = re.match(r"^sessions/(S\d+)/debrief\.md$", rel)
-    return f"/#{m.group(1)}" if m else "/"
+    if not m:
+        return "/"
+    return "/" if m.group(1) == backend.review_session() else f"/session/{m.group(1)}"
 
 
 @app.get("/edit/{rel:path}", response_class=HTMLResponse)
@@ -349,12 +370,15 @@ async def answer(request: Request, session_id: str):
     form = await request.form()
     answers = {int(k.split("-", 1)[1]): str(v) for k, v in form.items() if re.match(r"^answer-\d+$", k)}
     ticked = {int(k.split("-", 1)[1]) for k in form.keys() if re.match(r"^tick-\d+$", k)}
+    back = local_path(str(form.get("back", "")) or "/")
     try:
         message = backend.save_debrief(check_form(request, str(form.get("csrf", ""))), session_id, answers, ticked,
                                        str(form.get("note", "")), str(form.get("base", "")))
     except SpaceError as exc:
-        return latest_page(request, error=str(exc), error_for=session_id)
-    return done(request, message, f"/#{session_id}")
+        if back == "/":
+            return review_page(request, error=str(exc))
+        return session_page(request, session_id, error=str(exc))
+    return done(request, message, back)
 
 
 @app.post("/rate")

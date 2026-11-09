@@ -564,26 +564,37 @@ class Backend:
 
         `answered`: the researcher has written an answer or a note, or ticked a line, in it."""
         snap = self.current()
-        ws, human = snap.ws, snap.m.human
-        readers = human.read_by(ws.sessions.values())
-        rows = []
-        for session in sorted(ws.sessions.values(), key=lambda s: -s.number):
-            if session.debrief is None:
-                continue
-            reader = readers.get(session.id)
-            rel = f"{session.path}/debrief.md"
-            d = session.debrief
-            # The template's "Read the full note: `sessions/S<n>/note.tex`." line: the page has a button for it.
-            summary = re.sub(r"^Read the full note: `sessions/S\d+/note\.tex`\.?[ \t]*$", "", d.summary, flags=re.M).strip()
-            rows.append({"id": session.id, "number": session.number, "path": rel, "text": self.read(rel), "d": d,
-                         "summary_text": summary,
-                         "date": long_date((session.received or {}).get("started")), "answered": answered(d),
-                         "findings": [self.row(c.id) for c in ws.sorted_cards() if c.session == session.id],
-                         "groups": tick_groups(d.ticks), "changes": parse_changed(d.changed) if d.changed else None,
-                         "open": reader is None, "read_by": reader[0] if reader else None,
-                         "read_on": reader[1] if reader else None, "summary": first_sentence(session.debrief.summary),
-                         "goal": session.goal, "note": session.has_note})
-        return rows
+        readers = snap.m.human.read_by(snap.ws.sessions.values())
+        return [self._debrief(session, readers.get(session.id))
+                for session in sorted(snap.ws.sessions.values(), key=lambda s: -s.number) if session.debrief is not None]
+
+    def _debrief(self, session, reader) -> dict:
+        rel = f"{session.path}/debrief.md"
+        d = session.debrief
+        # The template's "Read the full note: `sessions/S<n>/note.tex`." line: the note is on the same page.
+        summary = re.sub(r"^Read the full note: `sessions/S\d+/note\.tex`\.?[ \t]*$", "", d.summary, flags=re.M).strip()
+        return {"id": session.id, "number": session.number, "path": rel, "text": self.read(rel), "d": d,
+                "summary_text": summary, "answered": answered(d), "groups": tick_groups(d.ticks),
+                "changes": parse_changed(d.changed) if d.changed else None,
+                "open": reader is None, "read_by": reader[0] if reader else None,
+                "read_on": reader[1] if reader else None, "summary": first_sentence(d.summary)}
+
+    def review(self, card_footer=None) -> dict:
+        """The Review page: the newest debrief still open, as its session's page, and the other open ones.
+
+        With none open, the newest debrief, which the researcher may still add to."""
+        rows = self.debriefs()
+        waiting = [r for r in rows if r["open"]]
+        ws = self.current().ws
+        return {"any": bool(rows), "running": self.running(),
+                "view": self.session_page(waiting[0]["id"], card_footer) if waiting else None,
+                "also": [{"id": r["id"], "number": r["number"], "title": self.title_of(ws.sessions[r["id"]])}
+                         for r in waiting[1:]],
+                "latest": rows[0] if rows and not waiting else None}
+
+    def review_session(self) -> str | None:
+        """The session the Review page shows: the newest one whose debrief is still open."""
+        return next((r["id"] for r in self.debriefs() if r["open"]), None)
 
     def running(self) -> list[dict]:
         """Sessions running now: open session pull requests (Hub), or the active session of a local folder."""
@@ -634,15 +645,18 @@ class Backend:
             return f"{card_id} needs a re-check: it depends on {', '.join(ws.needs_recheck(card_id))}."
         return None
 
-    def render_tex(self, tex: str, flags: bool = False) -> latex.Rendered:
-        """A LaTeX text as HTML, with card links, flags on cards in doubt (for the draft), and references."""
+    def render_tex(self, tex: str, flags: bool = False, card_footer=None) -> latex.Rendered:
+        """A LaTeX text as HTML, with card links, flags on cards in doubt (for the draft), references, and
+        under each result the HTML that card_footer gives for its cards (for the session page)."""
         snap = self.current()
-        key = hashlib.sha256(f"{snap.revision}|{snap.loaded_at}|{flags}|{tex}".encode()).hexdigest()
+        footer = getattr(card_footer, "__qualname__", "") if card_footer else ""
+        key = hashlib.sha256(f"{snap.revision}|{snap.loaded_at}|{flags}|{footer}|{tex}".encode()).hexdigest()
         if key not in self._renders:
             if len(self._renders) > 64:
                 self._renders.clear()
             self._renders[key] = latex.render(tex, bib=self.bib(), card_href=self.card_href,
-                                              card_note=self.card_note if flags else None, paper_href=self.paper_href)
+                                              card_note=self.card_note if flags else None, paper_href=self.paper_href,
+                                              card_footer=card_footer)
         return self._renders[key]
 
     def draft(self) -> dict:
@@ -652,6 +666,20 @@ class Backend:
                 "results": sum(1 for b in ws.draft if b.kind == "result"),
                 "conjectures": sum(1 for b in ws.draft if b.kind == "conjecture")}
 
+    def state_of(self, session, readers: dict, running: set) -> str:
+        """Where a session stands: running, without a debrief, read by a later session, or waiting for the researcher."""
+        if session.id in running:
+            return "Running now"
+        if session.debrief is None:
+            return "No debrief"
+        if session.id in readers:
+            return f"Read by {readers[session.id][0]}"
+        return "Answered, waiting for the next session" if answered(session.debrief) else "Awaiting your response"
+
+    def title_of(self, session) -> str:
+        """The title of a session's note, as HTML, or '' if it has none."""
+        return self.render_tex(self.read(f"{session.path}/note.tex")).title if session.has_note else ""
+
     def sessions(self) -> list[dict]:
         """One row per session, newest first, with the title and abstract of its note."""
         snap = self.current()
@@ -660,27 +688,36 @@ class Backend:
         rows = []
         for session in sorted(snap.ws.sessions.values(), key=lambda s: -s.number):
             rendered = self.render_tex(self.read(f"{session.path}/note.tex")) if session.has_note else None
-            if session.id in running:
-                state = "Running now"
-            elif session.debrief is None:
-                state = "No debrief"
-            elif session.id in readers:
-                state = f"Read by {readers[session.id][0]}"
-            else:
-                state = "Answered, waiting for the next session" if answered(session.debrief) else "Awaiting your response"
-            rows.append({"id": session.id, "number": session.number, "goal": session.goal, "state": state,
+            rows.append({"id": session.id, "number": session.number, "goal": session.goal,
+                         "state": self.state_of(session, readers, running),
                          "date": long_date((session.received or {}).get("started")), "has_note": session.has_note,
                          "title": rendered.title if rendered else "",
                          "abstract": first_sentence(re.sub(r"<[^>]+>", "", rendered.abstract), 300) if rendered else ""})
         return rows
 
-    def note(self, session_id: str) -> dict:
-        ws = self.current().ws
+    def session_page(self, session_id: str, card_footer=None) -> dict:
+        """One session on one page: its note, cut to the abstract and the results until the researcher asks for
+        all of it, the cards that no result of the note names, its debrief, and its record.
+
+        card_footer(card_id) gives the HTML shown under a result of the note that names the card."""
+        snap = self.current()
+        ws = snap.ws
         session = ws.sessions.get(session_id)
-        if session is None or not session.has_note:
-            raise SpaceError(f"Session {session_id} has no note.")
-        tex = self.read(f"{session.path}/note.tex")
-        return {"session": session, "tex": tex, "html": self.render_tex(tex), "path": f"{session.path}/note.tex"}
+        if session is None:
+            raise SpaceError(f"There is no session {session_id} in this workspace.")
+        readers = snap.m.human.read_by(ws.sessions.values())
+        running = {r["id"] for r in self.running()}
+        note = (self.render_tex(self.read(f"{session.path}/note.tex"), card_footer=card_footer)
+                if session.has_note else None)
+        named = {c for block in note.blocks for c in block.cards} if note else set()
+        return {"id": session.id, "number": session.number, "session": session, "goal": session.goal,
+                "date": long_date((session.received or {}).get("started")),
+                "state": self.state_of(session, readers, running),
+                "read_on": readers[session.id][1] if session.id in readers else None,
+                "note": note, "note_path": f"{session.path}/note.tex",
+                "other_cards": [self.row(c.id) for c in ws.sorted_cards() if c.session == session.id and c.id not in named],
+                "debrief": self._debrief(session, readers.get(session.id)) if session.debrief is not None else None,
+                "record": self.record(session)}
 
     def pdf(self, rel: str) -> tuple[bytes, str]:
         """The PDF of the draft or of a note, compiled now. Raises a SpaceError with the LaTeX errors."""
@@ -773,20 +810,18 @@ class Backend:
                 "related": [(label, [self.row(i) for i in ids]) for label, ids in related if ids],
                 "evidence": evidence, "trace": self.hub_url("traces", "tree/main", card.session) if card.session else None}
 
-    def session(self, session_id: str) -> dict:
+    def record(self, session) -> dict:
+        """What a session's page folds away: what it received, its brief, its artefacts and critiques, its log,
+        its debrief as written, its pull request and its trace."""
         snap = self.current()
-        ws = snap.ws
-        session = ws.sessions.get(session_id)
-        if session is None:
-            raise SpaceError(f"There is no session {session_id} in this workspace.")
         received = self.body(f"{session.path}/received.md").strip().strip("`").removeprefix("text").strip()
-        cards = [self.row(c.id) for c in ws.sorted_cards() if c.session == session_id]
-        artefacts = [a for a in sorted(ws.artefacts.values(), key=lambda a: snap.m.cards.natural_key(a.id))
-                     if snap.m.cards.session_of(a.id) == session_id]
-        critiques = sorted(p.relative_to(snap.root).as_posix() for p in (snap.root / "critiques").glob(f"CR-{session_id}-*.md"))
-        return {"session": session, "brief": self.body(f"{session.path}/brief.md"), "received": received,
-                "log": f"{session.path}/log.md" if session.has_log else None, "cards": cards, "artefacts": artefacts,
-                "critiques": critiques, "pr": self.hub_url("workspace", "discussions", str(session.number)),
+        artefacts = [a for a in sorted(snap.ws.artefacts.values(), key=lambda a: snap.m.cards.natural_key(a.id))
+                     if snap.m.cards.session_of(a.id) == session.id]
+        critiques = sorted(p.relative_to(snap.root).as_posix() for p in (snap.root / "critiques").glob(f"CR-{session.id}-*.md"))
+        return {"brief": self.body(f"{session.path}/brief.md"), "received": received,
+                "log": f"{session.path}/log.md" if session.has_log else None, "artefacts": artefacts,
+                "critiques": critiques, "debrief": f"{session.path}/debrief.md" if session.debrief is not None else None,
+                "pr": self.hub_url("workspace", "discussions", str(session.number)),
                 "trace": self.hub_url("traces", "tree/main", session.id)}
 
     def file_path(self, rel: str) -> Path | None:

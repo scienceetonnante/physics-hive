@@ -15,13 +15,13 @@ the text. Everything else (sections, numbering, labels, footnotes, citations, li
 tables, theorem-like blocks) is converted here.
 
 Public interface:
-    render(tex, bib=None, card_href=None, card_note=None, paper_href=None) -> Rendered
+    render(tex, bib=None, card_href=None, card_note=None, paper_href=None, card_footer=None) -> Rendered
     parse_bib(text) -> {key: {field: value}}   (field names lowercase, plus "entrytype")
     document_html(rendered) -> str             (one <article class="ltx-document">)
 
 The converter never raises on malformed input: it renders what it can and lists what it
 could not handle in Rendered.problems. All text is HTML-escaped; the only tags in the
-output are the ones generated here. Preamble \newcommand definitions go to MathJax in a
+output are the ones generated here and those of card_footer. Preamble \newcommand definitions go to MathJax in a
 hidden element at the start of the body; document_html moves it above the title so that
 math in the title and abstract can use them too.
 
@@ -37,6 +37,9 @@ CSS classes (styled in latex.css):
     ltx-thm-it          for an italic body; ltx-thm-head for "Result 1 (title)."
     ltx-proof, ltx-proof-head, ltx-qed, ltx-qed-line   proof block, heading, end mark
     ltx-flag            warning at the top of a theorem-like block (from card_note)
+    ltx-has-card        on a theorem-like block that names a card with \card
+    ltx-thm-foot        lines at the end of a theorem-like block, one per card it names
+                        (from card_footer)
     ltx-card            card tag (a link, or code without link); ltx-card-flagged if noted
     ltx-list            ul, ol and dl lists; ltx-description on dl; ltx-item-labelled and
     ltx-item-label      for \item[label] in itemize and enumerate
@@ -64,7 +67,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-__all__ = ["TocEntry", "Rendered", "render", "parse_bib", "document_html"]
+__all__ = ["TocEntry", "Block", "Rendered", "render", "parse_bib", "document_html"]
 
 
 @dataclass
@@ -77,6 +80,15 @@ class TocEntry:
 
 
 @dataclass
+class Block:
+    """One theorem-like block (a result, a conjecture, a theorem...)."""
+    kind: str     # the environment: "result", "conjecture", ...
+    number: str   # "1"
+    anchor: str   # id of the block
+    cards: list[str] = field(default_factory=list)  # the cards it names with \card, in order
+
+
+@dataclass
 class Rendered:
     """The converted document. All strings are HTML except problems (plain text)."""
     title: str = ""
@@ -86,6 +98,7 @@ class Rendered:
     body: str = ""
     toc: list[TocEntry] = field(default_factory=list)
     cards: list[str] = field(default_factory=list)
+    blocks: list[Block] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
 
@@ -378,12 +391,14 @@ class _Converter:
     """One conversion: walks the source once, collecting counters, labels, footnotes and
     citations, then resolves the deferred \\ref and \\cite and assembles the result."""
 
-    def __init__(self, bib, card_href, card_note, paper_href):
+    def __init__(self, bib, card_href, card_note, paper_href, card_footer=None):
         self.bib = bib or {}
         self.bib_lower = {k.lower(): k for k in self.bib}
         self.card_href, self.card_note, self.paper_href = card_href, card_note, paper_href
+        self.card_footer = card_footer
         self.problems: list[str] = []
         self.cards: list[str] = []
+        self.blocks: list[Block] = []
         self.toc: list[TocEntry] = []
         self.meta = {"title": "", "author": "", "date": ""}
         self.meta_src: dict[str, str] = {}
@@ -994,13 +1009,16 @@ class _Converter:
         self.card_scopes.append([])
         note = f" ({self._conv(opt, False).strip()})" if opt is not None else ""
         inner = self._conv(body, True)
-        cards = self.card_scopes.pop()
+        cards = list(dict.fromkeys(self.card_scopes.pop()))
         self.target = saved
-        notes = [self._note(c) for c in dict.fromkeys(cards)]
+        self.blocks.append(Block(env, str(n), anchor, cards))
+        notes = [self._note(c) for c in cards]
         flags = "".join(f'<div class="ltx-flag">{_esc(t)}</div>' for t in dict.fromkeys(notes) if t)
+        lines = "".join(filter(None, (self.card_footer(c) for c in cards))) if self.card_footer else ""
+        foot = f'<div class="ltx-thm-foot">{lines}</div>' if lines else ""
         head = f'<span class="ltx-thm-head">{_esc(heading)} {n}{note}.</span> '
-        cls = f"ltx-thm ltx-thm-{env}" + (" ltx-thm-it" if italic else "")
-        out.put(f'<div class="{cls}" id="{anchor}">{flags}{_prepend(inner, head)}</div>')
+        cls = f"ltx-thm ltx-thm-{env}" + (" ltx-thm-it" if italic else "") + (" ltx-has-card" if cards else "")
+        out.put(f'<div class="{cls}" id="{anchor}">{flags}{_prepend(inner, head)}{foot}</div>')
 
     def _proof(self, body: str, out: _Out) -> None:
         opt, body = self._lead_opt(body)
@@ -1256,6 +1274,7 @@ class _Converter:
             body=self._resolve(page).strip(),
             toc=[TocEntry(t.level, t.number, _strip_links(self._resolve(t.title)), t.anchor) for t in self.toc],
             cards=list(self.cards),
+            blocks=self.blocks,
             problems=self.problems,
         )
 
@@ -1263,15 +1282,19 @@ class _Converter:
 def render(tex: str, *, bib: Optional[dict[str, dict[str, str]]] = None,
            card_href: Optional[Callable[[str], Optional[str]]] = None,
            card_note: Optional[Callable[[str], Optional[str]]] = None,
-           paper_href: Optional[Callable[[str], Optional[str]]] = None) -> Rendered:
+           paper_href: Optional[Callable[[str], Optional[str]]] = None,
+           card_footer: Optional[Callable[[str], Optional[str]]] = None) -> Rendered:
     r"""Convert a note or draft to HTML.
 
     bib: entries from parse_bib, for \cite. card_href(id) gives the URL of a card page,
     or None for no link. card_note(id) gives a plain-text warning about a card (shown at
     the top of a theorem-like block that names it), or None. paper_href(id) gives the
-    URL of a paper card named by a bib entry's paperid field, or None.
+    URL of a paper card named by a bib entry's paperid field, or None. card_footer(id)
+    gives HTML to show at the end of a theorem-like block that names the card (the
+    session page puts the card's evidence there), or None; it is inserted as it is, so
+    the caller escapes what it puts in it.
     """
-    converter = _Converter(bib, card_href, card_note, paper_href)
+    converter = _Converter(bib, card_href, card_note, paper_href, card_footer)
     try:
         return converter.run(tex or "")
     except Exception as exc:   # a bug in the converter or a callback: show the source

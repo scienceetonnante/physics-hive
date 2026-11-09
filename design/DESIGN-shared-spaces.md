@@ -161,7 +161,7 @@ inside a global eigensolver on a point set acceptable?
 **Rules.**
 
 - Decisions take effect at the next session, not when the researcher ticks. The Space only writes files; it applies nothing. Edits the researcher makes directly to `project.md`, `conventions.md` or the draft are theirs and take effect at once.
-- A debrief is *open* until a later session starts and reads it, and *closed* afterwards. The Review page shows open debriefs in full and closed ones folded to one line ("S2 · answered on 28 October · read by S3"). A closed debrief is the record of what was asked, what was decided and when; git gives the author and the time.
+- A debrief is *open* until a later session starts and reads it, and *closed* afterwards. The Review page shows the newest open debrief on its session's page and points to the other open ones; every session, closed ones included, keeps its page, reached from the Sessions page. A closed debrief is the record of what was asked, what was decided and when; git gives the author and the time.
 - The note box of the newest debrief stays editable while the next session runs. Since `session.py start` reads everything written since the previous start, a note written then reaches the session after.
 - An unticked line is not applied. An unanswered question that still matters is asked again in the next debrief, so the researcher never needs to go back to old debriefs.
 - An answer in words that implies an action ("fine for now; we will add a corner later") is turned by the next session into a tick line in its own debrief.
@@ -227,19 +227,19 @@ Three changes make the literature readable for the researcher:
 
 ## 14. The Space
 
-The Space shows files. Each page shows one kind of file, rendered, with an Edit button where the researcher may write. Saving commits to `main` on the Hub with the Space's token and records the signed-in user as the author. The Space applies nothing on its own: it does not merge, promote or copy; ticked lines are applied by the next session.
+The Space shows files, rendered, with an Edit button where the researcher may write. Each page shows one kind of file, except a session's page, which shows the session's note, debrief and record together (below). Saving commits to `main` on the Hub with the Space's token and records the signed-in user as the author. The Space applies nothing on its own: it does not merge, promote or copy; ticked lines are applied by the next session.
 
 | Page | Shows | The researcher can |
 |---|---|---|
-| **Review** (first page) | The debriefs, newest first: open ones in full, closed ones folded to one line | Answer questions, tick lines, write the note, edit the raw markdown |
+| **Review** (first page) | The page of the session whose debrief is open (the newest, if several are) | Answer questions, tick lines, write the note, edit the raw markdown |
 | **Project** | `project.md` and `conventions.md`, lightly rendered | Edit either file in place |
 | **Draft** | `draft.tex`, rendered like arXiv's HTML papers: a contents column, numbered sections and equations, result environments, footnotes, appendices, references | Edit the source beside a preview; download the PDF |
-| **Sessions** | One line per session, newest first; each opens its note, rendered the same way, with a button to view the source and a link to the session record | Read |
+| **Sessions** | One line per session, newest first; each opens the session's page | Read, and still answer a closed debrief |
 | **Literature** | The overview, then the papers by topic with their one-line reason and rating; a click opens the agent's digest | Change a rating from its menu |
 
 **Rendering.** Markdown is rendered on the server, with equations in KaTeX or MathJax. LaTeX is converted to HTML on save with LaTeXML, the tool arXiv uses for its HTML papers, and to PDF with `latexmk`. LaTeXML can take several seconds per document, so the Draft editor's live preview may use a lighter converter for the subset of section 7, and the saved page uses LaTeXML. The mock-up uses a small converter written for it.
 
-**The session record** keeps today's pages (cards, artefacts, reviews, logs), reached from the notes, the draft footnotes and the Sessions page. Nobody is sent there by default.
+**A session's page** shows the session at three depths. To read: the note, cut to its abstract and its results, each result followed by what supports its card and whether the card is in the draft; the rest of the note opens in place. To decide: the debrief's form, beside it. To check: each result's card has its own page (evidence, reviews, full material), and the session record (what the session received, its brief, artefacts, log, trace) is folded at the bottom. The debrief's summary is not shown when there is a note, because the abstract says the same. One page per session, rather than one per file, keeps each result in one place on screen: in the note, with its evidence beside it and its tick line in the form.
 
 **Ask, later.** A read-only assistant that answers questions about the project, citing the files it read, with three tools: list files, read a file, search text. It matters once a colleague without a terminal joins; with one researcher, the agent in the terminal already does this, and the debrief note covers requests to the agents. It is out of version 0.
 
@@ -295,7 +295,7 @@ This follows the mock-up. Session S1 is real; sessions S2 and S3 and the researc
 
 **S2, reference spectra and per-ball weights.** `session.py start` prints the answers, the ticks and the note. The coordinator applies the ticks in one commit: the approach and three next steps go into `project.md`, and sections 1 to 3 of note S1 into `draft.tex`. It then takes the first next step. The session computes reference spectra on three domains and confirms the per-ball weights $kR/\sin kR$ and $1/J_0(kR)$ by a derivation and by sampling exit times, each confirmed by a blind review. It removes the two steps it finished from the next steps. Its note has a table of spectra and Result 1; its debrief asks whether a domain without corners is a fair test, offers to copy Result 1 and the table into the draft, and suggests two next steps. The researcher answers "fine for now; we will add a corner later", ticks the two copies and the step on the variance threshold, and leaves the step on a domain with a corner unticked, so it is not applied.
 
-**S3, the extraction with synthetic noise.** The session copies Result 1, which passes `check`, so it is now established, and the table as an appendix, and adds the ticked next step to `project.md`. It finds that with $10^6$ walks the extraction reaches 1% on the first three levels of the disk only, because the noise grows like $e^{(\lambda_n-\lambda_1/2)t}$. It adds one line to `conventions.md` (the normalisation of the basis functions), which its debrief shows as a diff. Its debrief asks whether to spend more walks or change the basis, and it removes its finished step from `project.md`. The Review page now shows S3's debrief open, and S2 and S1 folded to one line each.
+**S3, the extraction with synthetic noise.** The session copies Result 1, which passes `check`, so it is now established, and the table as an appendix, and adds the ticked next step to `project.md`. It finds that with $10^6$ walks the extraction reaches 1% on the first three levels of the disk only, because the noise grows like $e^{(\lambda_n-\lambda_1/2)t}$. It adds one line to `conventions.md` (the normalisation of the basis functions), which its debrief shows as a diff. Its debrief asks whether to spend more walks or change the basis, and it removes its finished step from `project.md`. The Review page now shows S3's page, and S2 and S1 are on the Sessions page.
 
 ## Appendix — Hub notes for implementers
 

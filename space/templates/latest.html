@@ -1,57 +1,29 @@
 {% extends "base.html" %}
-{% from "macros.html" import debrief_view %}
+{% from "macros.html" import session_view %}
 {% block title %}Review{% endblock %}
 {% block content %}
 <div class="narrow">
-  {% set open = debriefs | selectattr("open") | list %}
-  {% set closed = debriefs | rejectattr("open") | list %}
-  {% if error and not error_for %}<div class="error">{{ error }}</div>{% endif %}
   {% for r in running %}
   <div class="warn">{% if r.url %}<a href="{{ r.url }}">{{ r.title | md_inline }}</a>{% else %}Session {{ r.title }}{% endif %} is running now. Its note and debrief will appear here when it ends.</div>
   {% endfor %}
 
-  {% if not debriefs %}
+  {% if not any %}
   <h1 class="page-title" style="margin-bottom:18px">Review</h1>
   <div class="sheet md">
     <p><b>No session has ended yet.</b></p>
     <p>Before the first session, write the question in one line as the title of <a href="/project">project.md</a> and the goal under <em>Goal</em> (the other sections can wait), and list a few seed papers in <a href="/literature">literature/seeds.md</a> if you have some. Then run <code>/session-run</code> in the terminal.</p>
   </div>
-  {% elif not open %}
+  {% elif not view %}
   <h1 class="page-title" style="margin-bottom:8px">Review</h1>
-  <p class="fmeta" style="margin:0 0 18px">No session is waiting for your response. The debriefs of earlier sessions are below.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <p>No session is waiting for your response.</p>
+  {% if latest %}<p class="fmeta">The debrief of <a href="/session/{{ latest.id }}">session {{ latest.number }}</a> was read by {{ latest.read_by }}{% if latest.read_on %} on {{ latest.read_on }}{% endif %}. You can still add to your response on its page: the next session receives what changes.</p>{% endif %}
+  <p class="fmeta">Every session, with its note and its debrief, is on the <a href="/sessions">Sessions</a> page.</p>
+  {% else %}
+  {% if also %}
+  <p class="fmeta" style="margin:0 0 10px">Also waiting for your response: {% for a in also %}<a href="/session/{{ a.id }}">session {{ a.number }}</a>{% if a.title %} ({{ a.title | safe }}){% endif %}{{ ", " if not loop.last else "." }}{% endfor %}</p>
   {% endif %}
-
-  {% for d in open %}
-  <section class="review" id="{{ d.id }}">
-    <div class="review-head">
-      <div>
-        <p class="eyebrow">Session {{ d.number }}{% if d.date %} · {{ d.date }}{% endif %}</p>
-        <h1 class="page-title">{{ "Review the session" if open | length == 1 else "Review session " ~ d.number }}</h1>
-      </div>
-      {% if d.answered %}<span class="chip">Answered, waiting for the next session</span>
-      {% else %}<span class="chip open">Awaiting your response</span>{% endif %}
-    </div>
-    {% if error and error_for == d.id %}<div class="error">{{ error }}</div>{% endif %}
-    {{ debrief_view(d, user, local, sign_in, csrf) }}
-  </section>
-  {% endfor %}
-
-  {% if open and closed %}<h2 class="section-label" style="margin-top:8px">Earlier sessions</h2>{% endif %}
-  {% for d in closed %}
-  <details class="deb closed review" id="{{ d.id }}" {{ 'open' if error_for == d.id }}>
-    <summary><span class="sid">{{ d.id }}</span><span class="t">{{ d.summary | md_inline }}</span>
-      <span class="fmeta">read by {{ d.read_by }}{% if d.read_on %} on {{ d.read_on }}{% endif %}{% if loop.first %} · you can still add to it: the next session receives what changes{% endif %}</span></summary>
-    {% if error and error_for == d.id %}<div class="error" style="margin-top:12px">{{ error }}</div>{% endif %}
-    <div style="padding-top:14px">{{ debrief_view(d, user, local, sign_in, csrf) }}</div>
-  </details>
-  {% endfor %}
+  {{ session_view(view, user, local, sign_in, csrf, back, whole, error) }}
+  {% endif %}
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-  // Links on this page open in a new tab, so that an answer being written stays where it is.
-  document.querySelectorAll(".review a[href]").forEach(function (a) {
-    if (a.getAttribute("href").charAt(0) !== "#") { a.target = "_blank"; a.rel = "noopener"; }
-  });
-</script>
 {% endblock %}
