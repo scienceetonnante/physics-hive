@@ -14,7 +14,7 @@ This file says how to set up a development copy, how to check a change, the rule
 | `tests/` | The test suite, and two live scripts for the Hub (`hub_e2e.py`, `clean_hub.py`). |
 | `bench/reviewer/` | The reviewer benchmark. |
 | `.claude/skills/investigate-run/` | The audit skill, which writes a post-mortem of a workspace's sessions. |
-| `design/` | The design document, notes, the schematic and the source of the explainer animation. |
+| `design/` | The design document and notes. |
 | `examples/` | A real workspace after one session. |
 | `docs/` | The user guides. |
 | `install.sh`, `init-physics-hive.sh` | The installer (downloads a release) and the development launcher (uses this clone). |

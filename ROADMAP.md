@@ -37,6 +37,14 @@ Size: medium, and it should start with a real trial by two people, to see which 
 
 **Trace export for Codex and Pi.** Export is complete for Claude Code (its JSONL files, including sub-agent transcripts) and OpenCode (its SQLite store), and best effort for Codex rollouts and Pi sessions, which are copied as raw files. `investigate-run` reads traces too. Size: small to medium per harness.
 
+**References without an arXiv or INSPIRE record.** A book that has neither an arXiv identifier nor an INSPIRE record, such as Landau and Lifshitz's *Mechanics*, cannot be cited with `\cite`; this was found in a session on 2026-11-24. Notes and the draft cite the keys of `references.bib`, which `regen` writes from the paper cards alone, and `literature.py card` makes a paper card only from an arXiv identifier or `insp:<record>` (`card_id` in `scripts/literature.py` stops otherwise); the surveyor's role and `commons/workspace-doc.md` name paper cards only `P-<arXiv id>` or `P-insp-<record>`. INSPIRE holds some textbooks as book records (Landau and Lifshitz's *The Classical Theory of Fields* is `insp:1235601`), and those get a card like any paper. For the others, the method offers nothing today:
+
+- an entry added to `references.bib` by hand is overwritten at the next `regen`;
+- `pdf.py` compiles with `references.bib` alone, so a second `.bib` file is not found;
+- a `thebibliography` environment next to `\bibliography{references}` gives the PDF two reference lists, both numbered from 1, and the Space then shows only the entries written by hand and marks every citation of a paper card `?` (`_canonical` in `space/latex.py`).
+
+A session can only name the book in the text or in a footnote. One route works although no prompt describes it: `check.py` accepts any paper-card ID made of `P-` and letters, digits, `.`, `_` or `-`, so a card written by hand as `literature/P-landau1976.md`, with `title`, `authors` and `year` in its header, passes the checks and becomes a `@misc` entry with the key `landau1976`; the entry has no publisher or edition, because `render_bib` in `scripts/regen.py` writes only author, title, journal, year, DOI and arXiv fields. A fix: let `literature.py card` write a card from a reference given in full (title, authors, year, publisher, ISBN or DOI) with an ID made of the first author and the year; have `regen` write `@book` entries with their publisher; make `check.py` accept that ID form explicitly; and describe it in the surveyor's role, `commons/workspace-doc.md` and the guides. A lead would then list the book in `literature/seeds.md`, which already accepts a full reference, and the next survey could write its card. Size: small, but it changes the paper-card format, so it needs a new `VERSION` and the updates that a format change requires (see [CLAUDE.md](CLAUDE.md)).
+
 
 ## Questions the design left open
 

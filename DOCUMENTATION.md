@@ -80,9 +80,7 @@ physics-hive/
 ├── tests/                        pytest suite; hub_e2e.py and clean_hub.py (live, manual)
 ├── .github/                      the test workflow, an issue template, a pull request template
 ├── .claude/skills/investigate-run/   the audit skill (repo-level)
-├── design/                       the design document, IDEAS.md, the schematic (.svg, and its Affinity
-│                                 source .af), movie/ (the explainer animation and its export scripts),
-│                                 screenshots/ (the script that renders the images of the Space in docs/assets/)
+├── design/                       the design document (DESIGN-shared-spaces.md) and IDEAS.md
 └── hives/, workspaces/, tmp/     local test workspaces and scratch files (git-ignored)
 ```
 

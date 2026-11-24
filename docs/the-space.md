@@ -1,6 +1,6 @@
 # The Space
 
-The Space is the web app of a project: the place where the leads read what the sessions found and answer them, in a browser. In a shared space it runs as a private Hugging Face Space next to the workspace; for a local workspace, or to look at the example, it runs on your machine. This guide describes it page by page. Its images show the Space on the example in [`examples/pendulum/`](../examples/pendulum/); they are rendered from the app's real HTML and CSS by the script in [`design/screenshots/`](../design/screenshots/README.md), not captured in a browser, so small differences from a browser are possible.
+The Space is the web app of a project: the place where the leads read what the sessions found and answer them, in a browser. In a shared space it runs as a private Hugging Face Space next to the workspace; for a local workspace, or to look at the example, it runs on your machine. This guide describes it page by page. Its images show the Space on the example in [`examples/pendulum/`](../examples/pendulum/); they are rendered from the app's real HTML and CSS, not captured in a browser, so small differences from a browser are possible.
 
 The Space shows the lead's files, rendered, each with an editor where they may write. Saving commits the file to `main` on the Hub, with the Space's token, and names you in the commit. **The Space applies nothing**: it does not merge, copy or change anything on its own. The lines you tick are applied by the next session.
 

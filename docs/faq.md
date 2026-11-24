@@ -8,6 +8,7 @@
 - [How does it differ from Physics Intern?](#how-does-it-differ-from-physics-intern)
 - [Can several people work in one space?](#can-several-people-work-in-one-space)
 - [Can I check how a result was obtained?](#can-i-check-how-a-result-was-obtained)
+- [How do I cite a textbook?](#how-do-i-cite-a-textbook)
 - [A script failed. What do I do?](#a-script-failed-what-do-i-do)
 - [uv stops with "Failed to initialize cache"](#uv-stops-with-failed-to-initialize-cache)
 - [A script cannot reach the Hub, or reports a certificate error](#a-script-cannot-reach-the-hub-or-reports-a-certificate-error)
@@ -69,6 +70,11 @@ The format is built for it, but nobody has worked this way yet. Colleagues who a
 ## Can I check how a result was obtained?
 
 Yes. Under each result of a note, in the Space, a link opens the card's page with its evidence: the derivations and computations that support it, each with its one-page summary, its full material and its blind reviews. The session's page has the record folded at the bottom: the brief, the coordinator's log, what the session received, the artefacts, and the trace. Every card records which model and which contributor, or which person, produced it, and the workspace records the method version.
+
+
+## How do I cite a textbook?
+
+Notes and the draft cite with `\cite` and the keys of `references.bib`, which is generated from the paper cards, and a paper card needs an arXiv identifier or an INSPIRE record. INSPIRE holds some textbooks as books (Landau and Lifshitz's *The Classical Theory of Fields*, for example): if yours is there, add it to `literature/seeds.md` as `insp:<record number>`, so that the next survey can write its card, and cite it like a paper. A book with neither, such as Landau and Lifshitz's *Mechanics*, cannot be cited with `\cite` today: name it in the text or in a footnote. Editing `references.bib` does not help, since `regen` rewrites it, and a `thebibliography` in the draft breaks the citations of the paper cards in the Space. See [ROADMAP.md](../ROADMAP.md).
 
 
 ## A script failed. What do I do?

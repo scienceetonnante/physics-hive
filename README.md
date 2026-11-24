@@ -21,7 +21,7 @@ The work is organised the way a theoretical physicist works with a student.
 6. A shared LaTeX draft, `draft.tex`, holds what the leads decide to keep. A result counts as established only once the draft names it.
 7. The record behind these few files (cards, derivations, computations, reviews, logs, traces) keeps every step checkable and traceable: for every result, who produced it (which agent and model, or which person), how, and with which version of the method. The leads are never asked to read it; notes and the draft link into it.
 
-<p align="center"><a href="design/physics-hive-schematic.svg"><img src="docs/assets/schematic.png" alt="Diagram: a terminal running a session on the left, the Hugging Face Hub holding the project files and the record in the middle, and the Space where the lead reviews the last session on the right" width="800"></a></p>
+<p align="center"><img src="docs/assets/schematic.png" alt="Diagram: a terminal running a session on the left, the Hugging Face Hub holding the project files and the record in the middle, and the Space where the lead reviews the last session on the right" width="800"></p>
 
 The figure shows the same cycle. On the left, a contributor runs a session in a terminal, whose sub-agents use skills that PhysicsHive inherited from Physics Intern; in the middle, the shared space on the Hub holds the lead's files and the record; on the right, a lead answers in the Space. Dashed boxes are not built yet.
 
@@ -43,7 +43,7 @@ Every result leads to its evidence. In the Space, the link under Result 1 of the
 
 <p align="center"><img src="docs/assets/space-card.png" alt="The page of claim CL-S1-1 in the Space: the statement that the coefficient is 1/16, the evidence line (a derivation and a computation, each confirmed by a blind review), the origin (agent claude-opus-5-5, contributor dlouapre, session S1), a button to read the derivation D-S1-1, and the start of its blind review" width="800"></p>
 
-[`examples/README.md`](examples/README.md) says what each file of the example is. (The images of the Space are rendered from its HTML by [a script](design/screenshots/README.md).)
+[`examples/README.md`](examples/README.md) says what each file of the example is.
 
 
 ## Quick start
