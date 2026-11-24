@@ -67,8 +67,12 @@ fi
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/physics-hive.XXXXXX") || fail "could not create a temporary folder."
 trap 'rm -rf "$TMP"' EXIT
 trap 'exit 130' HUP INT TERM  # so that the line above also runs on Ctrl+C
-git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$VERSION" "$REPO" "$TMP/physics-hive" ||
+# git warns "is not a commit!" when a shallow clone targets an annotated tag; its messages are shown only on failure.
+if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$VERSION" "$REPO" "$TMP/physics-hive" \
+    2>"$TMP/clone.log"; then
+    cat "$TMP/clone.log" >&2
     fail "could not download PhysicsHive $VERSION from $REPO."
+fi
 echo "Downloaded PhysicsHive $VERSION."
 
 # The init script reads its answers from the terminal; without one, it asks nothing and takes the defaults.
