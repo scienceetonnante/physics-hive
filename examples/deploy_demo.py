@@ -43,7 +43,7 @@ EXAMPLE = REPO / "examples" / "pendulum"
 METHOD_MODULES = ("cards", "common", "human", "regen", "check", "pdf")
 APP_FOLDER, WORKSPACE_FOLDER = "space", "pendulum"
 HIDDEN_AND_CACHES = (".*", "__pycache__", "*.pyc")  # hidden files (.env, .DS_Store), caches
-DESCRIPTION = "A real PhysicsHive research session, read-only"  # the Hub allows 60 characters
+DESCRIPTION = "A real PhysicsHive project after two sessions, read-only"  # the Hub allows 60 characters
 
 CARD = f"""---
 title: PhysicsHive demo
@@ -64,10 +64,11 @@ PhysicsHive lets a small team of scientists steer AI coding agents on one proble
 mathematics. The agents work in sessions in a terminal; the project's leads read what the agents found
 and answer them in a web app like this one.
 
-This is that app on a real workspace, after one session on a textbook question: what is the period of a pendulum
-to second order in the amplitude? The session wrote a note and a debrief, and the debrief is waiting for the
-lead's response. You can open every page, follow each result to its derivation, computation and reviews,
-and type in the forms. This demonstration is read-only: nothing you type is saved.
+This is that app on a real workspace, after two sessions on a textbook question: what is the period of a pendulum
+to second order in the amplitude? The first session answered it; the lead read its debrief and ticked its result
+for the draft, which the second session copied there before it looked for a paper to cite. The second session's
+debrief is waiting for the lead's response. You can open every page, follow the result to its derivation,
+computation and reviews, and type in the forms. This demonstration is read-only: nothing you type is saved.
 
 To install PhysicsHive and use it on your own problem: {hub.PROJECT_URL}
 """

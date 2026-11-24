@@ -1,30 +1,29 @@
 ---
 session: S1
-goal: 'Find the coefficient a of the θ₀² correction in T = 2π√(L/g)(1 + a θ₀² + O(θ₀⁴)) for the simple pendulum, derived analytically and checked against a numerical evaluation of the exact period at several amplitudes.'
-budget: 10
+goal: 'Find the coefficient of the θ₀² correction to the small-oscillation period of the simple pendulum, derived analytically and checked against a numerical evaluation of the exact period for several amplitudes.'
+budget: 20
 starts_from: []
 ---
 ## Goal
 
-Find the coefficient a of the θ₀² correction to the period of the simple pendulum (point mass on a massless rigid rod, no friction, uniform gravity), T = 2π√(L/g)(1 + a θ₀² + O(θ₀⁴)), where θ₀ is the amplitude in radians. Derive a analytically, and check it against a numerical evaluation of the exact period (complete elliptic integral) at several amplitudes.
+Find the period T of the simple pendulum (point mass on a massless rigid rod, no friction, uniform gravity) to first non-trivial order in the amplitude θ₀: the coefficient c in T = 2π√(L/g) (1 + c θ₀² + O(θ₀⁴)). Derive c analytically, and check it against a numerical evaluation of the exact period (complete elliptic integral) at several amplitudes.
 
 ## Why
 
-This is the whole goal of `project.md`. Nothing has been done yet, and the target is small enough to be reached in one session.
+This is the goal of `project.md`, which lists no next step yet. The contributor asked to proceed with it as the session's brief.
 
 ## Plan of work
 
-1. Fix the conventions in `conventions.md`: θ measured from the downward vertical, θ₀ the amplitude in radians, ω₀ = √(g/L), T₀ = 2π/ω₀, and the elliptic modulus k = sin(θ₀/2), with the parameter m = k² that SciPy's `ellipk` takes stated explicitly.
-2. `/derive` D-S1-1: the coefficient a, analytically, by two independent analytic routes inside the same artefact if feasible. Supports the reserved card CL-S1-1.
-3. `/compute` C-S1-1, independent of the derivation and dispatched in parallel with it: the series of the exact period, symbolically, and the exact period evaluated numerically at several amplitudes, with the coefficient extracted from the data. Also supports CL-S1-1.
-4. `/review` each artefact blindly, then one `/critique`.
-5. No literature survey unless the work needs a reference: the result is textbook material and the check asked for is numerical.
+1. Fix the notation in `conventions.md` (angle, amplitude, small-oscillation period, elliptic-integral convention), so that the derivation and the computation use the same symbols.
+2. `/derive` the coefficient c analytically (claim CL-S1-1), then `/review` the derivation.
+3. `/compute` independently: the series of the exact period, and a numerical evaluation of the exact period at several amplitudes, compared with the second-order formula, including a check that the residual scales as θ₀⁴. Then `/review` the computation.
+4. `/critique` the state before ending.
 
-Budget: 10 dispatches.
+No literature survey is planned: the goal does not depend on it.
 
 ## Stop conditions
 
-- The coefficient is derived and confirmed by both reviewed artefacts.
-- The budget of 10 dispatches is spent.
+- The goal is reached: c is derived, the derivation and an independent computation are each confirmed by a blind review.
+- The budget of 20 dispatches is spent (about 6 are expected).
 - No progress: 4 dispatches in a row that add nothing towards the goal.
 - The work shows that `project.md` should change.

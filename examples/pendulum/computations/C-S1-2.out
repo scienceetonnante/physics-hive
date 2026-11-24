@@ -1,0 +1,87 @@
+==============================================================================
+C-S1-2  simple pendulum: second-order amplitude correction to the period
+==============================================================================
+
+## SYMBOLIC PATH
+
+S1  dE/dt on the equation of motion simplifies to: 0
+    theta'^2 = 2 \omega_{0}^{2} \left(\cos{\left(\theta \right)} - \cos{\left(\theta_{0} \right)}\right)
+S2  [dtheta/dphi / sqrt(theta'^2)] / [1/(w0 sqrt(1-k^2 sin^2 phi))] simplifies to: cos(phi)/Abs(cos(phi))
+    spot values of that ratio at 6 random (k, phi, w0): ['1.0', '1.0', '1.0', '1.0', '1.0', '1.0']
+    => T = (4/omega_0) K(k), k = sin(theta_0/2);  T/T0 = (2/pi) K(sin(theta_0/2))
+
+S3  K as a series in the parameter m = k^2 (term-by-term integration):
+    K = \frac{1225 \pi m^{4}}{32768} + \frac{25 \pi m^{3}}{512} + \frac{9 \pi m^{2}}{128} + \frac{\pi m}{8} + \frac{\pi}{2} + O(m^5)
+    difference with sympy.elliptic_k(m).series (parameter m): 0
+    difference with pi/2 * sum [binom(2n,n)/4^n]^2 m^n: 0
+
+S4  T/T0 = \frac{22931 \theta_{0}^{8}}{1321205760} + \frac{173 \theta_{0}^{6}}{737280} + \frac{11 \theta_{0}^{4}}{3072} + \frac{\theta_{0}^{2}}{16} + 1 + O(theta_0^10)
+    c0 = 1,  c2 = 1/16,  c4 = 11/3072,  c6 = 173/737280,  c8 = 22931/1321205760
+    LaTeX: c_2 = \frac{1}{16} , c_4 = \frac{11}{3072} , c_6 = \frac{173}{737280} , c_8 = \frac{22931}{1321205760}
+    cross-check, series of (2/pi) elliptic_k(sin^2(theta0/2)) directly to theta0^6: \frac{173 \theta_{0}^{6}}{737280} + \frac{11 \theta_{0}^{4}}{3072} + \frac{\theta_{0}^{2}}{16} + 1
+
+S5  Lindstedt-Poincare from the equation of motion (no elliptic integral):
+    order eps^3: secular condition gives a2 = -1/8
+    order eps^5: secular condition gives a4 = 7/1536
+    order eps^7: secular condition gives a6 = -19/184320
+    T/T0 = Omega^(-1/2) = \frac{173 \theta_{0}^{6}}{737280} + \frac{11 \theta_{0}^{4}}{3072} + \frac{\theta_{0}^{2}}{16} + 1 + O(theta_0^8)
+    difference with the elliptic-integral series (through theta0^6): 0
+    Lindstedt-Poincare: c2 = 1/16, c4 = 11/3072
+
+## NUMERICAL PATH
+
+N1  T/T0 at each amplitude: mpmath (40 digits) as reference; differences of the other routes
+    relative error of the second-order formula = [T0(1 + theta0^2/16) - T]/T
+ theta0            T/T0 mpmath   scipy-mp     AGM-mp  ODE(1/4)-mp  ODE(1/2)-mp  2nd-order relerr   resid/th^4
+  0.010    1.00000625003580753    0.0e+00    0.0e+00      5.3e-15      4.7e-15     -3.580736e-11   0.00358075
+  0.020    1.00002500057293168    2.2e-16    2.2e-16      7.1e-15      5.1e-15     -5.729174e-10   0.00358082
+  0.050    1.00015627238322432    0.0e+00    0.0e+00      4.4e-15      7.3e-15     -2.237973e-08   0.00358132
+  0.100    1.00062535830773663    0.0e+00    0.0e+00      3.1e-15      6.2e-15     -3.580838e-07   0.00358308
+  0.200    1.00250574422860192    0.0e+00    0.0e+00      8.9e-16      7.3e-15     -5.729871e-06   0.00359014
+  0.300    1.00565417611036461    0.0e+00    0.0e+00      2.9e-15      1.3e-14     -2.901207e-05   0.00360199
+  0.500    1.01585253110143671   -2.2e-16    0.0e+00      1.1e-15      1.6e-15     -2.239804e-04   0.00364050
+  0.750    1.03633279661752203    0.0e+00    2.2e-16      1.8e-15      1.3e-15     -1.135298e-03   0.00371847
+  1.000    1.06633424557996305   -2.2e-16    0.0e+00      3.3e-15      1.8e-15     -3.595726e-03   0.00383425
+  1.500    1.16196874438667244    0.0e+00    0.0e+00      1.3e-14      6.7e-15     -1.836860e-02   0.00421605
+  2.000    1.32890445191509954    0.0e+00   -4.4e-16      1.3e-14      7.3e-15     -5.937556e-02   0.00493153
+  2.500    1.64298239844576622   -4.4e-16   -4.4e-16      1.3e-14     -1.6e-14     -1.535971e-01   0.00646035
+  3.000    2.57123394943214205   -1.3e-15    4.4e-16      5.8e-15     -9.4e-13     -3.923151e-01   0.01245351
+
+    table written to computations/C-S1-2.periods.csv
+
+N2  log-log slope of the residual vs theta0 on [0.01, 0.3]: 4.001437 (expect 4)
+    residual/theta0^4 -> 0.0035807526 at theta0 = 0.01; c4 = 11/3072 = 0.0035807292
+    same slope from the ODE data alone: 4.001404
+
+N3  c2 extracted from numerical data alone
+     theta0   (T/T0-1)/th^2 [mpmath]    (T/T0-1)/th^2 [ODE]
+      0.010           0.062500358075         0.062500358129
+      0.020           0.062501432329         0.062501432347
+      0.050           0.062508953290         0.062508953291
+      0.100           0.062535830774         0.062535830774
+      0.200           0.062643605715         0.062643605715
+      0.300           0.062824179004         0.062824179004
+    fit c2 + c4 th^2 + c6 th^4 on theta0 in [0.05, 0.5] (5 points):
+      ODE data   : c2 = 0.062500003309, c4 = 0.00358032, c6 = 0.000241
+      mpmath data: c2 = 0.062500003308, c4 = 0.00358032, c6 = 0.000241
+      exact      : c2 = 0.062500000000, c4 = 0.00358073, c6 = 0.000235
+    Richardson from ODE at theta0 = 0.05, 0.1: c2 = 0.062499994131 (|err| = 5.9e-09)
+
+N4  truncated symbolic series vs mpmath exact, relative error
+    theta0 =  0.1: order 2 -3.581e-07   order 4 -2.347e-10   order 8 -1.387e-16
+    theta0 =  0.5: order 2 -2.240e-04   order 4 -3.677e-06   order 8 -1.362e-09
+    theta0 =  1.0: order 2 -3.596e-03   order 4 -2.377e-04   order 8 -1.420e-06
+    theta0 =  2.0: order 2 -5.938e-02   order 4 -1.626e-02   order 8 -1.620e-03
+
+Limits
+    theta0 -> 0: T/T0 (mpmath, theta0 = 1e-8) - 1 = 6.25e-18  (expect theta0^2/16 = 6.250e-18)
+    theta0 = 3.1: T/T0 = 3.348496446, (2/pi) ln(4/cos(theta0/2)) = 3.348203238
+    theta0 = 3.14: T/T0 = 5.425144192, (2/pi) ln(4/cos(theta0/2)) = 5.425143433
+    theta0 = 3.1415: T/T0 = 7.235874068, (2/pi) ln(4/cos(theta0/2)) = 7.235874065
+
+SUMMARY
+    symbolic (elliptic series):   c2 = 1/16, c4 = 11/3072, c6 = 173/737280, c8 = 22931/1321205760
+    symbolic (Lindstedt-Poincare): c2 = 1/16, c4 = 11/3072
+    numerical (ODE fit)          : c2 = 0.062500003309, c4 = 0.00358032
+    max |ODE - mpmath| over all amplitudes: 1.31e-14
+    max |scipy - mpmath|: 1.33e-15

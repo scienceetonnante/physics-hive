@@ -13,7 +13,7 @@ The people on a project have two roles. A **lead** sets the question and makes t
 - **Optional**: a TeX distribution with `latexmk` (TeX Live or MacTeX), to compile the notes and the draft to PDF on your machine. The Space compiles them itself.
 - **Optional**: `SEMANTIC_SCHOLAR_API_KEY` in your environment, which raises the rate limit of the citation lookups for papers that INSPIRE does not cover.
 
-Pick a question small enough for a first try. The example in [`examples/pendulum/`](../examples/pendulum/) used a textbook question (the period of a pendulum to second order in the amplitude), which one session answered.
+Pick a question small enough for a first try. The example in [`examples/pendulum/`](../examples/pendulum/) used a textbook question (the period of a pendulum to second order in the amplitude), which its first session answered; a second session found a paper to cite.
 
 
 ## A first session in a local workspace
@@ -142,7 +142,7 @@ uv run .physics-hive/scripts/session.py abort
 
 ## How long it takes, and what it costs
 
-A session is bounded by its budget of dispatches (20 by default), not by time. The design aims at sessions of a few hours. In the example in [`examples/pendulum/`](../examples/pendulum/), session S1 used 5 dispatches out of the 10 its brief allowed, and took about 35 minutes with Claude Code.
+A session is bounded by its budget of dispatches (20 by default), not by time. The design aims at sessions of a few hours. In the example in [`examples/pendulum/`](../examples/pendulum/), session S1 used 5 dispatches out of the 20 its brief allowed and took about 20 minutes with Claude Code; session S2, a short literature survey, used 1 out of 3 and took about 13 minutes.
 
 What a session costs is what your harness's model provider charges for the tokens it uses: the coordinator, and every sub-agent it dispatches. The repository holds no cost figure. In a shared space, the trace's `meta.json` records the tokens each model used; a local workspace records none, so there your harness's own usage display is the place to look. See [the FAQ](faq.md#what-does-it-cost-to-run).
 

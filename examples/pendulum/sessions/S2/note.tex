@@ -1,0 +1,97 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[hidelinks]{hyperref}
+\newtheorem{result}{Result}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{theorem}{Theorem}
+\newcommand{\card}[1]{\textsuperscript{\texttt{[#1]}}}
+
+\title{A classical reference for the period of the pendulum to second order}
+\author{Note on session S2, 24 November 2026}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The session looked for one citable reference for
+$T = T_0\,(1 + \theta_0^2/16)$, Result~1 of the draft\card{CL-S1-1}, which
+so far cites nothing. Lima and Arun (2006, Am.\ J.\ Phys.) state the exact
+period and this formula, which they attribute to Bernoulli (1749). Gatland
+(2007, a preprint) gives the full series of the exact period. No source
+disputes $c_2 = 1/16$. The session adds no new claim; it suggests citing Lima
+and Arun next to Result~1.
+\end{abstract}
+
+\section*{Setting}
+Notation is that of \texttt{conventions.md}: amplitude $\theta_0$,
+$T_0 = 2\pi\sqrt{L/g}$, $T = T_0\,(1 + c_2\,\theta_0^2 + c_4\,\theta_0^4 +
+\dots)$, and $K(k)$ written with the modulus $k = \sin(\theta_0/2)$, as in
+both papers (Gatland calls it $x$). The session made no derivation or
+computation: what follows is what the papers state, as read in the survey, and
+the numerical checks quoted were made during the survey, outside any reviewed
+artefact.
+
+\section{What the two papers state}
+Lima and Arun~\cite{lima2006} derive from energy conservation the exact period
+\begin{equation}
+  T = 4\sqrt{L/g}\;K(k) = \frac{2T_0}{\pi}\,K(k), \qquad k = \sin(\theta_0/2),
+  \label{eq:exact}
+\end{equation}
+the form found in S1, and state without deriving it
+\begin{equation}
+  T_2 = T_0\left(1 + \frac{\theta_0^2}{16}\right),
+  \label{eq:T2}
+\end{equation}
+``found by Bernoulli in 1749 from a perturbative analysis''.\footnote{Their
+Eqs.~5 and~11 in the arXiv version, which the survey read in its LaTeX source;
+the published numbering may differ.} Their stated accuracy of
+\eqref{eq:T2}, a relative error above $0.1\%$ beyond $41^\circ$, matches the
+survey's own evaluation. The attribution to Bernoulli is second-hand:
+they take it from a 1960 textbook by C.~J.~Smith, which the session did not
+read. A citation should therefore attribute the formula to Bernoulli
+``according to Lima and Arun''.
+
+Gatland~\cite{gatland2007} expands the same exact period as
+\begin{equation}
+  \frac{T}{T_0} = \sum_{n \ge 0} a_n\,k^{2n}
+  = 1 + \frac{k^2}{4} + \frac{9k^4}{64} + \dots
+  \label{eq:kseries}
+\end{equation}
+with $a_0 = 1$ and $a_n = (1 - 1/2n)^2\,a_{n-1}$ (we write $a_n$ for his
+coefficients, to keep $c_n$ for ours). He does not
+expand in $\theta_0$; substituting $k^2 = \theta_0^2/4 - \theta_0^4/48 + \dots$
+gives $T/T_0 = 1 + \theta_0^2/16 + 11\,\theta_0^4/3072 + \dots$, the two
+coefficients found in S1. His Table~I lists the exact $T/T_0$: 1.004301
+($15^\circ$), 1.017409 ($30^\circ$), 1.039973 ($45^\circ$), 1.073182
+($60^\circ$), 1.118959 ($75^\circ$) and 1.180341 ($90^\circ$). The survey
+reproduced all six with \texttt{mpmath.ellipk}, called with the parameter
+$m = k^2$. The paper is marked ``Submitted to Amer.\ J.\ Phys.'', and the survey
+found no evidence that it was published: it is a good working reference, and a
+weaker citation than Lima and Arun.
+
+Both papers agree with Result~1 of the draft\card{CL-S1-1}, and so do the
+closed-form large-amplitude approximations they compare (Kidd--Fogg, Molina and
+others), which the survey checked all reduce to $1 + \theta_0^2/16$ at second
+order.
+
+\section{What did not work}
+Textbooks cannot be cited in the workspace: Landau and Lifshitz's
+\emph{Mechanics}, Thornton and Marion's \emph{Classical Dynamics} and the NIST
+DLMF (\S22.19(i) and Eq.~19.5.1, read online by the survey) have no arXiv or
+INSPIRE record, so they cannot have a paper card or a \texttt{references.bib}
+entry. The session therefore settled on a journal paper.
+
+\section{Open question and next steps}
+The goal of \texttt{project.md}, answered in S1, now has a citable source,
+and the lead asked to stop after this survey. The immediate step is to cite
+Lima and Arun~\cite{lima2006} next to Result~1 of the draft, attributing
+\eqref{eq:T2} to Bernoulli according to them. If the project continues,
+Gatland's table offers an external check of the S1 computation, and Amore and
+Aranda (arXiv:math-ph/0303052, noted by the survey but not carded) are said to
+derive $\omega = \omega_0\,(1 - \theta_0^2/16)$ by the Poincar\'e--Lindstedt
+method, the second route of S1.
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

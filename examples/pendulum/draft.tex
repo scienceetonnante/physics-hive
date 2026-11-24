@@ -17,9 +17,10 @@
 \end{abstract}
 
 \section{Introduction}
-% The question and why it matters: to write.
+% The question and why it matters: to write when you are ready. This draft can
+% stay as it is until a session gives you a result worth keeping.
 
-% This draft is the best current state of the research. Only the researcher decides
+% This draft is the best current state of the research. Only the lead decides
 % what enters it: by ticking a line in a debrief ("Copy Result 1 of note S2 into the
 % draft, as a result"), or by editing this file. A result names its claim card, and
 % that is what makes the claim established:
@@ -31,6 +32,20 @@
 %
 % A claim without a confirming review goes in a conjecture environment instead.
 % Derivations behind the results go in appendices, after \appendix.
+
+\section{The period to second order in the amplitude}
+
+% Copied from note S1 by session S2, as ticked in the S1 debrief.
+\begin{result}[Second-order coefficient of the period]
+For the simple pendulum at amplitude $\theta_0$,
+\begin{equation}
+  T(\theta_0) = T_0\left(1 + \frac{\theta_0^2}{16} + O(\theta_0^4)\right),
+  \qquad T_0 = 2\pi\sqrt{L/g},
+  \label{eq:result}
+\end{equation}
+so $c_2 = 1/16$.\footnote{Derivation D-S1-1 and the independent computation
+C-S1-2, each confirmed by a blind review.}\card{CL-S1-1}
+\end{result}
 
 \bibliographystyle{plain}
 \bibliography{references}

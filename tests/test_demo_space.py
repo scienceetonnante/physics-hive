@@ -43,7 +43,8 @@ def test_the_folder_holds_the_app_the_method_modules_and_the_example(built):
     # The whole example, and nothing else under pendulum/.
     assert {n.removeprefix("pendulum/") for n in names if n.startswith("pendulum/")} == files(EXAMPLE) - {
         n for n in files(EXAMPLE) if any(part.startswith(".") or part == "__pycache__" for part in n.split("/"))}
-    assert "pendulum/sessions/S1/note.pdf" in names and "pendulum/project.toml" in names
+    assert {"pendulum/sessions/S1/note.pdf", "pendulum/sessions/S2/note.pdf", "pendulum/draft.pdf",
+            "pendulum/project.toml"} <= names
     # Exactly the modules the app imports for a workspace without a method copy.
     sys.path.insert(0, str(REPO / "space"))
     import backend
@@ -126,24 +127,27 @@ def running(built):
 
 
 def test_the_built_app_shows_the_example_read_only(running, built):
-    for path in ("/", "/project", "/draft", "/sessions", "/session/S1", "/literature", "/help", "/card/CL-S1-1",
-                 "/file/derivations/D-S1-1.tex?rendered=1", "/edit/project.md"):
+    for path in ("/", "/project", "/draft", "/sessions", "/session/S1", "/session/S2", "/literature", "/help",
+                 "/card/CL-S1-1", "/paper/P-physics_0510206", "/file/derivations/D-S1-1.tex?rendered=1",
+                 "/edit/project.md"):
         r = running.get(path)
         assert r.status_code == 200, path
         assert "This is a read-only demonstration of" in r.text, path
         assert "Load the latest version" not in r.text and str(built) not in r.text, path
     page = running.get("/").text
-    assert "The amplitude correction to the pendulum" in page and "Awaiting your response" in page
+    assert "A classical reference for the period of the pendulum" in page and "Awaiting your response" in page
     assert "An example workspace, <strong>pendulum</strong>" in page
-    # The note's PDF is the one in the example, served without a compile.
-    r = running.get("/note/S1/pdf")
-    assert r.status_code == 200 and r.content == (built / "pendulum/sessions/S1/note.pdf").read_bytes()
+    # The PDFs of the notes and of the draft are the ones in the example, served without a compile.
+    for url, pdf in (("/note/S1/pdf", "sessions/S1/note.pdf"), ("/note/S2/pdf", "sessions/S2/note.pdf"),
+                     ("/draft.pdf", "draft.pdf")):
+        r = running.get(url)
+        assert r.status_code == 200 and r.content == (built / "pendulum" / pdf).read_bytes(), url
     # A save is refused, and the example is unchanged.
-    before = (built / "pendulum/sessions/S1/debrief.md").read_text()
+    before = (built / "pendulum/sessions/S2/debrief.md").read_text()
     token = page.split('name="csrf" value="', 1)[1].split('"', 1)[0]
-    r = running.post("/debrief/S1", data={"answer-1": "Yes.", "note": "x", "base": before, "csrf": token})
+    r = running.post("/debrief/S2", data={"tick-0": "on", "note": "x", "base": before, "csrf": token})
     assert "Nothing was saved: this is a read-only demonstration." in r.text
-    assert (built / "pendulum/sessions/S1/debrief.md").read_text() == before
+    assert (built / "pendulum/sessions/S2/debrief.md").read_text() == before
 
 
 class FakeHub:
@@ -196,4 +200,4 @@ def test_push_lists_the_workspace_files_it_uploads(tmp_path, capsys):
     deploy.main(["--dir", str(tmp_path / "out"), "--push", "--repo", "me/demo"], hf=FakeHub())
     out = capsys.readouterr().out
     listing = out[out.index("The example workspace to upload"):]
-    assert "  sessions/S1/debrief.md" in listing and "  claims/CL-S1-1.md" in listing
+    assert "  sessions/S2/debrief.md" in listing and "  claims/CL-S1-1.md" in listing

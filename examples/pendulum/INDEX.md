@@ -4,8 +4,7 @@
 
 ## Claims
 
-- **CL-S1-1** · working — The period of the simple pendulum released from rest at angle $\theta_0$ (in radians) is $T = 2\pi\sqrt{L/g}\,\left(1 + \tfrac{1}{16}\theta_0^2 + O(\theta_0^4)\right)$, so the coefficient of the $\theta_0^2$ correction… — evidence: C-S1-1 [R-S1-1 confirmed], D-S1-1 [R-S1-1 confirmed]
-- **CL-S1-2** · working — To the next order, the period of the simple pendulum released from rest at angle $\theta_0$ (in radians) is $T = 2\pi\sqrt{L/g}\,\left(1 + \tfrac{1}{16}\theta_0^2 + \tfrac{11}{3072}\theta_0^4 + O(\theta_0^6)\right)$. — evidence: C-S1-1 [R-S1-1 confirmed] — depends on CL-S1-1
+- **CL-S1-1** · established — The period of the simple pendulum at amplitude $\theta_0$ is $T = T_0\,(1 + \theta_0^2/16 + O(\theta_0^4))$ with $T_0 = 2\pi\sqrt{L/g}$, so $c_2 = 1/16$. — evidence: C-S1-2 [R-S1-1 confirmed], D-S1-1 [R-S1-1 confirmed]
 
 ## Dead ends
 
@@ -13,17 +12,21 @@
 
 ## The draft
 
-(no result or conjecture in draft.tex yet)
+- Result (Second-order coefficient of the period), draft.tex line 39: CL-S1-1 (established)
 
 ## Artefacts
 
-- **C-S1-1** (computation, `computations/C-S1-1.md`) — supports CL-S1-1 — reviews: R-S1-1 confirmed
+- **C-S1-2** (computation, `computations/C-S1-2.md`) — supports CL-S1-1 — reviews: R-S1-1 confirmed
 - **D-S1-1** (derivation, `derivations/D-S1-1.summary.md`) — supports CL-S1-1 — reviews: R-S1-1 confirmed
 
 ## Literature
 
-(no paper cards yet)
+Overview of the field: `literature/overview.md`.
+
+- **P-0707.1029** [gatland2007] — Systematic approximations for the period of a finite amplitude pendulum (2007) — rating medium — topic: Exact period and its expansion in the amplitude — Gives the full series $T/T_0 = \sum_n c_n k^{2n}$ in $k=\sin(\theta_0/2)$, with $c_1 = 1/4$ (hence $c_2 = 1/16$ in $\theta_0$), and a table of exact $T/T_0$ at six amplitudes that a computation can b…
+- **P-physics_0510206** [lima2006] — An accurate formula for the period of a simple pendulum oscillating beyond the small angle regime (2006) — rating high — topic: Exact period and its expansion in the amplitude — A citable, peer-reviewed paper that states in one place the exact period $T = 4\sqrt{L/g}\,K(k)$ with modulus $k=\sin(\theta_0/2)$ and the second-order formula $T_2 = T_0(1+\theta_0^2/16)$, which it…
 
 ## Sessions
 
-- **S1** — Find the coefficient a of the θ₀² correction in T = 2π√(L/g)(1 + a θ₀² + O(θ₀⁴)) for the simple pendulum, derived analytically and checked against a numerical… — note `sessions/S1/note.tex` — debrief open
+- **S1** — Find the coefficient of the θ₀² correction to the small-oscillation period of the simple pendulum, derived analytically and checked against a numerical evaluat… — note `sessions/S1/note.tex` — debrief read by S2 on 2026-11-24
+- **S2** — Find one classical reference for the period of the simple pendulum and its expansion in the amplitude, write its paper card, and offer to cite it next to Resul… — note `sessions/S2/note.tex` — debrief open

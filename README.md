@@ -4,9 +4,9 @@ PhysicsHive lets a small team of scientists steer AI coding agents (Claude Code,
 
 Each person on a project is a lead, a contributor, or both. A **lead** sets the question, reads the notes, answers the debriefs and decides what enters the project's draft paper. A **contributor** runs the sessions in a terminal, with a coding agent. The format is built for several people, but so far PhysicsHive has been used by one person at a time, who was both the lead and the contributor.
 
-<p align="center"><a href="examples/pendulum/"><img src="docs/assets/space-review.png" alt="The Review page of the Space on the example project: on the left, the note of session 1 with its abstract and two results, each with a numbered equation and a link to its evidence; on the right, the response form with two questions, four lines to tick and a note box" width="800"></a></p>
+<p align="center"><a href="examples/pendulum/"><img src="docs/assets/space-review.png" alt="The page of session 1 in the Space, on the example project: on the left, the note's abstract and its result, a numbered equation for the period with a link to its evidence; on the right, the lead's response: an answer to the session's question, two of four lines ticked, and a note" width="800"></a></p>
 
-The Review page of the Space, the web app where the leads work, on [the example in this repository](examples/pendulum/). On the left is the note that session 1 wrote, cut to its abstract and its results; on the right, the lead's response: answers to the session's questions, and the lines to tick that the next session will apply.
+The page of a session in the Space, the web app where the leads work, on [the example in this repository](examples/pendulum/). On the left is the note that session 1 wrote, cut to its abstract and its result; on the right, the lead's response: an answer to the session's question, the lines ticked for the next session to apply, and a note.
 
 
 ## How the work goes
@@ -25,23 +25,20 @@ The work is organised the way a theoretical physicist works with a student.
 
 The figure shows the same cycle. On the left, a contributor runs a session in a terminal, whose sub-agents use skills that PhysicsHive inherited from Physics Intern; in the middle, the shared space on the Hub holds the lead's files and the record; on the right, a lead answers in the Space. Dashed boxes are not built yet.
 
-<!-- RELEASE: link to the video -->
-
 A space stays private while the research is done. The record is kept so that, at the end of a project, it can be published with the results; there is no publishing step yet (see [ROADMAP.md](ROADMAP.md)). A local workspace, on one machine without the Hub, keeps the same record but no agent traces: traces are exported only in a shared space.
 
 
-## What one session produces
+## What two sessions produce
 
-[`examples/pendulum/`](examples/pendulum/) is a real shared space after its first session, copied from the Hub, made with version 0.5.6 of the method. The question is small on purpose, a textbook result, so that the output is easy to judge: the period of a pendulum to second order in the amplitude. Session S1 ran with Claude Code (model `claude-opus-5-5`), used 5 of the 10 dispatches its brief allowed, and took about 35 minutes; no cost was recorded (see [the FAQ](docs/faq.md#what-does-it-cost-to-run)). It left:
+[`examples/pendulum/`](examples/pendulum/) is a real shared space after two sessions, copied from the Hub, made with version 0.6.0 of the method. The question is small on purpose, a textbook result, so that the output is easy to judge: the period of a pendulum to second order in the amplitude ([`project.md`](examples/pendulum/project.md)). Both sessions ran with Claude Code (model `claude-opus-5-5`); no cost was recorded (see [the FAQ](docs/faq.md#what-does-it-cost-to-run)).
 
-- [`project.md`](examples/pendulum/project.md), the question and the goal, written by the lead in the Space before the session;
-- the note, [`sessions/S1/note.pdf`](examples/pendulum/sessions/S1/note.pdf): the coefficient a = 1/16, obtained by two analytic routes and checked numerically, and the next coefficient, 11/3072, as a by-product;
-- the debrief, [`sessions/S1/debrief.md`](examples/pendulum/sessions/S1/debrief.md): a summary, the conventions the session added, two questions and four lines to tick;
-- two claim cards in [`claims/`](examples/pendulum/claims/), a derivation in [`derivations/`](examples/pendulum/derivations/) and a computation in [`computations/`](examples/pendulum/computations/), each with its blind review, and a critique of the whole.
+- Session S1 took about 20 minutes and used 5 of the 20 dispatches its brief allowed. Its note, [`sessions/S1/note.pdf`](examples/pendulum/sessions/S1/note.pdf), gives the coefficient c₂ = 1/16, obtained by two analytic routes and checked numerically, with the next coefficient, 11/3072, as context. Behind it are a claim card in [`claims/`](examples/pendulum/claims/), a derivation in [`derivations/`](examples/pendulum/derivations/) and a computation in [`computations/`](examples/pendulum/computations/), each with its blind review, and a critique of the whole.
+- The lead answered its debrief, [`sessions/S1/debrief.md`](examples/pendulum/sessions/S1/debrief.md): two lines ticked in the Space, to copy the result into the draft and to run a short literature survey next, and, at the start of S2, the answer "survey only, then stop" to its question.
+- Session S2 applied the ticked lines first, so the draft, [`draft.pdf`](examples/pendulum/draft.pdf), now holds the result, which makes it established. It then ran the survey with 1 of the 3 dispatches its brief allowed and wrote two paper cards; one of them, Lima and Arun (2006), states the formula. The session took about 13 minutes. Its debrief, [`sessions/S2/debrief.md`](examples/pendulum/sessions/S2/debrief.md), offers one line to tick, a sentence that cites this paper after the result in the draft, and waits for the lead.
 
 Every result leads to its evidence. In the Space, the link under Result 1 of the note opens the page of its claim card:
 
-<p align="center"><img src="docs/assets/space-card.png" alt="The page of claim CL-S1-1 in the Space: the statement that the coefficient is 1/16, the evidence line (a derivation and a computation, each confirmed by a blind review), the origin (agent claude-opus-5-5, contributor dlouapre, session S1), a button to read the derivation D-S1-1, and the start of its blind review" width="800"></p>
+<p align="center"><img src="docs/assets/space-card.png" alt="The page of claim CL-S1-1 in the Space: the statement that the coefficient is 1/16, the evidence line (a derivation and a computation, each confirmed by a blind review), the draft line (in the draft, as a result), the origin (agent claude-opus-5-5, contributor dlouapre, session S1), a button to read the derivation D-S1-1, and the start of its blind review" width="800"></p>
 
 [`examples/README.md`](examples/README.md) says what each file of the example is.
 

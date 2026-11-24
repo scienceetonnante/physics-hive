@@ -27,7 +27,7 @@ The page the Space opens on. It shows the page of the newest session whose debri
 
 Each session has one page, reached from *Review* and from *Sessions*. It shows the session at three depths: what to read, what to decide, and how to check.
 
-<p align="center"><img src="assets/space-review.png" alt="The page of session 1 of the example, as the Review page shows it: the note's abstract and two results on the left, the response form with two questions, four lines to tick and a note box on the right" width="800"></p>
+<p align="center"><img src="assets/space-review.png" alt="The page of session 1 of the example, after the lead's response: the note's abstract and its result on the left; on the right the response, with an answer to the session's question, two of four lines ticked and a note" width="800"></p>
 
 **On the left, the note.** It is headed by *Session n · date*, the note's title and the session's state. A switch above it shows either *Abstract and results* (the default) or the *Whole note*; the PDF and the LaTeX source are below it. Under each result, a link to the evidence of its card says what you will find there, for example *Derivation, computation and reviews*. A warning shows when a card is refuted, revised, or needs a re-check because a card it depends on was refuted or revised.
 
@@ -82,7 +82,7 @@ Then comes the material behind the claim, one block per supporting derivation or
 
 The card's own text is folded below, then the cards related to it.
 
-<p align="center"><img src="assets/space-derivation.png" alt="The derivation D-S1-1 rendered from LaTeX: a contents column on the left, and on the right the title, Section 1 and the start of Section 2 with numbered equations" width="800"></p> Elsewhere in the Space, a claim shows two facts rather than a status: its evidence in one sentence, and *In the draft* or *Not in the draft*.
+<p align="center"><img src="assets/space-derivation.png" alt="The derivation D-S1-1 rendered from LaTeX: a contents column on the left, and on the right the title, the target and conventions, and Section 1 with numbered equations, ending with the exact period in a box" width="800"></p> Elsewhere in the Space, a claim shows two facts rather than a status: its evidence in one sentence, and *In the draft* or *Not in the draft*.
 
 There are also pages for each paper card (`/paper/<id>`) and for any file of the record (`/file/<path>`; a derivation's `.tex` file has a *Rendered* button). In rendered Markdown, every card, paper, artefact and session ID, and every workspace path in code, is a link.
 
@@ -118,7 +118,7 @@ uv run scripts/serve.py --dir examples/pendulum --read-only
 
 It prints the address to open, `http://127.0.0.1:7860/` when that port is free, and listens on your machine only. Press Ctrl+C to stop it. There is no sign-in: your edits are made in the name you give with `--user`; without it, in the name of your git `user.name`, else your login name on the machine, else "lead". `--port` chooses the port.
 
-On a local folder, the Space writes your edits into the files without committing them; the next `session.py start` commits them as yours. That is why the command for the example has `--read-only`: without it, saving the response form would change `examples/pendulum/sessions/S1/debrief.md` in your clone.
+On a local folder, the Space writes your edits into the files without committing them; the next `session.py start` commits them as yours. That is why the command for the example has `--read-only`: without it, saving a response form would change a debrief in `examples/pendulum/sessions/` in your clone.
 
 **Read-only mode.** With `--read-only` (the environment variable `PHYSICS_HIVE_READONLY=1` for the app), nobody signs in, every page and form is shown, and you can type in the forms, but nothing is saved: a banner at the top says so, and the server refuses every save. Since the files never change, the footer names the example instead of a folder and has no *Load the latest version*, and a PDF that sits next to its LaTeX source is served as it is, without compiling. It is meant for showing an example workspace; [`examples/deploy_demo.py`](../examples/deploy_demo.py) uses it to build a public demonstration Space of the example (see [DOCUMENTATION.md](../DOCUMENTATION.md#the-demonstration-space)).
 

@@ -1,7 +1,7 @@
 # PhysicsHive project file. Written by init; edit [people] and [models] by hand if needed.
 
 [method]
-physics_hive_version = "0.5.6"   # version of the method copy in .physics-hive/
+physics_hive_version = "0.6.0"   # version of the method copy in .physics-hive/
 
 [hub]                                  # empty in local mode
 workspace  = "dlouapre/physics-hive-pendulum"
@@ -10,7 +10,7 @@ sources    = "dlouapre/physics-hive-pendulum-sources"
 chat_debug = "dlouapre/physics-hive-pendulum-chat-debug"
 space      = "dlouapre/physics-hive-pendulum"
 
-[people]                               # the researcher; more people later (see the design, section 4)
+[people]                               # the lead; more people later (see the design, section 4)
 leads = ["dlouapre"]
 
 [models]
