@@ -79,7 +79,7 @@ uv run scripts/serve.py --dir examples/pendulum --read-only
 
 `--read-only` keeps the example as it is: without it, saving the response form writes into the example's files.
 
-<!-- RELEASE: link to the demonstration Space -->
+https://huggingface.co/spaces/dlouapre/physics-hive-demo
 
 [Getting started](docs/getting-started.md) takes you through the first session step by step.
 
