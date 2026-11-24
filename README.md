@@ -1,5 +1,7 @@
 # PhysicsHive
 
+<p align="center"><img src="docs/assets/schematic.png" alt="Diagram: a terminal running a session on the left, the Hugging Face Hub holding the project files and the record in the middle, and the Space where the lead reviews the last session on the right" width="500"></p>
+
 PhysicsHive lets a small team of scientists steer AI coding agents (Claude Code, Codex CLI, OpenCode, Pi) on one problem in theoretical physics or mathematics. The agents work on their own in sessions of up to a few hours; each session comes back with a short LaTeX note and a one-page debrief, which the team reads and answers in a browser. A project lives in a *shared space*: private repositories on the Hugging Face Hub that hold its files and a complete record, which keeps every result checkable and traceable. *The Space* is the shared space's web app, where the notes are read and the debriefs answered.
 
 Each person on a project is a lead, a contributor, or both. A **lead** sets the question, reads the notes, answers the debriefs and decides what enters the project's draft paper. A **contributor** runs the sessions in a terminal, with a coding agent. The format is built for several people, but so far PhysicsHive has been used by one person at a time, who was both the lead and the contributor.
