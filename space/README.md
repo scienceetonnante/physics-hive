@@ -1,5 +1,5 @@
 ---
-title: Physics Hive
+title: PhysicsHive
 emoji: ⚛️
 colorFrom: indigo
 colorTo: gray
@@ -10,7 +10,7 @@ pinned: false
 tags: [physics-hive]
 ---
 
-<!-- When the Space is deployed, its title becomes "[Physics Hive] <project>" and its short_description the question
+<!-- When the Space is deployed, its title becomes "[PhysicsHive] <project>" and its short_description the question
 of project.md (scripts/hub.py, space_card). Each session start updates the description if the question changed. -->
 
 # PhysicsHive Space

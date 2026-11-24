@@ -18,7 +18,7 @@
 
 Four harnesses: Claude Code, Codex CLI, OpenCode and Pi. A workspace can be rendered for several of them, and two contributors to one space may use different ones.
 
-PhysicsHive does not choose the model: each harness uses the one it is configured with. The only session recorded in this repository, the example in [`examples/pendulum/`](../examples/pendulum/), used `claude-opus-5-5` through Claude Code; the repository records no session with another harness or model. Claude Code runs Claude models and Codex CLI runs OpenAI models; OpenCode and Pi can use many providers, including open models through Hugging Face Inference Providers. The coordinator and its sub-agents run in the same harness, so in Claude Code the authors and the reviewers are all Claude models. Every card and every trace records the model that produced it.
+PhysicsHive does not choose the model: each harness uses the one it is configured with. The only sessions recorded in this repository, the two of the example in [`examples/pendulum/`](../examples/pendulum/), used `claude-opus-5-5` through Claude Code; the repository records no session with another harness or model. Claude Code runs Claude models and Codex CLI runs OpenAI models; OpenCode and Pi can use many providers, including open models through Hugging Face Inference Providers. The coordinator and its sub-agents run in the same harness, so in Claude Code the authors and the reviewers are all Claude models. Every card and every trace records the model that produced it.
 
 The reviewer benchmark in [`bench/reviewer/`](../bench/reviewer/README.md) measures how often a reviewer configuration (a harness and a model) catches errors planted in derivations and computations, and how often it refutes correct work. It is the way to compare models for the reviewer's role.
 
@@ -31,7 +31,7 @@ Not to try it. A local workspace is a git repository on your machine, without th
 ## What stays private?
 
 - **On the Hub**, a shared space is five private repositories (four datasets and a Space). Only members of the organisation that owns them can see them. PhysicsHive has no step that makes anything public.
-- **Traces.** In a shared space, the agents' transcript of each session is uploaded to the space's private `-traces` dataset, which every member of the organisation can read. A transcript contains whatever the agents read and printed. Secrets in a recognised format are replaced with a marker before the upload, but this does not guarantee that none is left; [Traces and secrets](shared-spaces.md#traces-and-secrets) says what is recognised. Read the traces before you make that dataset public. A local workspace exports and uploads no trace.
+- **Traces.** In a shared space, the agents' transcript of each session is uploaded to the space's private `-traces` dataset, which every member of the organisation can read. A transcript contains whatever the agents read and printed. It also contains what your harness puts in the agents' context on your machine, unchanged: your personal instruction files (for Claude Code, `~/.claude/CLAUDE.md` and the `CLAUDE.md` of every parent folder of the workspace), your e-mail address and your account identifiers, so keep nothing in those files that you would not share with the team. Secrets in a recognised format are replaced with a marker before the upload, but this does not guarantee that none is left; [Traces and secrets](shared-spaces.md#traces-and-secrets) says what is recognised and what else a trace holds. Read the traces before you make that dataset public. A local workspace exports and uploads no trace.
 - **The model provider** receives what the agents read and write, as with any use of your harness.
 - **The literature tools** send search queries and paper identifiers to arXiv, INSPIRE and Semantic Scholar.
 - **The Space** holds a copy of a Hugging Face token, as a Space secret, to read the workspace and save your edits. See [the Space's token](shared-spaces.md#the-spaces-token) for how to give it a token with narrow permissions.
@@ -42,7 +42,7 @@ Not to try it. A local workspace is a git repository on your machine, without th
 
 The main cost is the model: what your harness's provider charges for the tokens of the coordinator and of every sub-agent it dispatches. The repository holds no cost figure, for a session or otherwise. What is known:
 
-- The example's session S1 used `claude-opus-5-5` through Claude Code, made 5 of the 10 dispatches its brief allowed, and took about 35 minutes. No cost was recorded for it.
+- The example's two sessions used `claude-opus-5-5` through Claude Code. Session S1 made 5 of the 20 dispatches its brief allowed and took about 20 minutes; session S2, a short literature survey, made 1 of 3 and took about 13 minutes. No cost was recorded for them.
 - In a shared space, each session's `meta.json` in the `-traces` dataset records how many tokens each model used (`tokens_by_model`), when the harness's record holds the counts; your provider's prices give the cost. PhysicsHive records no prices.
 - A local workspace exports no trace, so it records no token counts; there, your harness's own usage display is the place to look.
 - What bounds a session is its budget of dispatches, 20 by default, which you can change when you confirm the brief; a dispatch is one sub-agent run, such as one derivation or one review.
@@ -64,7 +64,7 @@ PhysicsHive grew out of [Physics Intern](https://github.com/huggingface/physics-
 
 ## Can several people work in one space?
 
-The format is built for it, but nobody has worked this way yet. Colleagues who are members of the organisation can sign in to the Space and write in the debriefs; a second contributor can join with `--mode join` and run sessions. Two parts still assume one person: a debrief has one answer per question, and two sessions that edit the same file at the same time conflict when they merge. See [ROADMAP.md](../ROADMAP.md).
+The format is built for it, but nobody has worked this way yet. Colleagues who are members of the organisation can sign in to the Space and write in the debriefs; a second contributor can join with `--mode join` and run sessions. Three parts still assume one person: a debrief has one answer per question, an answer or a tick that the contributor gives in the terminal is recorded as the lead's, and two sessions that edit the same file at the same time conflict when they merge. See [ROADMAP.md](../ROADMAP.md).
 
 
 ## Can I check how a result was obtained?
@@ -74,7 +74,21 @@ Yes. Under each result of a note, in the Space, a link opens the card's page wit
 
 ## How do I cite a textbook?
 
-Notes and the draft cite with `\cite` and the keys of `references.bib`, which is generated from the paper cards, and a paper card needs an arXiv identifier or an INSPIRE record. INSPIRE holds some textbooks as books (Landau and Lifshitz's *The Classical Theory of Fields*, for example): if yours is there, add it to `literature/seeds.md` as `insp:<record number>`, so that the next survey can write its card, and cite it like a paper. A book with neither, such as Landau and Lifshitz's *Mechanics*, cannot be cited with `\cite` today: name it in the text or in a footnote. Editing `references.bib` does not help, since `regen` rewrites it, and a `thebibliography` in the draft breaks the citations of the paper cards in the Space. See [ROADMAP.md](../ROADMAP.md).
+Notes and the draft cite with `\cite` and the keys of `references.bib`, which `regen` writes from the paper cards. INSPIRE holds some textbooks as books (the *NIST Handbook of Mathematical Functions* is `insp:3072283`, Landau and Lifshitz's *The Classical Theory of Fields* is `insp:1235601`): if yours is there, add it to `literature/seeds.md` as `insp:<record number>`, so that the next survey can write its card, and cite it like a paper.
+
+A book with neither an arXiv identifier nor an INSPIRE record, such as Landau and Lifshitz's *Mechanics*, can have a paper card written by hand, although no prompt describes this yet. Name the file after the first author and the year, `literature/P-landau1976.md`, and give its header at least the title, the authors and the year:
+
+```markdown
+---
+id: P-landau1976
+kind: paper
+title: 'Mechanics'
+authors: ['L. D. Landau', 'E. M. Lifshitz']
+year: 1976
+---
+```
+
+`check` accepts this card, and `regen` turns it into a `@misc` entry of `references.bib` with the key `landau1976`, which notes and the draft cite as `\cite{landau1976}`. The entry holds the authors, the title and the year, with no publisher or edition. Ask a session to write the card, in the note of your response to a debrief or through the contributor when they confirm the brief. Do not edit `references.bib`, which `regen` rewrites, and do not add a `thebibliography` to the draft, which breaks the citations of the paper cards in the Space. See [ROADMAP.md](../ROADMAP.md).
 
 
 ## A script failed. What do I do?

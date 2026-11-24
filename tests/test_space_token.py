@@ -150,7 +150,7 @@ def test_the_card_names_the_project_and_shows_its_question(fake_hub):
     hub.deploy_space(fake_hub, REPOS, None)  # project.md not written yet: no description
     [(_, readme)] = FakeHub.uploads
     meta = card(readme)
-    assert meta["title"] == "[Physics Hive] x" and "short_description" not in meta
+    assert meta["title"] == "[PhysicsHive] x" and "short_description" not in meta
     assert meta["sdk"] == "docker" and meta["hf_oauth"] is True and "# PhysicsHive Space" in readme
 
     (fake_hub / "project.md").write_text(f"# {PENDULUM}\n\n## Goal\n\nFind T.\n")

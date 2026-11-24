@@ -70,6 +70,41 @@ def test_claude_export_reads_main_and_subagent_files(tmp_path, monkeypatch):
     assert result["models"] == ["claude-opus-5-5", "claude-sonnet-5-5"]
 
 
+def test_only_the_files_that_go_on_after_the_start_count(tmp_path, monkeypatch):
+    # The session started at 11:33:20 (SINCE), so the window opens at 11:28:20.
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    folder = claude_folder(tmp_path, monkeypatch, ws)
+    (folder / "clr" / "subagents").mkdir(parents=True)
+    usage = {"input_tokens": 2, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000, "output_tokens": 10}
+
+    def said(msg_id, when):
+        return {"type": "assistant", "timestamp": when,
+                "message": {"id": msg_id, "model": "claude-opus-5-5", "usage": usage}}
+
+    # The session's conversation: an old exchange, the command that opened the session (in the margin), a
+    # record without a timestamp, and the session's work.
+    session = [said("m0", "2026-10-05T10:00:00Z"), said("m1", "2026-10-05T11:30:00Z"),
+               {"type": "ai-title", "aiTitle": "Session S2"}, said("m2", "2026-10-05T11:40:00Z")]
+    # An earlier session's conversation, modified since the window opened: old records and records without
+    # a timestamp.
+    earlier = [said("e1", "2026-10-05T09:00:00Z"), {"type": "mode", "mode": "normal"},
+               {"type": "last-prompt", "lastPrompt": "end the session"}]
+    # A conversation cleared just before the session started, inside the margin, and its sub-agent.
+    cleared = [said("c1", "2026-10-05T11:31:00Z"), {"type": "permission-mode", "permissionMode": "auto"}]
+    cleared_agent = [said("c2", "2026-10-05T11:32:00Z")]
+    for path, records in ((folder / "abc.jsonl", session), (folder / "old.jsonl", earlier),
+                          (folder / "clr.jsonl", cleared), (folder / "clr" / "subagents" / "agent-1.jsonl", cleared_agent)):
+        path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    result = export("claude", ws, SINCE, tmp_path / "out")
+    lines = [json.loads(line) for line in (tmp_path / "out" / "trace.jsonl").read_text().splitlines()]
+    assert {line["source"].rsplit("/", 1)[1] for line in lines} == {"abc.jsonl"}
+    assert [line["record"] for line in lines] == session[1:] and result["records"] == 3
+    # The tokens of the two messages kept, and of no other.
+    assert result["tokens"] == {"claude-opus-5-5": {"input": 4, "cache_read": 2000, "cache_write": 200, "output": 20}}
+
+
 def test_missing_records_are_reported(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "none"))
     result = export("opencode", tmp_path, SINCE, tmp_path / "out")

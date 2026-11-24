@@ -21,6 +21,8 @@ output. `mcp` runs the other commands as the tools of an MCP server over stdio.
 
 Sources: INSPIRE-HEP for high-energy physics and gravitation, the arXiv API,
 and Semantic Scholar for papers that INSPIRE does not cover as core records.
+`card` takes the header from INSPIRE, else from arXiv, else, when arXiv keeps
+answering with a rate limit or a server error, from Semantic Scholar.
 arXiv requests are spaced by at least 3 seconds, also across runs of this
 script. Set SEMANTIC_SCHOLAR_API_KEY to raise the Semantic Scholar rate limit.
 """
@@ -76,6 +78,8 @@ INSPIRE_LIST_FIELDS = ("control_number,titles,first_author,author_count,collabor
                        "arxiv_eprints,citation_count,earliest_date,dois,core")
 INSPIRE_CARD_FIELDS = INSPIRE_LIST_FIELDS + ",authors.full_name"
 S2_FIELDS = "title,authors,year,citationCount,externalIds"
+S2_CARD_FIELDS = "title,authors,year,externalIds,abstract,journal"
+RETRY_CODES = (429, 500, 502, 503, 504)  # rate limits and server errors: http_get retries them
 
 SortInspire = Literal["mostcited", "mostrecent"]
 SortArxiv = Literal["relevance", "recent"]
@@ -161,6 +165,7 @@ class Paper:
     doi: str | None = None
     abstract: str | None = None
     inspire_core: bool | None = None  # INSPIRE curates core (HEP) records fully, references included
+    journal: str | None = None  # the journal's name, when the source gives it (Semantic Scholar)
 
 
 def one_line(text: str | None) -> str:
@@ -319,7 +324,7 @@ def http_get(url: str, params: dict | None = None, *, accept: str | None = None,
             with _OPENER.open(urllib.request.Request(url, headers=headers), timeout=TIMEOUT) as resp:
                 body = resp.read(MAX_BYTES + 1)
         except urllib.error.HTTPError as exc:
-            if exc.code in (429, 500, 502, 503, 504) and attempt < retries:
+            if exc.code in RETRY_CODES and attempt < retries:
                 retry_after = exc.headers.get("Retry-After", "")
                 time.sleep(min(int(retry_after), 30) if retry_after.isdigit() else 5 * (attempt + 1))
                 continue
@@ -384,6 +389,24 @@ def arxiv_search_query(text: str) -> str:
         return text
     terms = re.findall(r'"[^"]+"|\S+', text)
     return " AND ".join(f"all:{term}" for term in terms)
+
+
+def s2_lookup(arxiv: str) -> Paper | None:
+    """Semantic Scholar's record of an arXiv paper, with its abstract and journal, or None if it has none."""
+    try:
+        item = get_json(f"{S2_API}arXiv:{arxiv}", {"fields": S2_CARD_FIELDS})
+    except HTTPStatusError as exc:
+        if exc.code == 404:
+            return None
+        raise
+    if not item.get("title"):
+        return None
+    paper = paper_from_s2(item)
+    paper.arxiv = paper.arxiv or arxiv
+    paper.abstract = one_line(item.get("abstract")) or None
+    journal = one_line((item.get("journal") or {}).get("name"))
+    paper.journal = journal if journal and "arxiv" not in journal.lower() else None  # preprints show as "ArXiv"
+    return paper
 
 
 def s2_links(arxiv: str, direction: str) -> tuple[list[Paper], str, bool]:
@@ -467,11 +490,29 @@ def inspire_links(direction: str, target: Paper, limit: int, sort: str) -> dict:
 
 
 def cmd_card(paper: str, session: str | None = None) -> dict:
-    """A paper-card skeleton with the bibliographic header filled in."""
+    """A paper-card skeleton with the bibliographic header filled in.
+
+    The header comes from INSPIRE, else from the arXiv API. If arXiv still answers with a rate limit or a
+    server error after http_get's retries, it comes from Semantic Scholar's record of the same arXiv ID.
+    """
     ref = parse_paper_id(paper)
-    found = inspire_lookup(ref, INSPIRE_CARD_FIELDS)
+    found, source, note = inspire_lookup(ref, INSPIRE_CARD_FIELDS), "INSPIRE", ""
     if found is None and ref.arxiv:
-        found = arxiv_lookup(ref)
+        try:
+            found, source = arxiv_lookup(ref), "arXiv"
+        except HTTPStatusError as exc:
+            if exc.code not in RETRY_CODES:
+                raise
+            try:
+                found = s2_lookup(ref.arxiv)
+            except LiteratureError as s2_exc:
+                raise LiteratureError(f"INSPIRE has no record of {ref.label}, {exc}, and Semantic Scholar "
+                                      f"failed too ({s2_exc})") from None
+            if found is None:
+                raise LiteratureError(f"INSPIRE and Semantic Scholar have no record of {ref.label}, "
+                                      f"and {exc}") from None
+            source = "Semantic Scholar"
+            note = f"The header comes from Semantic Scholar: arXiv answered HTTP {exc.code}."
     if found is None:
         raise LiteratureError(f"neither INSPIRE nor arXiv knows {ref.label}")
     if ref.arxiv and not found.arxiv:
@@ -479,8 +520,8 @@ def cmd_card(paper: str, session: str | None = None) -> dict:
     session = session or active_session()
     text = render_card(found, session)
     paper_id = card_id(found.arxiv, found.inspire)
-    return {"command": "card", "id": paper_id, "path": f"literature/{paper_id}.md", "paper": asdict(found),
-            "text": text}
+    return {"command": "card", "id": paper_id, "path": f"literature/{paper_id}.md", "source": source,
+            "note": note, "paper": asdict(found), "text": text}
 
 
 def cmd_download(paper: str, force: bool = False) -> dict:
@@ -859,7 +900,7 @@ def card_hint(data: dict) -> str:
     hint = f"Save as {data['path']}"
     if "session: S<n>" in data["text"]:
         hint += " and replace S<n> by the session ID"
-    return hint + "."
+    return hint + "." + (f" {data['note']}" if data.get("note") else "")
 
 
 def format_search_cards(data: dict) -> str:

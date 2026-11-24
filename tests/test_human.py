@@ -152,8 +152,9 @@ def test_changed_by_session_shows_the_net_change_of_conventions(toy):
     toy.commit("[S3] conventions.md: call the mass M, as the flag asks")
     text = changed_by_session(History(toy.root, None), "S3", base)
     # One diff from before the first commit to after the last, without the lead's line in between.
-    assert ("- `conventions.md` (+3 −0 lines): conventions.md: write the notation; "
-            "conventions.md: call the mass M, as the flag asks.") in text
+    # The subjects leave out the file's name, which the line already gives.
+    assert ("- `conventions.md` (+3 −0 lines): write the notation; "
+            "call the mass M, as the flag asks.") in text
     assert "+- The pendulum has mass $M$." in text and "+- Time is $t$." in text
     assert "$m$" not in text and "Units" not in text
 
@@ -180,7 +181,7 @@ def test_changed_by_session_shows_only_the_own_wording_of_the_draft(toy):
     assert "Copied" not in own and "CL-S2-1" not in own and "Statement." not in own
 
 
-def test_changed_by_session_a_file_changed_then_restored_is_unchanged(toy):
+def test_changed_by_session_a_file_changed_then_restored_is_unchanged_in_the_end(toy):
     toy.git_init()
     base = toy.commit("base")
     conventions = toy.root / "conventions.md"
@@ -190,7 +191,24 @@ def test_changed_by_session_a_file_changed_then_restored_is_unchanged(toy):
     conventions.write_text(before)
     toy.commit("[S3] conventions.md: go back to SI units")
     text = changed_by_session(History(toy.root, None), "S3", base)
-    assert "- `conventions.md`: unchanged." in text and "```diff" not in text
+    assert ("- `conventions.md`: unchanged in the end (measure lengths in units of the radius; "
+            "go back to SI units).") in text
+    assert "```diff" not in text and "- `project.md`: unchanged." in text
+
+
+def test_changed_by_session_a_ticked_step_added_then_finished(toy):
+    # The usual second session: it adds the next step the lead ticked, takes that step, and removes it as
+    # finished. The net change of project.md is empty, but the lead must still see that the tick was applied.
+    toy.git_init()
+    project = toy.root / "project.md"
+    base = toy.commit("base")
+    project.write_text(project.read_text() + "2. Cite a paper that states the coefficient.\n")
+    toy.commit("[S2] apply the lines ticked in the S1 debrief")
+    project.write_text(project.read_text().replace("2. Cite a paper that states the coefficient.\n", ""))
+    toy.commit("[S2] project.md: remove the finished step")
+    text = changed_by_session(History(toy.root, None), "S2", base)
+    assert "- `project.md`: unchanged in the end (as you ticked in S1; remove the finished step)." in text
+    assert "- `conventions.md`: unchanged." in text and "- `draft.tex`: unchanged." in text
 
 
 def test_the_templates_compile_to_pdf():

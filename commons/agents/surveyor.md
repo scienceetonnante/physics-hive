@@ -24,7 +24,7 @@ The dispatch gives you the session ID and the focus of this survey: either the w
    uv run .physics-hive/scripts/literature.py card <arXiv id> --session S<n> > literature/P-<id>.md
    uv run .physics-hive/scripts/literature.py search-cards "<query>"
    ```
-   `download` fetches the LaTeX source (preferred: equations come out exact) or the PDF into `literature/sources/<id>/`. `card` prints a paper-card skeleton with the bibliographic header filled in. `search-cards` searches the existing paper cards, the overview and the claim cards; check it before writing a card. A paper without an arXiv identifier is written `insp:<INSPIRE record number>`. Every command has `--help`.
+   `download` fetches the LaTeX source (preferred: equations come out exact) or the PDF into `literature/sources/<id>/`. `card` prints a paper-card skeleton with the bibliographic header filled in. `search-cards` searches the existing paper cards, the overview and the claim cards; check it before writing a card. A paper without an arXiv identifier is written `insp:<INSPIRE record number>`. INSPIRE also holds some books: when a reference is a book, search for its record (`search-inspire "t <title> and tc b"`) before concluding that it cannot get a card. Every command has `--help`.
 3. Read the papers that look useful, from their source when you can. For each, write a paper card (below). Skip papers that do not bear on the question; say how many you skipped.
 4. Update the overview.
 

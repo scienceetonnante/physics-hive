@@ -34,7 +34,7 @@ Each session has one page, reached from *Review* and from *Sessions*. It shows t
 **Below the note:**
 
 - *Other cards from this session*: the session's cards that no result of the note names;
-- *Changed by this session*: one line for each of the lead's files that the session changed, with its line counts and, when it applied ticked lines, the debrief they came from; the diff is folded;
+- *Changed by this session*: one line for each of the lead's files that the session changed, with its line counts (or "unchanged in the end" when it changed the file and then restored it) and, when it applied ticked lines, the debrief they came from; the diff is folded;
 - the session record, folded: the debrief as the session wrote it, the coordinator's log, the pull request, the trace, what the session received, its brief, its artefacts and critiques.
 
 **On the right, your response**, in a panel that stays in view: the questions, each with a text box; the lines to tick, grouped by the file they change (the draft, `project.md`, `conventions.md`, or *Other*); a note box for anything else; and *Save my response*. Links in a session's page open in a new tab, so that an answer you are writing stays in place.

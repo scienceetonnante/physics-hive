@@ -27,8 +27,13 @@ replaced by a placeholder record that says so, and counted; the rest of the
 trace is kept.
 
 The window starts a few minutes before the session started, so that the
-command that opened the session is included; it may therefore also include the
-end of an earlier conversation in the same harness session.
+command that opened the session is included. Claude Code, Codex and Pi write
+each conversation and sub-agent to its own file; a file counts only if it has
+a record from after the session started. The file of a conversation that
+ended before the session started (one cleared just before it, or an earlier
+session's) is left out whole, with its records that carry no timestamp and its
+tokens. OpenCode's sessions are read from the margin on, so an OpenCode trace
+may still include the end of an earlier conversation.
 
 Usage: uv run .physics-hive/scripts/export_trace.py --harness H --since ISO --out DIR [--workspace PATH]
 """
@@ -361,8 +366,30 @@ def pi_files(workspace: Path, start: dt.datetime) -> list[Path]:
     return sorted(picked)
 
 
-def export_jsonl_files(files: list[Path], start: dt.datetime, out: TraceWriter, models: set[str]) -> None:
+def goes_on_after(path: Path, started: dt.datetime) -> bool:
+    """The file has a record timestamped at or after the session's start."""
+    for record in jsonl_lines(path):
+        when = record_time(record) if isinstance(record, dict) else None
+        if when is not None and when >= started:
+            return True
+    return False
+
+
+def export_jsonl_files(files: list[Path], started: dt.datetime, out: TraceWriter, models: set[str]) -> None:
+    """Write the records of the files that belong to the session.
+
+    Claude Code, Codex and Pi write each conversation, sub-agent or session to its own file. The
+    conversation that opened the session goes on after `session.py start` (it receives the command's
+    output), and sub-agents are dispatched after it, so a file with no record timestamped at or after the
+    start belongs to a conversation that had ended before the session started: it is skipped whole,
+    including its records without a timestamp (the finders pick files by their modification time, which
+    such a file can also have). From the other files, the records timestamped from MARGIN before the start
+    on are written, and those without a timestamp; earlier ones only feed Codex's running totals.
+    """
+    start = started - MARGIN
     for path in files:
+        if not goes_on_after(path, started):
+            continue
         for record in jsonl_lines(path):
             when = record_time(record) if isinstance(record, dict) else None
             if when is not None and when < start:
@@ -430,7 +457,8 @@ def export(harness: str, workspace: Path, since: str, out_dir: Path, secrets=())
     `redactions` each kind of secret removed to the number of replacements. If reading the harness's record
     stops with an error, the records written so far are kept and the note says the trace is incomplete.
     """
-    start = parse_time(since) - MARGIN
+    started = parse_time(since)
+    start = started - MARGIN
     workspace = workspace.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     models: set[str] = set()
@@ -442,7 +470,7 @@ def export(harness: str, workspace: Path, since: str, out_dir: Path, secrets=())
                 export_opencode(workspace, start, writer, models)
             elif harness in ("claude", "codex", "pi"):
                 finder = {"claude": claude_files, "codex": codex_files, "pi": pi_files}[harness]
-                export_jsonl_files(finder(workspace, start), start, writer, models)
+                export_jsonl_files(finder(workspace, start), started, writer, models)
                 if harness in ("codex", "pi"):
                     notes.append(f"best-effort {harness} export: raw records of the session files found for "
                                  "this folder")

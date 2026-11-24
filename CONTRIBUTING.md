@@ -15,7 +15,7 @@ This file says how to set up a development copy, how to check a change, the rule
 | `bench/reviewer/` | The reviewer benchmark. |
 | `.claude/skills/investigate-run/` | The audit skill, which writes a post-mortem of a workspace's sessions. |
 | `design/` | The design document and notes. |
-| `examples/` | A real workspace after one session. |
+| `examples/` | A real workspace after two sessions. |
 | `docs/` | The user guides. |
 | `install.sh`, `init-physics-hive.sh` | The installer (downloads a release) and the development launcher (uses this clone). |
 | `.github/` | The test workflow, which runs the render and the tests on every push to `master` and every pull request; an issue template for problem reports; a pull request template with a checklist. |
@@ -32,7 +32,7 @@ git clone https://github.com/scienceetonnante/physics-hive && cd physics-hive
 ./init-physics-hive.sh --mode local --harness claude --dir /tmp/try-hive
 ```
 
-`./init-physics-hive.sh` takes the same options as the installer, and uses the method as it is in your clone, uncommitted changes included. To move an existing test workspace to the method as it is now in your clone, run `./init-physics-hive.sh --dir <workspace> --upgrade`. To try the unreleased `master` branch on another machine without a clone, set `PHYSICS_HIVE_VERSION=master` before `sh` in the installer's command.
+`./init-physics-hive.sh` takes the same options as the installer, and uses the method as it is in your clone, uncommitted changes included. Create test workspaces outside the folder of this repository, as `/tmp/try-hive` above: Claude Code reads the `CLAUDE.md` of every parent folder, so the agents of a workspace inside the repository receive its developer instructions, which describe the method and the example. To move an existing test workspace to the method as it is now in your clone, run `./init-physics-hive.sh --dir <workspace> --upgrade`. To try the unreleased `master` branch on another machine without a clone, set `PHYSICS_HIVE_VERSION=master` before `sh` in the installer's command.
 
 To create shared spaces from your clone with a dedicated token for the Space, put `PHYSICS_HIVE_SPACE_TOKEN=hf_...` in the `.env` at the root of the clone (it is git-ignored); see [the Space's token](docs/shared-spaces.md#the-spaces-token).
 

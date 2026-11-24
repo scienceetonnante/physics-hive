@@ -25,7 +25,7 @@ def card(text: str) -> tuple[dict, str]:
 def test_each_dataset_card_names_the_project_and_carries_the_tag(key):
     meta, body = card(hub.dataset_card(key, REPOS))
     assert meta["tags"] == [hub.CARD_TAG] and meta["viewer"] is False
-    assert meta["pretty_name"].startswith("[Physics Hive] x")
+    assert meta["pretty_name"].startswith("[PhysicsHive] x")
     assert "**x**" in body and hub.PROJECT_URL in body
     assert body.lstrip().startswith(f"# {meta['pretty_name']}")
 
@@ -36,6 +36,7 @@ def test_the_cards_link_the_repositories_of_the_project():
     assert f"/spaces/{REPOS['space']}" in body
     _, body = card(hub.dataset_card("traces", REPOS))
     assert hub.repo_url(REPOS["workspace"]) in body and "does not guarantee" in body
+    assert "~/.claude/CLAUDE.md" in body and "e-mail address" in body  # the harness's context stays in a trace
 
 
 def test_the_space_card_keeps_the_metadata_it_does_not_manage():
@@ -43,8 +44,12 @@ def test_the_space_card_keeps_the_metadata_it_does_not_manage():
               "hf_oauth: true\n---\n\n# Body\n")
     meta, body = card(hub.space_card(readme, "x", "Is X finite?"))
     assert meta["tags"] == ["physics-hive"] and meta["models"] == ["a/b"] and meta["hf_oauth"] is True
-    assert meta["title"] == "[Physics Hive] x" and meta["short_description"] == "Is X finite?"
+    assert meta["title"] == "[PhysicsHive] x" and meta["short_description"] == "Is X finite?"
     assert body == "\n# Body\n"
+    # A card written before 0.6.0, titled "[Physics Hive] x": its title is replaced, not duplicated.
+    old = hub.space_card(readme, "x", "Is X finite?").replace("[PhysicsHive] x", "[Physics Hive] x")
+    card_text = hub.space_card(old, "x", "Is X finite?")
+    assert card(card_text)[0]["title"] == "[PhysicsHive] x" and card_text.count("title:") == 1
     # The Space app's own README.md: every field it has survives, whatever the other fields are.
     original, _ = card(README.read_text(encoding="utf-8"))
     deployed, _ = card(hub.space_card(README.read_text(encoding="utf-8"), "x", "Is X finite?"))

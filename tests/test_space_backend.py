@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from conftest import DEBRIEF, conjecture, result
-from human import parse_debrief
+from human import parse_debrief, set_changed
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "space"))
@@ -203,6 +203,22 @@ def test_the_changes_of_a_session_are_summed_up():
     assert f["counts"] == "2 lines added and 1 line removed" and [kind for kind, _ in f["diff"]] == ["add", "del"]
     assert changes["unchanged"] == "Research plan and draft: unchanged."
     assert sb.parse_changed("(Written by session.py end, from git.)") is None  # shown as it is
+
+
+def test_a_file_changed_then_restored_shows_the_tick_it_applied(client):
+    # The usual second session: it added the next step the lead ticked, then removed it as finished.
+    c, toy = client
+    path = toy.root / "sessions/S1/debrief.md"
+    path.write_text(set_changed(path.read_text(), (
+        "- `project.md`: unchanged in the end (as you ticked in S1; remove the finished step).\n"
+        "- `conventions.md`: unchanged.\n"
+        "- `draft.tex` (+14 −0 lines): as you ticked in S1.")))
+    page = c.get("/session/S1").text
+    changes = page[page.index('<ul class="changes">'):]
+    changes = changes[:changes.index("</ul>")]
+    assert "<li><b>Research plan</b> (<code>project.md</code>): unchanged in the end, as you ticked in S1." in changes
+    assert "<li><b>Draft</b> (<code>draft.tex</code>): 14 lines added, as you ticked in S1." in changes
+    assert '<li class="muted">Notation and conventions: unchanged.</li>' in changes
 
 
 def test_the_method_comes_from_the_workspace_copy(toy):

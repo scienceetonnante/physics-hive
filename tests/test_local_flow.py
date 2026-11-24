@@ -204,7 +204,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     changed = parse_debrief((ws / "sessions/S2/debrief.md").read_text()).changed
     assert "- `draft.tex` (+" in changed and "as you ticked in S1" in changed
     # project.md: the apply commit added step 2, then the session removed step 1; the net change is one line replaced.
-    assert "- `project.md` (+1 −1 lines)" in changed and "project.md: remove the finished step" in changed
+    assert "- `project.md` (+1 −1 lines): as you ticked in S1; remove the finished step." in changed
     index = (ws / "INDEX.md").read_text()
     assert "**CL-S1-1** · established" in index and "**CL-S1-2** · working" in index
     assert "debrief read by S2" in index

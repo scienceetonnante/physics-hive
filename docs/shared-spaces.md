@@ -19,7 +19,7 @@ The Hub keeps datasets and Spaces apart, so the workspace and the Space share th
 
 All five are private, so only members of the owning organisation can see them. Private repositories under a personal account cannot be shared with anyone else, so a team needs one organisation (one per team, not per project). Choosing your own account as the owner works for trying a space alone; the installer warns you that nobody else will be able to see it.
 
-On the Hub, the Space's card reads "[Physics Hive] x-correction" and shows the question of `project.md`. Each session start updates it when the question has changed.
+On the Hub, the Space's card reads "[PhysicsHive] x-correction" and shows the question of `project.md`. Each session start updates it when the question has changed.
 
 
 ## Create
@@ -72,6 +72,8 @@ The Hub squashes a pull request into one commit when it merges it. The session's
 ### Traces and secrets
 
 Before `session.py end` uploads a trace, `export_trace.py` replaces the secrets it recognises with a marker such as `[REDACTED:huggingface-token]`: tokens of known formats (Hugging Face, Anthropic, OpenAI, GitHub, AWS access keys, private key blocks, JWTs, signatures in URLs and credentials in HTTP Authorization headers), and the values of the environment variables whose name contains `TOKEN`, `KEY` or `SECRET`, along with the Hub token the scripts use. The number of replacements is recorded in the trace's `meta.json`. This reduces the risk that a trace leaks a secret; it does not guarantee that a trace holds none. A secret in another format, one shorter than 12 characters, one printed in pieces or encoded, or one held in a variable with another name, is not recognised. Every member of the organisation can read the traces dataset, so read the traces before you make it public.
+
+A trace also holds the contributor's personal context, and the export keeps it unchanged, since none of it has the form of a secret. A trace is the harness's record of the session, so it contains what the harness put in the agents' context on the contributor's machine. For Claude Code, that is the contributor's own instruction file `~/.claude/CLAUDE.md` and the `CLAUDE.md` of every parent folder of the workspace, copied into the main conversation and into each sub-agent's transcript; the contributor's e-mail address; the identifiers of their Claude account and of its organisation; and paths in their home folder. So what a contributor writes in these files ends up in the traces, which every member of the organisation can read and which are kept so that they can be published at the end of the project. Other harnesses read personal instruction files of their own (a user-level `AGENTS.md`, for example); treat them the same way. Keep nothing in these files that you would not share with the team, or run sessions from a user account on your machine that has no such files. Read the traces for this as well before you make the dataset public.
 
 A local workspace exports and uploads no trace, and records no token counts.
 

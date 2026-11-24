@@ -677,29 +677,37 @@ def changed_by_session(history: History, session: str, base: str) -> str:
     """The text of 'Changed by this session' for a debrief, from the session's own commits since `base`.
 
     For each of the lead's files it gives the net change made by the session's commits: its line counts,
-    the diff of conventions.md, and the diff of what the session worded itself in draft.tex (leaving out
-    what its apply commits copied as the lead ticked). The lead's own commits are left out of both. A file
-    that the session changed and then restored reads "unchanged".
+    the subjects of those commits, the diff of conventions.md, and the diff of what the session worded
+    itself in draft.tex (leaving out what its apply commits copied as the lead ticked). The lead's own
+    commits are left out of both. A file that the session's commits changed and then restored (for example
+    a next step that it added as the lead ticked and removed when it finished it) reads "unchanged in the
+    end", followed by the subjects of those commits; a file they did not touch reads "unchanged".
     """
     commits = history.commits(HUMAN_FILES, since=base)
     lines = []
     for path in HUMAN_FILES:
         touching = [c for c in commits if path in c.files]
         ours = [c for c in touching if c.subject.startswith(f"[{session}]")]
-        net = net_change(history, path, touching, {c.sha for c in ours})
-        if not net:
+        if not ours:
             lines.append(f"- `{path}`: unchanged.")
             continue
-        added = sum(row.startswith("+") for row in net)
-        removed = len(net) - added
         reasons, own = [], set()
         for c in ours:
             m = re.match(rf"^\[{re.escape(session)}\]\s*apply the lines ticked in the (S\d+) debrief", c.subject, re.I)
-            reason = f"as you ticked in {m.group(1)}" if m else re.sub(r"^\[S\d+\]\s*", "", c.subject)
+            if m:
+                reason = f"as you ticked in {m.group(1)}"
+            else:
+                # "[S2] project.md: remove the finished step" reads "remove the finished step" on project.md's line.
+                reason = re.sub(rf"^\[S\d+\]\s*(?:{re.escape(path)}:\s*)?", "", c.subject)
+                own.add(c.sha)
             if reason not in reasons:
                 reasons.append(reason)
-            if not m:
-                own.add(c.sha)
+        net = net_change(history, path, touching, {c.sha for c in ours})
+        if not net:
+            lines.append(f"- `{path}`: unchanged in the end (" + "; ".join(reasons) + ").")
+            continue
+        added = sum(row.startswith("+") for row in net)
+        removed = len(net) - added
         lines.append(f"- `{path}` (+{added} −{removed} lines): " + "; ".join(reasons) + ".")
         diff = []
         if path == "conventions.md":

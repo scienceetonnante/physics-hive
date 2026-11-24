@@ -5,7 +5,7 @@ A shared space is a private dataset repository holding the research files
 chat_debug) and a private Space, all owned by one organisation. The
 repositories of project <name> are named physics-hive-<name> (the workspace and
 the Space, which the Hub keeps apart) and physics-hive-<name>-traces, -sources
-and -chat-debug. The Space's card on the Hub is titled "[Physics Hive] <name>"
+and -chat-debug. The Space's card on the Hub is titled "[PhysicsHive] <name>"
 and shows the question of project.md, which `open_session` updates when the
 lead changes it. Each dataset repository gets a card (its README.md) at
 creation, which says what it holds and carries the tag physics-hive; nothing
@@ -50,7 +50,7 @@ from huggingface_hub.utils import HfHubHTTPError, disable_progress_bars  # isort
 DATASET = "dataset"
 SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, instead of the creator's login token
 REPO_PREFIX = "physics-hive-"  # the repositories of project <name> are <org>/physics-hive-<name>[-traces, ...]
-CARD_TITLE = "[Physics Hive] {name}"
+CARD_TITLE = "[PhysicsHive] {name}"
 CARD_DESCRIPTION_LIMIT = 60  # the Hub refuses a longer short_description
 CARD_TAG = "physics-hive"  # in the metadata of every repository of a space, so that spaces can be found on the Hub
 PROJECT_URL = "https://github.com/scienceetonnante/physics-hive"
@@ -213,8 +213,13 @@ DATASET_CARDS = {
         "which commits it made and how many tokens each model used. `session.py end` uploads them.\n\n"
         "Before the upload, the export replaces the secrets it recognises (tokens of known formats, and the "
         "values of the environment's token variables) with a marker such as `[REDACTED:huggingface-token]`. "
-        "This lowers the risk but does not guarantee that a trace holds no secret: read the traces before you "
-        "make this repository public.\n"),
+        "This lowers the risk but does not guarantee that a trace holds no secret.\n\n"
+        "A trace also keeps, unchanged, what the harness put in the agents' context on the contributor's machine: "
+        "their personal instruction files (for Claude Code, `~/.claude/CLAUDE.md` and the `CLAUDE.md` of every "
+        "parent folder of the workspace), their e-mail address, the identifiers of their account and paths in "
+        "their home folder. Every member of the organisation can read this repository, so contributors should "
+        "keep nothing in those files that they would not share with the team. Read the traces before you make "
+        "this repository public.\n"),
     "sources": (
         "This dataset repository holds the source files (LaTeX, or PDF when there is no source) of the "
         "papers that the agents of the PhysicsHive project **{name}** downloaded, one folder per paper. The "
@@ -332,7 +337,8 @@ def card_line(text: str, limit: int = CARD_DESCRIPTION_LIMIT) -> str:
 def space_card(readme: str, name: str, question: str | None) -> str:
     """The Space's README.md with its card: the title names the project, the description is its question.
 
-    Without a question, an existing description is kept.
+    Without a question, an existing description is kept. The `title` field is rewritten whole, so a title of
+    an earlier form ("[Physics Hive] <name>" before 0.6.0) is replaced, not kept beside the new one.
     """
     m = re.match(r"---\n(.*?)\n---\n", readme, re.S)
     if not m:

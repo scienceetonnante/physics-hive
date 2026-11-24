@@ -256,8 +256,10 @@ def line_counts(added: int, removed: int) -> str:
 
 def parse_changed(text: str) -> dict | None:
     """'Changed by this session' as written by session.py end: the changed files (name, path, line counts,
-    the debriefs whose ticks it applied, the diff) and a sentence for the unchanged ones. None if the text
-    does not have that shape, so that the page shows it as it is."""
+    the debriefs whose ticks it applied, the diff) and a sentence for the unchanged ones. A file that the
+    session changed and then restored ("unchanged in the end (…)", for example a ticked next step that it
+    added and then removed as finished) is listed with the changed ones, so that the lead sees the tick
+    applied. None if the text does not have that shape, so that the page shows it as it is."""
     files, diff, in_diff = [], [], False
     for line in text.splitlines():
         if in_diff:
@@ -274,8 +276,10 @@ def parse_changed(text: str) -> dict | None:
         m = CHANGED_LINE_RE.match(line.strip())
         if m:
             path, added, removed, rest = m.groups()
-            files.append({"path": path, "name": FILE_NAMES.get(path, path), "changed": added is not None,
-                          "counts": line_counts(int(added or 0), int(removed or 0)),
+            restored = added is None and rest.startswith("unchanged in the end")
+            files.append({"path": path, "name": FILE_NAMES.get(path, path), "changed": added is not None or restored,
+                          "counts": "unchanged in the end" if restored
+                          else line_counts(int(added or 0), int(removed or 0)),
                           "ticked": re.findall(r"as you ticked in (S\d+)", rest), "diff": []})
     if not files:
         return None

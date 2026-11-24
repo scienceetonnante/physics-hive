@@ -28,6 +28,7 @@ Claude Code reads `CLAUDE.md`, a one-line import of `AGENTS.md`. Skills are slas
 
   Without it, no workspace script can run in the sandbox, and uv stops with "Failed to initialize cache". If you set `UV_CACHE_DIR`, allow that folder instead. The workspace's own settings do not open this folder, because a sandboxed command could then change packages that later run outside the sandbox; you decide it for your machine.
 - **Do not let the agent run the workspace scripts outside the sandbox**, and do not exclude them from it (`sandbox.excludedCommands`). The scripts live in the workspace, which the agent can edit, so they would let anything the agent writes there run unsandboxed.
+- **Your own instruction files reach the agents.** Claude Code gives the coordinator and every sub-agent your `~/.claude/CLAUDE.md` and the `CLAUDE.md` of every parent folder of the workspace, next to the workspace's own `CLAUDE.md`. The agents read them as instructions too, and in a shared space they are uploaded with each session's trace ([Traces and secrets](shared-spaces.md#traces-and-secrets)).
 
 
 ## Codex CLI

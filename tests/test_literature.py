@@ -13,6 +13,7 @@ import json
 import re
 import struct
 import tarfile
+import urllib.error
 import zlib
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from cards import PAPER_ID_RE, split_front_matter
 
 FIXTURES = Path(__file__).parent / "fixtures" / "literature"
 SURVEYOR = Path(__file__).resolve().parents[1] / "commons" / "agents" / "surveyor.md"
+REAL_HTTP_GET = lit.http_get  # kept before the fixture below replaces it, to test its retries
 
 
 @pytest.fixture(autouse=True)
@@ -163,6 +165,101 @@ def test_card_command_uses_inspire_then_the_active_session(tmp_path, monkeypatch
     assert data["path"] == "literature/P-0710.1060.md"
     meta, _ = split_front_matter(data["text"])
     assert meta["inspire"] == 763100 and meta["session"] == "S7"
+    assert data["source"] == "INSPIRE" and lit.card_hint(data) == "Save as literature/P-0710.1060.md."
+
+
+# Semantic Scholar's answer for physics/0510206 (trimmed), a paper that INSPIRE does not hold.
+S2_RECORD = {
+    "paperId": "a59f7b7cc1fb22d7b17a2e426184161355908d86",
+    "externalIds": {"ArXiv": "physics/0510206", "MAG": "2028714762", "DOI": "10.1119/1.2215616"},
+    "title": "An accurate formula for the period of a simple pendulum oscillating beyond the small angle regime",
+    "year": 2005,
+    "journal": {"name": "American Journal of Physics", "pages": "892-895", "volume": "74"},
+    "authors": [{"authorId": "94108149", "name": "F. M. Lima"}, {"authorId": "79010294", "name": "P. Arun"}],
+    "abstract": "A simple approximate expression is derived for the dependence of the period of a simple pendulum "
+                "on the amplitude.",
+}
+
+
+def fake_card_services(monkeypatch, arxiv_code: int, s2):
+    """INSPIRE has no record; arXiv answers HTTP `arxiv_code`; Semantic Scholar answers `s2` (a record, or
+    an exception to raise)."""
+    calls = []
+
+    def fake_get_json(url, params=None):
+        calls.append(url)
+        if "semanticscholar" in url:
+            if isinstance(s2, Exception):
+                raise s2
+            return s2
+        assert url == lit.INSPIRE_API
+        return {"hits": {"total": 0, "hits": []}}
+
+    def fake_http_get(url, params=None, **kwargs):
+        calls.append(url)
+        assert url == lit.ARXIV_API
+        raise lit.HTTPStatusError(f"export.arxiv.org answered HTTP {arxiv_code}", arxiv_code)
+
+    monkeypatch.setattr(lit, "get_json", fake_get_json)
+    monkeypatch.setattr(lit, "http_get", fake_http_get)
+    return calls
+
+
+def test_card_falls_back_to_semantic_scholar_when_arxiv_rate_limits(monkeypatch, capsys):
+    calls = fake_card_services(monkeypatch, 429, S2_RECORD)
+    data = lit.cmd_card("physics/0510206", "S2")
+    assert calls == [lit.INSPIRE_API, lit.ARXIV_API, f"{lit.S2_API}arXiv:physics/0510206"]
+    assert data["source"] == "Semantic Scholar" and data["path"] == "literature/P-physics_0510206.md"
+    meta, body = split_front_matter(data["text"])
+    assert list(meta) == surveyor_template()[0]  # the card format is the usual one
+    assert {k: meta[k] for k in ("id", "title", "authors", "year", "arxiv", "inspire", "doi", "session")} == {
+        "id": "P-physics_0510206", "title": S2_RECORD["title"], "authors": ["F. M. Lima", "P. Arun"],
+        "year": 2005, "arxiv": "physics/0510206", "inspire": None, "doi": "10.1119/1.2215616", "session": "S2"}
+    assert data["paper"]["journal"] == "American Journal of Physics"
+    assert data["paper"]["abstract"].startswith("A simple approximate expression")
+    # The command line prints the card on stdout and, on stderr, where to save it and where the header came from.
+    assert lit.main(["card", "physics/0510206", "--session", "S2"]) == 0
+    out, err = capsys.readouterr()
+    assert out == data["text"] + "\n"
+    assert err == ("Save as literature/P-physics_0510206.md. "
+                   "The header comes from Semantic Scholar: arXiv answered HTTP 429.\n")
+
+
+def test_card_fallback_reports_what_failed(monkeypatch):
+    # A preprint's journal, which Semantic Scholar gives as "ArXiv", is not a journal.
+    fake_card_services(monkeypatch, 503, dict(S2_RECORD, journal={"name": "ArXiv", "volume": "abs/physics/0510206"}))
+    assert lit.cmd_card("physics/0510206")["paper"]["journal"] is None
+    # Semantic Scholar does not know the paper, or fails too: one error that says what each service answered.
+    fake_card_services(monkeypatch, 429, lit.HTTPStatusError("api.semanticscholar.org answered HTTP 404", 404))
+    with pytest.raises(lit.LiteratureError, match="INSPIRE and Semantic Scholar have no record of arXiv:physics/"
+                                                  "0510206, and export.arxiv.org answered HTTP 429"):
+        lit.cmd_card("physics/0510206")
+    fake_card_services(monkeypatch, 429, lit.HTTPStatusError("api.semanticscholar.org answered HTTP 429", 429))
+    with pytest.raises(lit.LiteratureError, match="Semantic Scholar failed too"):
+        lit.cmd_card("physics/0510206")
+    # Another error from arXiv (here a bad request) is reported as it is, without asking Semantic Scholar.
+    calls = fake_card_services(monkeypatch, 400, S2_RECORD)
+    with pytest.raises(lit.HTTPStatusError, match="HTTP 400"):
+        lit.cmd_card("physics/0510206")
+    assert calls == [lit.INSPIRE_API, lit.ARXIV_API]
+
+
+def test_rate_limits_are_retried_after_the_pause_the_server_asks_for(monkeypatch):
+    answers = [429, 503, 200]
+    pauses = []
+
+    class Opener:
+        def open(self, request, timeout):
+            code = answers.pop(0)
+            if code != 200:
+                headers = {"Retry-After": "7"} if code == 429 else {}
+                raise urllib.error.HTTPError(request.full_url, code, "busy", headers, None)
+            return io.BytesIO(b"{}")
+
+    monkeypatch.setattr(lit, "_OPENER", Opener())
+    monkeypatch.setattr(lit.time, "sleep", pauses.append)
+    assert REAL_HTTP_GET(f"{lit.S2_API}arXiv:physics/0510206") == b"{}"
+    assert pauses == [7, 10]  # as Retry-After asks, then the default pause of the second retry
 
 
 # ----- parsing API answers -----
