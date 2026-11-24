@@ -1,4 +1,4 @@
-"""The researcher's edits reach main on the Hub through `session.py` (save, and start), not through the agent.
+"""The lead's edits reach main on the Hub through `session.py` (save, and start), not through the agent.
 Also: the git side of starting and abandoning a session never writes the repository's config.
 
 A bare local repository stands in for the workspace repository on the Hub; `hub.git_env` (the Hub token) is
@@ -57,7 +57,7 @@ def test_a_dictated_goal_is_committed_as_the_researchers_and_pushed(hub_repo):
     origin, a = hub_repo
     (a / "project.md").write_text(GOAL)
     assert session.commit_researcher_edits(a, "before a session") == ["project.md"]
-    assert git(a, "log", "-1", "--format=%s") == "Researcher's edits (before a session)"
+    assert git(a, "log", "-1", "--format=%s") == "The lead's edits (before a session)"
     assert hub.push_researcher_edits(a, session.researcher_path) == ["project.md"]
     assert hub_main(origin, "project.md") == GOAL.strip()
     assert session.project_is_template(a, "origin/main") is False
@@ -100,7 +100,7 @@ def test_commits_to_other_files_on_main_are_not_pushed(hub_repo):
     origin, a = hub_repo
     (a / "code.py").write_text("x = 2\n")
     git(a, "commit", "-qam", "change code on main")
-    with pytest.raises(ScriptError, match=r"other than the researcher's \(code\.py\)"):
+    with pytest.raises(ScriptError, match=r"other than the lead's \(code\.py\)"):
         hub.push_researcher_edits(a, session.researcher_path)
     assert hub_main(origin, "code.py") == "x = 1"
 

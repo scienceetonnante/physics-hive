@@ -68,8 +68,14 @@ def main() -> int:
     root = args.root.resolve() if args.root else find_root()
     rel = f"sessions/{args.what}/note.tex" if re.match(r"^S\d+$", args.what) else args.what
     source = root / rel
-    if not source.is_file() or source.suffix != ".tex":
-        raise ScriptError(f"{rel} is not a LaTeX file of this workspace")
+    if source.suffix != ".tex":
+        raise ScriptError(f"{rel} is not a LaTeX file; name draft.tex, a note's path, or a session such as S3")
+    if not source.is_file():
+        raise ScriptError(f"{rel} does not exist in this workspace")
+    if not latexmk():
+        raise ScriptError("latexmk is not installed, so the PDF cannot be built on this machine. It comes with a "
+                          "TeX distribution: TeX Live, or MacTeX on a Mac. The Space of a shared space builds the "
+                          "PDFs itself.")
     regenerate(root)
     pdf, log = build_pdf(source.read_text(encoding="utf-8"), (root / "references.bib").read_text(encoding="utf-8"),
                          source.stem)

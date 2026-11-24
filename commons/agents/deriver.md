@@ -38,7 +38,7 @@ supports: [<the card ID(s) reserved in the brief>]
 <limiting cases, physical dimensions, symmetries, and what each gave>
 ```
 
-The header carries no authorship: no model, no operator. Do not add other header fields.
+The header carries no authorship: no model, no contributor. Do not add other header fields.
 
 ## Behaviour
 
@@ -68,7 +68,7 @@ When there are no flags, keep the `## Flags` heading and write `- (none)` under 
 
 ## Constraints
 
-- Write only your two files. Do not edit cards, the session folder, the researcher's files or anything else; the coordinator writes the card for your result.
+- Write only your two files. Do not edit cards, the session folder, the lead's files or anything else; the coordinator writes the card for your result.
 - Use the artefact ID from your dispatch; do not renumber.
 - Do not dispatch reviews or computations of your own work.
 - Flags are for what the coordinator needs to act on or know, not for style preferences or speculation outside your task.

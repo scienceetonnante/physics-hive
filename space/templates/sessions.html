@@ -3,7 +3,8 @@
 {% block content %}
 <div class="narrow">
   <p class="muted">Each session takes the first next step in <a href="/project">project.md</a>, runs in a terminal, and ends with a note and a debrief. Newest first; each opens on its page, with its note, your response and its record.</p>
-  {% if not sessions %}<p class="muted">No session yet.</p>{% endif %}
+  {% if not sessions %}<div class="empty-note">No session yet. A session starts when you run <code>/session-run</code> in a terminal,
+    in the workspace folder. It shows here while it runs, and opens on its page when it ends.</div>{% endif %}
   <ul class="rows">
     {% for s in sessions %}
     <li><a class="srow" href="/session/{{ s.id }}">

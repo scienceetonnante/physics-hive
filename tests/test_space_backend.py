@@ -120,7 +120,8 @@ def test_the_record_pages(toy):
     project(toy)
     b = local(toy)
     card = b.card("CL-S1-1")
-    assert card["evidence"][0]["title"].startswith("D-S1-1") and card["row"]["status"] == "working"
+    assert card["evidence"][0]["label"] == "Derivation D-S1-1" and card["row"]["status"] == "working"
+    assert card["evidence"][0]["tex"] == ["derivations/D-S1-1.tex"] and card["evidence"][0]["tone"] == "ok"
     session = b.session_page("S1")
     assert [r["id"] for r in session["other_cards"]] == ["CL-S1-2"] and session["record"]["log"] == "sessions/S1/log.md"
     assert [a.id for a in session["record"]["artefacts"]] == ["D-S1-1"]
@@ -450,3 +451,290 @@ def test_signing_in_from_a_new_tab(client):
     page = c.get("/signed-in", params={"back": "/project"}).text
     assert "You are signed in as alice." in page and '<a href="/project">Work in this tab</a>' in page
     assert '<a href="/">Work in this tab</a>' in c.get("/signed-in", params={"back": "//elsewhere.com"}).text
+
+
+# ----- for a first-time visitor -----
+
+
+def test_the_card_page_leads_with_the_material(client):
+    c, toy = client
+    toy.computation("C-S1-1", ["CL-S1-1"])
+    (toy.root / "computations/C-S1-1.out").write_text("a = 0.0625\n")
+    toy.review("C-S1-1_R-S1-1", "confirmed", ["CL-S1-1"])
+    page = c.get("/refresh?back=/card/CL-S1-1", follow_redirects=True).text
+    # The derivation first, then the computation's output and code, each with its review; the summaries and the
+    # card's own text folded below.
+    assert page.index("Derivation D-S1-1</h2>") < page.index("Computation C-S1-1</h2>") \
+        < page.index("Output · computations/C-S1-1.out") < page.index("Code · computations/C-S1-1.py") \
+        < page.rindex("Review R-S1-1 (agent)") < page.index("The summary of C-S1-1, by the agent who wrote it") \
+        < page.index("The card's own text")
+    assert '<a class="btn primary" href="/file/derivations/D-S1-1.tex?rendered=1">Read the derivation</a>' in page
+    # The derivation, rendered on its own page; without ?rendered=1, its source.
+    rendered = c.get("/file/derivations/D-S1-1.tex?rendered=1").text
+    assert 'class="paper"' in rendered and 'href="/file/derivations/D-S1-1.tex">LaTeX source</a>' in rendered
+    assert "<pre>\\documentclass{article}" in c.get("/file/derivations/D-S1-1.tex").text
+    # A claim that nothing supports keeps its text in view.
+    assert "<p>Body.</p>" in c.get("/card/CL-S1-2").text
+
+
+def test_the_help_page_titles_and_errors(client):
+    c, _ = client
+    page = c.get("/").text
+    assert '<a href="/help">How this works</a>' in page and "<title>Review · " in page
+    assert '<link rel="icon" href="data:image/svg+xml,' in page and '<meta name="description"' in page
+    assert "read-only demonstration" not in page  # only in a demonstration
+    help_page = c.get("/help").text
+    assert "The cycle" in help_page and 'href="https://github.com/scienceetonnante/physics-hive"' in help_page
+    assert "<title>Session 1 · " in c.get("/session/S1").text
+    for url, said in (("/no/such/page", "There is no page at <code>/no/such/page</code>"),
+                      ("/session/S9", "There is no session S9"), ("/card/CL-S9-9", "There is no card CL-S9-9")):
+        r = c.get(url)
+        assert r.status_code == 404 and said in r.text and '<a href="/">Back to the Review page</a>' in r.text, url
+        assert "<title>Not found · " in r.text
+    r = c.get("/debrief/S1")
+    assert r.status_code == 405 and "it is not a page to open" in r.text
+
+
+def test_a_new_space_says_what_each_page_will_show(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from conftest import ToyWorkspace
+
+    toy = ToyWorkspace(tmp_path)
+    (toy.root / "project.md").write_text("# <the question in one line>\n\n## Goal\n\n## Next steps\n")
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL", str(toy.root))
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL_USER", "alice")
+    sys.modules.pop("app", None)
+    import app
+
+    c = TestClient(app.app)
+    assert "No session has ended yet." in c.get("/").text and "<code>/session-run</code>" in c.get("/").text
+    assert "Before the first session, write the question in one line" in c.get("/project").text
+    assert "No session yet. A session starts when you run" in c.get("/sessions").text
+    assert "Nothing is in the draft yet." in c.get("/draft").text
+    assert "No paper yet." in c.get("/literature").text
+
+
+# Every route that receives a form, and whether it writes to the workspace.
+WRITING_ROUTES = {"/edit/{rel:path}", "/debrief/{session_id}", "/rate"}
+READING_ROUTES = {"/preview"}  # renders the draft editor's preview; writes nothing
+
+
+@pytest.fixture
+def demo(toy, monkeypatch):
+    """The Space as a public demonstration: read-only, on a local folder. A local user set by mistake is ignored."""
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    project(toy)
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL", str(toy.root))
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL_USER", "alice")
+    monkeypatch.setenv("PHYSICS_HIVE_READONLY", "1")
+    sys.modules.pop("app", None)
+    import app
+
+    return TestClient(app.app), toy, app
+
+
+def snapshot(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file() and ".git" not in p.parts}
+
+
+def test_a_read_only_demonstration_shows_everything_and_saves_nothing(demo):
+    c, toy, app = demo
+    # Every page opens, without sign-in, with a banner that links to the repository.
+    for url in ("/", "/project", "/draft", "/draft/edit", "/sessions", "/session/S1", "/literature", "/help",
+                "/paper/P-1512.07725", "/card/CL-S1-1", "/file/sessions/S1/log.md", "/edit/project.md",
+                "/edit/sessions/S1/debrief.md", "/edit/literature/seeds.md"):
+        r = c.get(url)
+        assert r.status_code == 200, url
+        assert "This is a read-only demonstration of" in r.text and "https://github.com/scienceetonnante/physics-hive" in r.text
+        assert "Sign in" not in r.text and "alice" not in r.text and "PHYSICS_HIVE_LOCAL_USER" not in r.text, url
+    # The response form can be typed in; before its first question it says that nothing is saved, and what saving does.
+    page = c.get("/").text
+    form = page[page.index('<form class="response"'):page.index("</form>")]
+    assert form.index("You can type") < form.index('name="answer-1"') and "commits them to the workspace" in form
+    assert "disabled>" not in form.split("<button")[0] and "data-save" not in form
+    assert '<button class="primary" type="button" disabled>Save my response</button>' in form
+    assert "example workspace" in page and str(toy.root) not in page  # the footer does not show the folder
+    # Every route that receives a form is known here, and every one that writes refuses on the server.
+    posts = {r.path for r in app.app.routes if "POST" in getattr(r, "methods", set())}
+    assert posts == WRITING_ROUTES | READING_ROUTES
+    before = snapshot(toy.root)
+    token = csrf_of(c.get("/edit/project.md").text)
+    debrief = (toy.root / "sessions/S1/debrief.md").read_text()
+    for url, data in (("/debrief/S1", {"answer-1": "Yes.", "tick-0": "on", "note": "N.", "base": debrief}),
+                      ("/debrief/S1", {"answer-1": "Yes.", "base": debrief, "back": "/session/S1"}),
+                      ("/edit/project.md", {"text": "# Changed\n", "base": (toy.root / "project.md").read_text()}),
+                      ("/edit/conventions.md", {"text": "# Changed\n", "base": (toy.root / "conventions.md").read_text()}),
+                      ("/edit/literature/seeds.md", {"text": "# Changed\n", "base": (toy.root / "literature/seeds.md").read_text()}),
+                      ("/edit/draft.tex", {"text": "% changed\n", "base": (toy.root / "draft.tex").read_text()}),
+                      ("/edit/sessions/S1/debrief.md", {"text": "Changed.\n", "base": debrief}),
+                      ("/rate", {"paper_id": "P-1512.07725", "rating": "high"})):
+        r = c.post(url, data={**data, "csrf": token})
+        assert "Nothing was saved: this is a read-only demonstration." in r.text, url
+    assert snapshot(toy.root) == before
+    assert c.post("/preview", data={"text": NOTE, "csrf": token}).status_code == 200  # the preview still renders
+    # The backend refuses on its own, whoever the user.
+    b = sb.Backend(sb.LocalStore(toy.root), local_user="alice", readonly=True)
+    for write in (lambda: b.save_file("alice", "project.md", "# X\n"), lambda: b.save_debrief("alice", "S1", {}, {0}, "x"),
+                  lambda: b.rate("alice", "P-1512.07725", "high")):
+        with pytest.raises(sb.SpaceError, match="read-only demonstration"):
+            write()
+    assert snapshot(toy.root) == before
+    assert sb.Backend.from_env({"PHYSICS_HIVE_LOCAL": str(toy.root), "PHYSICS_HIVE_READONLY": "1"}).readonly
+    assert not sb.Backend.from_env({"PHYSICS_HIVE_LOCAL": str(toy.root)}).readonly
+
+
+def test_normal_mode_writes_through_every_writing_route(client):
+    """The counterpart of the demonstration: outside it, the same posts save."""
+    c, toy = client
+    token = csrf_of(c.get("/edit/project.md").text)
+    for rel in ("project.md", "conventions.md", "literature/seeds.md"):
+        base = (toy.root / rel).read_text()
+        assert "Saved" in c.post(f"/edit/{rel}", data={"text": base + "More.\n", "base": base, "csrf": token}).text
+        assert (toy.root / rel).read_text().endswith("More.\n")
+    page = c.get("/").text
+    assert "data-save" in page and "read-only demonstration" not in page
+
+
+# ----- what the Space opens -----
+
+
+def test_inside_refuses_paths_that_leave_the_workspace_or_name_secrets(tmp_path):
+    root = tmp_path / "ws"
+    (root / "derivations/.briefs").mkdir(parents=True)
+    (root / "derivations/.briefs/b.md").write_text("brief")
+    (tmp_path / "secret").write_text("hf_secret")
+    (root / "out.md").symlink_to(tmp_path / "secret")
+    for bad in ("", "../secret", "/etc/passwd", ".git/config", "a/.git/x", ".env", "sessions/S1/.env",
+                ".env.local", "out.md"):
+        assert sb.inside(root, bad) is None, bad
+    assert sb.inside(root, "derivations/.briefs/b.md") == (root / "derivations/.briefs/b.md").resolve()
+
+
+def test_links_out_of_the_workspace_are_never_opened(client, tmp_path_factory):
+    c, toy = client
+    secret = tmp_path_factory.mktemp("outside") / "environ"
+    secret.write_text("HF_TOKEN=hf_secret_value\n")
+    (toy.root / "literature/x.md").symlink_to(secret)
+    (toy.root / "derivations/D-S1-9.tex").symlink_to(secret)
+    (toy.root / "literature/inner.md").symlink_to(toy.root / "project.md")  # a link that stays inside is followed
+    (toy.root / ".env").write_text("HF_TOKEN=hf_secret_value\n")
+    (toy.root / "sessions/S1/.env.local").write_text("HF_TOKEN=hf_secret_value\n")
+    (toy.root / "derivations/.briefs").mkdir()
+    (toy.root / "derivations/.briefs/D-S1-1.md").write_text("The brief of D-S1-1.\n")
+    # The evidence of a claim: a computation whose output is a link out of the workspace.
+    toy.computation("C-S1-1", ["CL-S1-1"])
+    (toy.root / "computations/C-S1-1.out").symlink_to(secret)
+    c.get("/refresh")
+    for url in ("/file/literature/x.md", "/file/derivations/D-S1-9.tex?rendered=1", "/file/.env",
+                "/file/sessions/S1/.env.local", "/file/literature/../../x"):
+        r = c.get(url)
+        assert r.status_code == 404 and "hf_secret_value" not in r.text, url
+    assert "hf_secret_value" not in c.get("/card/CL-S1-1").text
+    assert "Toy question?" in c.get("/file/literature/inner.md").text
+    assert "<p>The brief of " in c.get("/file/derivations/.briefs/D-S1-1.md").text
+    # One of the lead's files replaced by a link out of the workspace: nothing is written through it.
+    target = tmp_path_factory.mktemp("outside2") / "victim"
+    target.write_text("keep\n")
+    (toy.root / "conventions.md").unlink()
+    (toy.root / "conventions.md").symlink_to(target)
+    with pytest.raises(sb.SpaceError, match="nothing was saved"):
+        local(toy).save_file("alice", "conventions.md", "# Overwritten\n", "")
+    assert target.read_text() == "keep\n"
+
+
+def test_the_hub_store_checks_out_links_as_plain_files(toy, tmp_path):
+    project(toy)
+    (toy.root / "literature/x.md").symlink_to("/etc/hosts")
+    toy.commit("a link")
+    git(toy.root, "branch", "-M", "main")
+    b = sb.Backend(sb.HubStore("org/toy", "token", api=FakeApi(toy.root), remote=str(toy.root), cache=tmp_path / "c"))
+    b.refresh()
+    path = b.snap.root / "literature/x.md"
+    assert not path.is_symlink() and path.read_text() == "/etc/hosts"
+
+
+def test_a_demonstration_compiles_each_source_once_and_one_at_a_time(toy, monkeypatch):
+    import threading
+    import time
+
+    project(toy)
+    b = sb.Backend(sb.LocalStore(toy.root), readonly=True)
+    calls, active, peak = [], [0], [0]
+    lock = threading.Lock()
+
+    def build_pdf(tex, bib, name):
+        with lock:
+            calls.append(name)
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.2)
+        with lock:
+            active[0] -= 1
+        return (None, "! Undefined control sequence.") if name == "note" else (b"%PDF-1.5 draft", "")
+
+    monkeypatch.setattr(b.current().m.pdf, "build_pdf", build_pdf)
+    results = []
+
+    def fetch(rel):
+        try:
+            results.append(b.pdf(rel)[0])
+        except sb.SpaceError as exc:
+            results.append(str(exc))
+
+    threads = [threading.Thread(target=fetch, args=(rel,)) for rel in ["draft.tex"] * 4 + ["sessions/S1/note.tex"] * 3]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    # One compile per source, never two at once; the failure is kept too.
+    assert sorted(calls) == ["draft", "note"] and peak[0] == 1
+    assert results.count(b"%PDF-1.5 draft") == 4 and sum("did not compile" in str(r) for r in results) == 3
+    # Outside a demonstration, every request compiles, as before.
+    normal = local(toy)
+    monkeypatch.setattr(normal.current().m.pdf, "build_pdf", build_pdf)
+    normal.pdf("draft.tex")
+    normal.pdf("draft.tex")
+    assert calls.count("draft") == 3
+
+
+def test_the_host_check_applies_only_when_serve_py_asks_for_it(toy, monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    project(toy)
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL", str(toy.root))
+    monkeypatch.setenv("PHYSICS_HIVE_ALLOWED_HOSTS", "127.0.0.1,localhost")
+    sys.modules.pop("app", None)
+    import app
+
+    assert TestClient(app.app, base_url="http://127.0.0.1:8000").get("/").status_code == 200
+    assert TestClient(app.app, base_url="http://localhost:7860").get("/project").status_code == 200
+    r = TestClient(app.app, base_url="http://127.0.0.1:8000").get("/", headers={"host": "attacker.example:8000"})
+    assert r.status_code == 400
+    monkeypatch.delenv("PHYSICS_HIVE_ALLOWED_HOSTS")
+    sys.modules.pop("app", None)
+    import app as unchecked  # noqa: F811  (the Space on the Hub: any host name)
+
+    assert TestClient(unchecked.app, base_url="http://my-space.hf.space").get("/").status_code == 200
+
+
+def test_review_before_the_first_session_asks_only_for_what_is_missing(toy, monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("PHYSICS_HIVE_LOCAL", str(toy.root))
+    sys.modules.pop("app", None)
+    import app
+
+    page = TestClient(app.app).get("/").text  # the toy's project.md has a question and a goal
+    assert "No session has ended yet." in page and "To start the first session, run <code>/session-run</code>" in page
+    assert "Before the first session, write the question" not in page
+    assert "The session proposes a brief, by default the first next" in TestClient(app.app).get("/help").text

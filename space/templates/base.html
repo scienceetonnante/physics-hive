@@ -3,13 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{% endblock %} · {{ name }}</title>
+<title>{% block title %}{% endblock %} · {{ name }}{% if name != "PhysicsHive" %} · PhysicsHive{% endif %}</title>
+<meta name="description" content="The research space of the PhysicsHive project {{ name }}: AI agents work on the problem in sessions, and the project's leads read their notes and answer them here.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 28 9v14L16 30 4 23V9z' fill='%232d6a4f'/%3E%3Cpath d='M16 10l6 3.5v7L16 24l-6-3.5v-7z' fill='%23ffffff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
 <style>
 :root {
-  --ground: #eef0f3; --surface: #ffffff; --paper: #fffffd; --ink: #17202c; --muted: #586375; --faint: #8792a2;
+  --ground: #eef0f3; --surface: #ffffff; --paper: #fffffd; --ink: #17202c; --muted: #586375; --faint: #6b7585;
   --line: #dde1e6; --accent: #2d6a4f; --accent-ink: #ffffff; --accent-soft: #e3efe8; --panel: #f5f6f4;
   --attn-bg: #fdf4dc; --attn-line: #e0bd6a; --attn-ink: #6b4a00; --warn-bg: #fdf4dc; --warn-ink: #6b4a00;
   --ok: #17733a; --ok-bg: #e1f2e6; --bad: #a12a2a; --bad-bg: #fbe5e5; --lo: #56627a; --lo-bg: #eceff4;
@@ -20,7 +22,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #0f141a; --surface: #171d25; --paper: #1a2029; --ink: #e3e7ed; --muted: #a0aab8; --faint: #6f7a89;
+    --ground: #0f141a; --surface: #171d25; --paper: #1a2029; --ink: #e3e7ed; --muted: #a0aab8; --faint: #8f9aaa;
     --line: #2a333f; --accent: #7fcca4; --accent-ink: #0f141a; --accent-soft: #1a3027; --panel: #1d242d;
     --attn-bg: #2b2411; --attn-line: #7a6326; --attn-ink: #f1d48a; --warn-bg: #2b2411; --warn-ink: #f1d48a;
     --ok: #72d398; --ok-bg: #15301f; --bad: #f19a9a; --bad-bg: #3d1f1f; --lo: #aab3c2; --lo-bg: #232b36;
@@ -83,6 +85,15 @@ code { font: .9em var(--font-mono); }
 textarea { width: 100%; font: 15px/1.5 var(--font-ui); padding: 7px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); resize: vertical; }
 textarea.code { font: 13px/1.55 var(--font-mono); min-height: 60vh; tab-size: 2; }
 textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+/* keyboard focus, visible on every control */
+a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible,
+textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.demo { background: var(--attn-bg); color: var(--attn-ink); border-bottom: 1px solid var(--attn-line); font-size: 14px; }
+.demo .bar { padding-top: 8px; padding-bottom: 8px; display: block; }
+.demo a { color: inherit; text-decoration: underline; }
+.demo-note { background: var(--attn-bg); color: var(--attn-ink); border: 1px solid var(--attn-line); border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; font-size: 13.5px; }
+.help h2 { font-size: 1.06rem; margin: 1.3em 0 .4em; }
+.help { max-width: 760px; }
 .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
 details > summary { cursor: pointer; }
 
@@ -107,7 +118,7 @@ details > summary { cursor: pointer; }
 .eyebrow { color: var(--muted); font-size: 14px; margin: 0 0 4px; }
 .page-title { font-size: 1.75rem; font-weight: 600; line-height: 1.25; margin: 0; }
 .review-head .chip { font-size: 13px; padding: 7px 11px; border-radius: 5px; }
-/* the two columns: what the session found and did, and the researcher's response (stays in view) */
+/* the two columns: what the session found and did, and the lead's response (stays in view) */
 .review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); gap: 36px; align-items: start; }
 .review-text > .section-label:first-child { margin-top: 0; }
 .review-solo { max-width: 860px; }
@@ -196,7 +207,10 @@ ul.ticks input { margin-top: 6px; width: 16px; height: 16px; accent-color: var(-
 .topic-h { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 6px; font-weight: 600; }
 .record-note { font-size: 13px; color: var(--muted); margin: -4px 0 14px; }
 .claim-box { font: 1.12rem/1.55 var(--font-doc); border-left: 4px solid var(--accent); padding: 4px 0 4px 14px; margin: 4px 0 14px; }
-.evidence + .evidence { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.material-h { font-size: 1.1rem; font-weight: 600; margin: 0 0 2px; }
+.material pre { max-height: 28rem; margin: 0 0 14px; }
+.review-body { margin: 6px 0 16px; padding-left: 14px; border-left: 3px solid var(--line); }
+.review-body .md { font-size: 15px; }
 dl.facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .9rem; }
 dl.facts dt { color: var(--muted); }
 dl.facts dd { margin: 0; }
@@ -210,10 +224,17 @@ dl.facts dd { margin: 0; }
   .split .paper { max-height: none; }
 }
 @media (max-width: 620px) {
+  /* a phone: the header scrolls away, to leave the screen to the text */
+  header.top { position: static; }
+  .wrap { padding-top: 16px; }
   .paper { font-size: 17px; padding-top: 28px; }
   .prow, .srow { grid-template-columns: minmax(0, 1fr); }
-  nav.tabs { gap: 2px; }
-  nav.tabs a { padding: 13px 9px 11px; }
+  .srow { gap: 2px; }
+  nav.tabs { gap: 0; }
+  nav.tabs a { padding: 12px 7px 10px; font-size: 14px; }
+  nav.tabs a:first-child { padding-left: 0; }
+  .note-body .ltx-document { font-size: 16.5px; }
+  .page-title { font-size: 1.45rem; }
 }
 </style>
 {% if latex_css %}<style>{{ latex_css | safe }}</style>{% endif %}
@@ -226,14 +247,22 @@ window.MathJax = {
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
 </head>
 <body>
+{% if readonly %}
+<div class="demo" role="note">
+  <div class="bar">This is a read-only demonstration of <a href="{{ github }}">PhysicsHive</a> on an example project.
+    You can open every page and type in every form, but nothing is saved. <a href="/help">How this works</a></div>
+</div>
+{% endif %}
 <header class="top">
   <div class="bar brand-row">
     <a class="brand" href="/"><b>PhysicsHive</b><span>{{ name }}</span></a>
     <div class="who">
       <a id="full-page" href="{{ here }}" target="_blank" hidden>Open in a full page</a>
+      <a href="/help">How this works</a>
       {% if user %}
         <span>{{ user }}</span>
         {% if not local %}<a href="{{ sign_out }}">Sign out</a>{% endif %}
+      {% elif readonly %}
       {% elif local %}
         <span>Local folder, no user: set PHYSICS_HIVE_LOCAL_USER to write.</span>
       {% else %}
@@ -256,7 +285,7 @@ window.MathJax = {
   {% block content %}{% endblock %}
 </div>
 <footer class="status">
-  {{ status | md_inline }} <a href="/refresh?back={{ here | urlencode }}">Load the latest version</a>
+  {{ status | md_inline }}{% if not readonly %} <a href="/refresh?back={{ here | urlencode }}">Load the latest version</a>{% endif %}
 </footer>
 <script>
   window.addEventListener("DOMContentLoaded", function () {

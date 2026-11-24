@@ -19,8 +19,8 @@ Usage:
   uv run tests/clean_hub.py --owner OWNER [--yes]
 
 TARGET is a local workspace folder (its repositories are read from the [hub]
-table of its project.toml) or a workspace repository id such as
-dlouapre/physics-hive-pendulum. --owner lists every project under a user or an
+table of its project.toml) or a workspace repository id of the form
+<owner>/physics-hive-<name>. --owner lists every project under a user or an
 organisation: a dataset X-chat-debug, or any dataset named physics-hive-*.
 --local also deletes the workspace folders given as targets. --yes deletes
 without asking; without it, and without a terminal to ask in, the script only

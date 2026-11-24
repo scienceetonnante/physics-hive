@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use PhysicsHive in your research, please cite it as below."
+type: software
+title: PhysicsHive
+abstract: "PhysicsHive lets a small team of scientists use AI coding agents (Claude Code, OpenAI Codex CLI, OpenCode, Pi) to work together on one problem in theoretical physics or mathematics."
+authors:
+  - family-names: Louapre
+    given-names: David
+repository-code: "https://github.com/scienceetonnante/physics-hive"
+license: Apache-2.0
+version: "0.6.0"
+date-released: "2026-11-11"

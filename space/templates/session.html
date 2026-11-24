@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "macros.html" import session_view %}
-{% block title %}{{ view.id }}{% endblock %}
+{% from "macros.html" import session_view with context %}
+{% block title %}Session {{ view.number }}{% endblock %}
 {% block content %}
 <div class="narrow">
   <p class="record-note"><a href="/sessions">← Sessions</a></p>

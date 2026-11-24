@@ -4,26 +4,9 @@
 # ///
 """Create, join or refresh a PhysicsHive workspace.
 
-Run without options, it asks a few questions in the terminal, each with a
-default: what to do (create a shared space on the Hugging Face Hub, join one,
-or start a local workspace), which harnesses will be used on this machine,
-where, and for a new workspace the question of the project and its goal, which
-it writes into project.md. Every question also has a flag. When no Hugging
-Face token is found for a shared space, it offers to log in.
-
 It is launched by install.sh, from a downloaded release of the method, or by
-init-physics-hive.sh, from a clone of the method repository.
-
-Run inside an existing workspace, it renders the harness files again (to add a
-harness or refresh them) from the workspace's own copy of the method. With
---upgrade it replaces that copy with this one.
-
-Usage:
-  uv run scripts/init.py [--mode create|join|local] [--harness claude,codex,opencode,pi]
-                         [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
-                         [--question TEXT] [--goal TEXT]
-                         [--chat-model ID] [--space-token env|mine|none] [--yes]
-                         [--upgrade]
+init-physics-hive.sh, from a clone of the method repository. HELP below is what
+--help prints; README.md describes the same steps for users.
 
 The Space of a new shared space holds a copy of a token, its secret HF_TOKEN. By
 default it is the token in the environment variable PHYSICS_HIVE_SPACE_TOKEN
@@ -37,6 +20,7 @@ import argparse
 import functools
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -61,6 +45,41 @@ DEFAULT_CHAT_MODEL = "openai/gpt-oss-20b"
 WORKSPACE_DIRS = ("claims", "derivations/.briefs", "computations/.briefs", "critiques", "literature", "sessions")
 ALLOWED_IN_NEW_DIR = {"project.md", ".DS_Store"}
 GOAL_HINT = "<!-- The question in full, and what would count as an answer. -->"  # in commons/templates/project.md
+HELP = """\
+Create a PhysicsHive workspace, join a shared one, or refresh one.
+
+Without options, it asks a few questions in the terminal, each with a default:
+what to do, which harnesses you will use on this machine, the folder, and for a
+new workspace the question of the project and its goal, which it writes into
+project.md. Every question also has an option, listed below. With --yes, or
+without a terminal, anything not given takes its default. With the installer,
+put the options after `sh -s --`.
+
+What to do (--mode):
+  create  a shared space on the Hugging Face Hub: private dataset repositories
+          and a private Space, owned by an organisation, or by your own account
+          to try it alone. Needs a Hugging Face login; it offers to log you in.
+  join    a checkout of an existing shared space, for a second machine or a
+          second contributor.
+  local   a workspace on this machine only, without the Hub or an account.
+
+Run inside an existing workspace, it renders the harness files again from the
+workspace's own copy of the method (to add a harness, or to refresh them). With
+--upgrade, it first replaces that copy with the version of the method it runs
+from.
+"""
+EPILOG = """\
+examples:
+  --mode local --harness claude --question "<one line>" --goal "<the goal>"
+  --mode create --org our-lab --name x-correction --harness claude,codex
+  --mode join --repo our-lab/physics-hive-x-correction
+  --harness codex                  (inside a workspace: add a harness)
+
+The Space of a new shared space keeps a copy of a token, to read the workspace
+and save your edits: by default the one in the environment variable
+PHYSICS_HIVE_SPACE_TOKEN if it is set, else your login token.
+"""
+README_SETUP = "https://github.com/scienceetonnante/physics-hive/blob/master/docs/harness-setup.md"
 
 
 def method_version() -> str:
@@ -153,7 +172,7 @@ def copy_method(target: Path) -> None:
         "# Method copy\n\n"
         f"This folder is a copy of the PhysicsHive method, version {method_version()}: the prompts\n"
         "(`commons/`, `hosts/`), the workspace scripts (`scripts/`) and the Space app (`space/`).\n"
-        "Every operator renders their harness files from it, so everyone runs the same prompts and\n"
+        "Every contributor renders their harness files from it, so everyone runs the same prompts and\n"
         "scripts, and the prompts that produced a result sit in the git history next to it.\n\n"
         "Do not edit it. Sessions may not touch it; an upgrade replaces it as a whole\n"
         "(`uv run .physics-hive/scripts/init.py --upgrade`, run from a newer copy of the method).\n"
@@ -178,7 +197,7 @@ def project_toml(version: str, hub: dict | None, leads: list[str], chat_model: s
             lines.append(f"{key:<10} = {toml_string(hub[key])}")
     lines += [
         "",
-        "[people]                               # the researcher; more people later (see the design, section 4)",
+        "[people]                               # the lead; more people later (see the design, section 4)",
         "leads = [" + ", ".join(toml_string(u) for u in leads) + "]",
         "",
         "[models]",
@@ -254,6 +273,8 @@ def warm_up(target: Path) -> None:
 def check_new_dir(target: Path) -> None:
     if not target.exists():
         return
+    if not target.is_dir():
+        raise ScriptError(f"{target} is a file, not a folder. Name a new or empty folder, for example with --dir.")
     names = {p.name for p in target.iterdir()}
     for doc in ("CLAUDE.md", "AGENTS.md"):
         if (target / doc).is_file() and "PhysicsHive workspace" in (target / doc).read_text(errors="ignore"):
@@ -264,8 +285,9 @@ def check_new_dir(target: Path) -> None:
     extra = sorted(names - ALLOWED_IN_NEW_DIR)
     if extra:
         raise ScriptError(
-            f"{target} is not empty ({', '.join(extra[:6])}{', …' if len(extra) > 6 else ''}). "
-            "Use an empty folder (it may already contain project.md)."
+            f"{target} is not empty ({', '.join(extra[:6])}{', …' if len(extra) > 6 else ''}). A new workspace "
+            "needs an empty or new folder (one that holds only project.md is fine). Name another folder, for "
+            "example with --dir my-project."
         )
 
 
@@ -302,7 +324,8 @@ def refresh(target: Path, harnesses: list[str] | None) -> None:
     regen(target)
     names = ", ".join(HARNESSES[h][0] for h in harnesses)
     say(f"Rendered the harness files for {names} from this workspace's method copy.")
-    say_launch(harnesses)
+    say_launch(harnesses, target)
+    say("Restart a harness that is already running in this folder, so that it reads the new files.")
 
 
 def upgrade(target: Path, harnesses: list[str] | None) -> None:
@@ -341,44 +364,65 @@ def upgrade(target: Path, harnesses: list[str] | None) -> None:
     say(f"Upgraded the method copy from {old} to {new} and re-rendered the harness files.")
 
 
-def say_launch(harnesses: list[str], prefix: str = "") -> None:
+def place(target: Path) -> str:
+    """The workspace folder as the user can type it: relative to the current folder when it is inside it."""
+    rel = os.path.relpath(target, Path.cwd().resolve())
+    return shlex.quote(rel if not rel.startswith("..") else str(target))
+
+
+def say_launch(harnesses: list[str], target: Path, prefix: str = "") -> None:
     hints = {
-        "claude": "claude",
+        "claude": "claude       (accept the trust prompt on first launch)",
         "codex": "codex        (accept the trust prompt on first launch, so .codex/config.toml applies)",
         "opencode": "opencode",
         "pi": "pi           (installs pi-subagents and pi-web-access on first launch)",
     }
-    say(f"{prefix}Launch a harness in this folder:")
+    pad = " " * len(prefix) + "     "
+    if target == Path.cwd().resolve():
+        say(f"{prefix}Launch a harness in this folder:")
+    else:
+        say(f"{prefix}Go to the workspace folder and launch a harness there:")
+        say(f"{pad}cd {place(target)}")
     for h in harnesses:
-        say(f"{' ' * len(prefix)}     {hints[h]}")
+        missing = "" if shutil.which(HARNESSES[h][1]) else f"   ({HARNESSES[h][0]} is not installed on this machine yet)"
+        say(f"{pad}{hints[h]}{missing}")
 
 
-def say_next_steps(harnesses: list[str], mode: str, missing: list[str]) -> None:
+def say_next_steps(harnesses: list[str], mode: str, target: Path, missing: list[str]) -> None:
     what = {
         ("question", "goal"): "the question in one line as the title of project.md, and the goal under Goal",
         ("question",): "the question in one line as the title of project.md",
         ("goal",): "the goal under Goal in project.md",
     }.get(tuple(missing), "")
     if mode == "create" and what:
-        first = (f"In the Space (its address is above), on the Project page, write {what}. Write there rather than "
-                 "in this folder: a session does not start while this checkout has uncommitted changes. Add seed "
-                 "papers on the Literature page if you have some.")
+        first = (f"In the Space (its address is above), on the Project page, write {what}. Add seed papers on the "
+                 "Literature page if you have some.")
     elif mode == "create":
         first = "If you have seed papers, list them on the Space's Literature page (its address is above)."
     elif mode == "local" and what:
         them = "them" if len(missing) == 2 else "it"
-        first = (f"Write {what} (the other sections can wait), or dictate {them} to the coordinator. List seed "
-                 "papers in literature/seeds.md if you have some.")
+        first = (f"Write {what} (the other sections can wait), or dictate {them} to the coordinator once your "
+                 "harness is running. List seed papers in literature/seeds.md if you have some.")
     elif mode == "local":
         first = "If you have seed papers, list them in literature/seeds.md."
     else:
         first = "Read project.md and the latest debrief (the Space shows both)."
+    codex = " ($session-run in Codex)" if "codex" in harnesses else ""
+    third = (f"Run /session-run{codex}. The coordinator proposes a brief; once you confirm it, the session works on "
+             "its own for up to a few hours, then writes a note and a debrief.")
     say("")
     say("Next steps:")
     say(textwrap.fill(first, width=100, initial_indent="  1. ", subsequent_indent="     "))
-    say_launch(harnesses, prefix="  2. ")
-    codex = " ($session-run in Codex)" if "codex" in harnesses else ""
-    say(f"  3. Run /session-run{codex} to start a session.")
+    say_launch(harnesses, target, prefix="  2. ")
+    say(textwrap.fill(third, width=100, initial_indent="  3. ", subsequent_indent="     "))
+    if mode == "local":
+        say("  4. Read the note and answer the debrief in your browser. In the workspace folder, run")
+        say("          uv run .physics-hive/scripts/serve.py")
+        say("     and open the address it prints. You can also answer in sessions/S1/debrief.md with a text editor.")
+    else:
+        say("  4. Read the note and answer the debrief in the Space. The next /session-run starts from your answers.")
+    say("")
+    say(f"Before the first session, read how to set up your harness: {README_SETUP}")
     say("")
 
 
@@ -397,28 +441,38 @@ def load_from_dotenv(name: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("dir_arg", nargs="?", metavar="DIR", help="target folder (same as --dir)")
-    parser.add_argument("--mode", choices=["create", "join", "local"], help="default: create")
-    parser.add_argument("--harness", "--harnesses", dest="harness", help="comma-separated: " + ", ".join(HARNESSES))
+    parser = argparse.ArgumentParser(prog=os.environ.get("PHYSICS_HIVE_PROG") or None, description=HELP,
+                                     epilog=EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("dir_arg", nargs="?", metavar="DIR", help="the folder (same as --dir)")
+    parser.add_argument("--mode", choices=["create", "join", "local"], help="what to do (default: create)")
+    parser.add_argument("--harness", "--harnesses", dest="harness", metavar="LIST",
+                        help="the harnesses you will use on this machine, comma-separated, from: "
+                             f"{', '.join(HARNESSES)} (default: those installed, else claude)")
     parser.add_argument("--host", help=argparse.SUPPRESS)  # earlier name of --harness
-    parser.add_argument("--dir", help="target folder (default: the current folder)")
-    parser.add_argument("--org", help="create: Hugging Face organisation, or your own account, that will own the "
-                        "repositories")
-    parser.add_argument("--name", help="create: project name")
-    parser.add_argument("--repo", help="join: the workspace repository, org/name")
-    parser.add_argument("--question", default="", help="create and local: the question of the project in one line, "
-                        "written as the title of project.md")
-    parser.add_argument("--goal", default="", help="create and local: the goal (the question in full, and what "
-                        "would count as an answer), written under Goal in project.md")
-    parser.add_argument("--chat-model", default=None, help=f"model of the Space's explainer chat (default {DEFAULT_CHAT_MODEL})")
+    parser.add_argument("--dir", metavar="PATH", help="the folder of the workspace (default: the current folder). "
+                        "A new workspace needs an empty or new folder.")
+    parser.add_argument("--org", help="create: the Hugging Face organisation, or your own account, that will own "
+                        "the project")
+    parser.add_argument("--name", help="create: the project's name; its repositories are named "
+                        "ORG/physics-hive-NAME")
+    parser.add_argument("--repo", metavar="ORG/NAME", help="join: the workspace repository, as printed by create")
+    parser.add_argument("--question", default="", metavar="TEXT", help="create and local: the question of the "
+                        "project in one line, written as the title of project.md")
+    parser.add_argument("--goal", default="", metavar="TEXT", help="create and local: the goal (the question in "
+                        "full, and what would count as an answer), written under Goal in project.md")
+    parser.add_argument("--chat-model", default=None, help=argparse.SUPPRESS)  # for the Space's assistant, not built yet
     parser.add_argument("--space-token", choices=["env", "mine", "none"], default=None,
                         help="create: the token the Space holds: the one in PHYSICS_HIVE_SPACE_TOKEN (env, the "
-                             "default when it is set), your login token (mine), or none, set later in the Space settings")
-    parser.add_argument("--yes", action="store_true", help="do not ask; use defaults for anything not given")
-    parser.add_argument("--upgrade", action="store_true", help="replace the workspace's method copy with this one")
+                             "default when it is set), your login token (mine, the default otherwise), or none "
+                             "(you set it later in the Space's settings)")
+    parser.add_argument("--yes", action="store_true", help="do not ask; use the defaults for anything not given")
+    parser.add_argument("--upgrade", action="store_true", help="inside a workspace: replace its method copy with "
+                        "this version of the method")
     args = parser.parse_args()
 
+    if not shutil.which("git"):
+        raise ScriptError("PhysicsHive needs git, which is not installed. Install it (on macOS: "
+                          "xcode-select --install), then run this again.")
     asking = interactive() and not args.yes
     harness_flag = args.harness or args.host
     harnesses = parse_harnesses(harness_flag) if harness_flag else None
@@ -430,12 +484,15 @@ def main() -> int:
         if args.upgrade:
             upgrade(probe, harnesses)
         else:
+            if args.mode:
+                say(f"{probe} is already a PhysicsHive workspace; nothing new was created.")
             if harnesses is None and asking:
                 harnesses = ask_harnesses(rendered_harnesses(probe) or installed_harnesses())
             refresh(probe, harnesses)
         return 0
     if args.upgrade:
-        raise ScriptError(f"{probe} is not a PhysicsHive workspace (no project.toml)")
+        raise ScriptError(f"{probe} is not a PhysicsHive workspace (it has no project.toml). Run --upgrade inside "
+                          "a workspace, or name one with --dir.")
 
     mode = args.mode
     if mode is None:
@@ -463,10 +520,10 @@ def main() -> int:
         target = target.expanduser().resolve()
         join(target, repo, harnesses, render, regen, check_new_dir)
         warm_up(target)
-        say_next_steps(harnesses, mode, missing=[])
+        say_next_steps(harnesses, mode, target, missing=[])
         return 0
 
-    target = Path(dir_value or (ask("Folder for the workspace", ".") if asking else ".")).expanduser().resolve()
+    target = choose_folder(dir_value, asking)
     if mode == "local":
         question, goal = ask_project(args, asking, target)
         create_local(target, harnesses, chat_model, question=question, goal=goal)
@@ -485,7 +542,8 @@ def main() -> int:
                              orgs[0] if orgs else me)
         name = args.name or (ask("Project name", target.name) if asking else None)
         if not org or not name:
-            raise ScriptError("create needs --org and --name")
+            raise ScriptError("create needs --org and --name (run without --yes in a terminal to be asked). "
+                              "To try PhysicsHive without the Hub, use --mode local.")
         question, goal = ask_project(args, asking, target)
         load_from_dotenv(SPACE_TOKEN_ENV)
         space_token = args.space_token
@@ -498,8 +556,25 @@ def main() -> int:
         create_shared(target, org, name, harnesses, chat_model, space_token,
                       create_local=functools.partial(create_local, question=question, goal=goal),
                       first_commit=first_commit, regen=regen, version=method_version())
-    say_next_steps(harnesses, mode, missing=project_missing(target))
+    say_next_steps(harnesses, mode, target, missing=project_missing(target))
     return 0
+
+
+def choose_folder(dir_value: str | None, asking: bool) -> Path:
+    """The folder of a new workspace, checked before anything else is asked; asked again while it is not usable."""
+    if dir_value or not asking:
+        target = Path(dir_value or ".").expanduser().resolve()
+        check_new_dir(target)
+        return target
+    default = "."
+    while True:
+        target = Path(ask("Folder for the workspace", default)).expanduser().resolve()
+        try:
+            check_new_dir(target)
+            return target
+        except ScriptError as exc:
+            say(str(exc.code).removeprefix("ERROR: "))
+            default = "physics-hive-project"
 
 
 def ensure_hub_login(asking: bool) -> None:
@@ -516,7 +591,7 @@ def ensure_hub_login(asking: bool) -> None:
 def ask_project(args: argparse.Namespace, asking: bool, target: Path) -> tuple[str, str]:
     """The question and the goal for a new project.md, from the flags or asked in the terminal.
 
-    Nothing is asked when the folder already holds a project.md written by the researcher."""
+    Nothing is asked when the folder already holds a project.md written by the lead."""
     question, goal = args.question.strip(), args.goal.strip()
     if asking and not (target / "project.md").exists():
         say("The project's question and goal go into project.md; a session needs both to start.")
@@ -526,4 +601,8 @@ def ask_project(args: argparse.Namespace, asking: bool, target: Path) -> tuple[s
 
 
 if __name__ == "__main__":
-    raise SystemExit(run_main(main))
+    try:
+        raise SystemExit(run_main(main))
+    except (KeyboardInterrupt, EOFError):
+        print("\nStopped.", file=sys.stderr)
+        raise SystemExit(130) from None

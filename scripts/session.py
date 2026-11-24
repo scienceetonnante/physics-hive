@@ -5,24 +5,24 @@
 """Open, follow and close a research session.
 
 Subcommands:
-  start --harness H --model M   Open a session. First saves the researcher's edits (as `save`
+  start --harness H --model M   Open a session. First saves the lead's edits (as `save`
                                 does). Refuses if a session is already active, if project.md
                                 has no title and goal yet, or if the checkout has uncommitted
                                 changes to other files. Shared mode: opens a draft pull request
                                 (its number is the session number) and moves the checkout to
                                 the session's branch. Local mode: takes the next free number in
-                                sessions/. Prints what the researcher sent since the previous
+                                sessions/. Prints what the lead sent since the previous
                                 session started, and records it in sessions/S<n>/received.md.
-  save                          Outside a session: commit the researcher's uncommitted edits of
+  save                          Outside a session: commit the lead's uncommitted edits of
                                 their files as theirs; shared mode: push them to main.
   status                        Where the active session stands; without one, what a session
                                 started now would receive.
   next <CL|DE|D|C|CR>           Print the next free ID of that prefix in the active session.
   next review <artefact>        Print the path of the next review file of that artefact.
-  answer <S> <n|note> <text>    Record an answer (or the note) the researcher gave in the
+  answer <S> <n|note> <text>    Record an answer (or the note) the lead gave in the
                                 terminal, in the debrief of session S, as theirs.
   tick <S> <k> [<k> ...]        Tick lines k (1, 2, ...) of the debrief of session S, as the
-                                researcher asked in the terminal.
+                                lead asked in the terminal.
   brief                         Commit sessions/S<n>/brief.md; shared mode: push it and copy
                                 it to the pull request.
   end [--no-merge]              Needs note.tex and debrief.md. Writes "Changed by this session"
@@ -101,27 +101,31 @@ def require_active(root: Path) -> dict:
 
 
 def researcher_path(path: str) -> bool:
-    """Files the researcher edits between sessions: the human files, seeds, ratings and debriefs."""
+    """Files the lead edits between sessions: the human files, seeds, ratings and debriefs."""
     return path in HUMAN_FILES or path in RESEARCHER_FILES or bool(re.match(r"^sessions/S\d+/debrief\.md$", path))
 
 
 def commit_researcher_edits(root: Path, when: str) -> list[str]:
-    """Commit the researcher's uncommitted edits of their files as theirs, or refuse. Returns the files committed."""
+    """Commit the lead's uncommitted edits of their files as theirs, or refuse. Returns the files committed."""
     dirty = dirty_paths(root)
     if not dirty:
         return []
     others = [p for p in dirty if not researcher_path(p)]
     if others:
         listing = ", ".join(others[:8]) + (", …" if len(others) > 8 else "")
-        raise ScriptError(f"the checkout has uncommitted changes ({listing}); commit or discard them first")
+        raise ScriptError(f"the checkout has uncommitted changes ({listing}) to files that are not the "
+                          "lead's. A session starts from a clean checkout; only the lead's files "
+                          "(project.md, conventions.md, draft.tex, seeds, ratings, debriefs) are committed "
+                          "automatically, as theirs. Commit these changes, delete them, or list them in .gitignore; "
+                          "then run this again.")
     git(root, "add", "--", *dirty)
-    git(root, "commit", "-q", "-m", f"Researcher's edits ({when})", "-m", "Committed by session.py: " + ", ".join(dirty))
+    git(root, "commit", "-q", "-m", f"The lead's edits ({when})", "-m", "Committed by session.py: " + ", ".join(dirty))
     say(f"Committed your edits of {', '.join(dirty)} as yours.")
     return dirty
 
 
 def save_researcher_edits(root: Path, ws: Workspace, when: str) -> bool:
-    """Commit the researcher's edits of their files as theirs; in shared mode, push them to main on the Hub.
+    """Commit the lead's edits of their files as theirs; in shared mode, push them to main on the Hub.
 
     Returns whether there was anything to save."""
     if ws.mode == "shared":
@@ -155,7 +159,7 @@ def compute_received(root: Path, ws: Workspace):
 
 
 def print_context(ws: Workspace, root: Path, active: dict, news) -> None:
-    """What the coordinator needs besides the researcher's input: handoffs, re-checks, draft flags, other sessions."""
+    """What the coordinator needs besides the lead's input: handoffs, re-checks, draft flags, other sessions."""
     for d in news.debriefs:
         if not d.full:
             continue
@@ -184,7 +188,7 @@ def print_context(ws: Workspace, root: Path, active: dict, news) -> None:
                 say(f"- {item}")
     if news.unanswered:
         say("")
-        say("Questions without an answer (show them to the operator and wait, or go on if they say so):")
+        say("Questions without an answer (show them to the contributor and wait, or go on if they say so):")
         for session_id, number, question in news.unanswered:
             say(f"- {session_id} question {number}: {one_line(question, 200)}")
 
@@ -206,11 +210,13 @@ def cmd_start(root: Path, args) -> None:
     save_researcher_edits(root, ws, "before a session")
     # In shared mode the session starts from main on the Hub, where the goal may have been written in the Space.
     if project_is_template(root, "origin/main" if ws.mode == "shared" else None):
+        where = "in the Space, on the Project page," if ws.mode == "shared" else "with a text editor"
         raise ScriptError(
-            "project.md has no title or goal yet. The researcher writes the question in one line as its title and "
-            "the goal under ## Goal, in the Space or by dictating them to the coordinator, who writes them in "
-            "project.md. Then run `session.py start` again: it commits them as the researcher's edit and, in "
-            "shared mode, pushes them to main."
+            "project.md does not have both its question and its goal yet, and a session needs both. The lead "
+            "writes the question in one line as the title of project.md, replacing <the question in one line>, and "
+            f"the goal under ## Goal, {where} or by dictating them to the coordinator, who writes them in. Then "
+            "run `session.py start` again: it commits them as the lead's edit"
+            + (" and pushes them to main." if ws.mode == "shared" else ".")
         )
     if ws.mode == "local":
         refuse_if_stale(root, (root / ".physics-hive" / "VERSION").read_text().strip())
@@ -263,12 +269,12 @@ def cmd_start(root: Path, args) -> None:
 def cmd_save(root: Path, args) -> None:
     active = load_active(root)
     if active:
-        raise ScriptError(f"session {active['id']} is active in this checkout; save the researcher's edits after "
+        raise ScriptError(f"session {active['id']} is active in this checkout; save the lead's edits after "
                           "it ends (the next `session.py start` also saves them)")
     if not is_git_repo(root):
         raise ScriptError("the workspace is not a git repository")
     if not save_researcher_edits(root, Workspace(root), "outside a session"):
-        say("Nothing to save: the researcher's files have no new edits.")
+        say("Nothing to save: the lead's files have no new edits.")
 
 
 def refuse_if_stale(root: Path, method: str) -> None:
@@ -310,7 +316,7 @@ def cmd_status(root: Path, args) -> None:
     received_file = folder / "received.md"
     if received_file.exists():
         say("")
-        say(f"What this session received from the researcher (sessions/{active['id']}/received.md):")
+        say(f"What this session received from the lead (sessions/{active['id']}/received.md):")
         say(split_front_matter(received_file.read_text(encoding="utf-8"))[1].strip().strip("`").removeprefix("text").strip())
 
 
@@ -353,7 +359,7 @@ def _debrief_of(root: Path, session_id: str) -> Path:
 
 
 def _record_in_received(root: Path, active: dict, session_id: str, key: str, value) -> None:
-    """Add what the researcher gave in the terminal to the active session's received.md."""
+    """Add what the lead gave in the terminal to the active session's received.md."""
     path = root / "sessions" / active["id"] / "received.md"
     if not path.is_file():
         return
@@ -370,7 +376,7 @@ def _record_in_received(root: Path, active: dict, session_id: str, key: str, val
 
 
 def _commit_researcher(root: Path, path: Path, message: str) -> None:
-    """Commit one file as the researcher's (a message without the session prefix), and nothing else."""
+    """Commit one file as the lead's (a message without the session prefix), and nothing else."""
     rel = str(path.relative_to(root))
     if git(root, "diff", "--quiet", "HEAD", "--", rel, check=False).returncode != 0:
         git(root, "commit", "-q", "-m", message, "--", rel)
@@ -393,11 +399,11 @@ def cmd_answer(root: Path, args) -> None:
             raise ScriptError(str(exc)) from None
         what, record = f"question {args.what}", ("answers", {int(args.what): answer})
     where = f" in {active['id']}" if active else ""
-    _commit_researcher(root, path, f"Researcher's answer to {what} of the {args.session} debrief "
+    _commit_researcher(root, path, f"The lead's answer to {what} of the {args.session} debrief "
                                    f"(given to the coordinator{where})")
     if active:
         _record_in_received(root, active, args.session, *record)
-    say(f"Recorded the researcher's answer to {what} in sessions/{args.session}/debrief.md, as theirs.")
+    say(f"Recorded the lead's answer to {what} in sessions/{args.session}/debrief.md, as theirs.")
 
 
 def cmd_tick(root: Path, args) -> None:
@@ -414,10 +420,10 @@ def cmd_tick(root: Path, args) -> None:
         wanted[k - 1] = True
     path.write_text(set_ticks(text, wanted), encoding="utf-8")
     where = f" in {active['id']}" if active else ""
-    _commit_researcher(root, path, f"Researcher's ticks in the {args.session} debrief (given to the coordinator{where})")
+    _commit_researcher(root, path, f"The lead's ticks in the {args.session} debrief (given to the coordinator{where})")
     if active:
         _record_in_received(root, active, args.session, "ticked", [ticks[i].text for i in sorted(wanted)])
-    say(f"Ticked line(s) {', '.join(map(str, args.lines))} of sessions/{args.session}/debrief.md, as the researcher's.")
+    say(f"Ticked line(s) {', '.join(map(str, args.lines))} of sessions/{args.session}/debrief.md, as the lead's.")
 
 
 def cmd_brief(root: Path, args) -> None:
@@ -452,7 +458,7 @@ def cmd_end(root: Path, args) -> None:
     dirty = dirty_paths(root)
     if dirty:
         raise ScriptError(f"uncommitted changes ({', '.join(dirty[:8])}); commit them before ending the session (if "
-                          "some are the researcher's own edits, commit those separately, with a message that does "
+                          "some are the lead's own edits, commit those separately, with a message that does "
                           f"not start with [{active['id']}])")
     if active["mode"] == "shared":
         import hub
@@ -520,13 +526,13 @@ def main() -> int:
     p = sub.add_parser("answer")
     p.add_argument("session", help="the session whose debrief it answers, e.g. S3")
     p.add_argument("what", help="the question number, or note")
-    p.add_argument("text", nargs="+", help="the researcher's words")
+    p.add_argument("text", nargs="+", help="the lead's words")
     p = sub.add_parser("tick")
     p.add_argument("session", help="the session whose debrief it ticks, e.g. S3")
     p.add_argument("lines", nargs="+", type=int, help="tick lines to tick, counted from 1")
     sub.add_parser("brief")
     p = sub.add_parser("end")
-    p.add_argument("--no-merge", action="store_true", help="shared mode: leave the pull request open for the operator")
+    p.add_argument("--no-merge", action="store_true", help="shared mode: leave the pull request open for the contributor")
     sub.add_parser("abort")
     args = parser.parse_args()
     root = args.root.resolve() if args.root else find_root()

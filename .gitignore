@@ -1,6 +1,6 @@
+# Python
 __pycache__/
 *.pyc
-.env
 .venv/
 dist/
 *.egg-info/
@@ -8,10 +8,30 @@ dist/
 .coverage
 coverage.xml
 htmlcov/
-logs/
-.claude/settings.local.json
-.idea/
-tmp/
 
-hives/
+# Secrets and local settings
+.env
+.env.*
+**/.claude/settings.local.json
+.claude/.cc-writes/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Local work: logs, scratch files, test workspaces, benchmark results
+logs/
+*.log
 tmp/
+hives/
+workspaces/
+bench/reviewer/results/
+
+# Media: the movie's voice clips and its exported video
+*.mp3
+*.mp4
+design/

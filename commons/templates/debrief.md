@@ -1,4 +1,4 @@
-<Summary: three to six sentences, for the researcher: what was asked and what was found.>
+<Summary: three to six sentences, for the lead: what was asked and what was found.>
 
 Read the full note: `sessions/S<n>/note.tex`.
 

@@ -1,9 +1,9 @@
-"""The PhysicsHive Space: the researcher's view of a research workspace, in a browser.
+"""The PhysicsHive Space: the lead's view of a research workspace, in a browser.
 
 Five pages, each showing files (design, section 14):
 
 - Project: project.md and conventions.md, each with an editor;
-- Review (the first page, at /): the session waiting for the researcher's
+- Review (the first page, at /): the session waiting for the lead's
   response, as its session page;
 - Draft: draft.tex rendered like an arXiv HTML paper, an editor with a preview
   beside it, and the PDF;
@@ -16,17 +16,21 @@ abstract and results, each result with what supports its card (the whole note
 opens in place); the debrief as a form beside it; and, folded, the session
 record (what the session received, its brief, artefacts, log, trace). The cards
 keep their own pages. The Space applies nothing: it writes files, and the next
-session applies what the researcher ticked. This file is the user interface
+session applies what the lead ticked. This file is the user interface
 only; reading and writing the workspace is in backend.py.
 
 Every write takes the signed-in user from the sign-in session itself
 (`parse_huggingface_oauth`), never from a value the page sends.
 
-Run it on a local workspace folder, without the Hub and without sign-in:
-    PHYSICS_HIVE_LOCAL=/path/to/workspace PHYSICS_HIVE_LOCAL_USER=alice uvicorn app:app --reload
+To run it on a workspace folder of this machine, without the Hub and without sign-in, use
+`uv run .physics-hive/scripts/serve.py` in the workspace (`--read-only` to forbid edits). It sets these variables:
+PHYSICS_HIVE_LOCAL (the folder), PHYSICS_HIVE_LOCAL_USER (the name edits are made in) and, for read-only,
+PHYSICS_HIVE_READONLY=1. Read-only is the mode of the public demonstration (examples/deploy_demo.py): nobody signs
+in, every page and form is shown, and every write is refused (in backend.py, so that no route can save).
 """
 
 import logging
+import os
 import re
 import secrets
 from html import escape
@@ -36,12 +40,14 @@ from urllib.parse import quote
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from huggingface_hub import attach_huggingface_oauth, parse_huggingface_oauth
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from markupsafe import Markup
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import latex
 from backend import Backend, SpaceError, log
@@ -50,6 +56,7 @@ HERE = Path(__file__).resolve().parent
 # Workspace paths, card, paper, artefact and critique IDs, and session numbers. Only those that exist become links.
 ID_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)+\.\w+|\b(?:CL|CR|DE|P|D|C)-[\w.-]*[A-Za-z0-9]|\bS\d+\b")
 NOTE_RE = re.compile(r"^sessions/(S\d+)/note\.tex$")
+GITHUB = "https://github.com/scienceetonnante/physics-hive"
 
 
 # ----- Markdown with equations and links -----
@@ -148,10 +155,16 @@ def fresh(request: Request) -> None:
 
 
 app = FastAPI(title="PhysicsHive", docs_url=None, redoc_url=None, openapi_url=None, dependencies=[Depends(fresh)])
-if backend.local:
+if backend.local or backend.readonly:  # nobody signs in
     app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 else:
     attach_huggingface_oauth(app)  # adds the session, and the sign-in and sign-out pages
+# serve.py, which serves a folder of this machine without sign-in, names the host names a request may carry
+# (127.0.0.1 and localhost): a page of another site that makes its name point to this machine (DNS rebinding) is
+# refused. The Space on the Hub does not set it.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("PHYSICS_HIVE_ALLOWED_HOSTS", "").split(",") if h.strip()]
+if ALLOWED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 templates = Jinja2Templates(directory=HERE / "templates")
 templates.env.filters.update(md=md, md_inline=md_inline, latex_doc=lambda rendered: Markup(latex.document_html(rendered)))
 MACROS = templates.env.get_template("macros.html").module
@@ -167,7 +180,7 @@ LATEX_CSS = (HERE / "latex.css").read_text(encoding="utf-8") if (HERE / "latex.c
 
 
 def signed_in(request: Request) -> str | None:
-    if backend.local:
+    if backend.local or backend.readonly:
         return backend.user(None)
     info = parse_huggingface_oauth(request)
     return info.user_info.preferred_username if info else None
@@ -189,7 +202,8 @@ def check_form(request: Request, token: str) -> str | None:
 
 def page(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
     here = quote(request.url.path)
-    context.update(request=request, user=signed_in(request), local=backend.local, name=backend.project_name(),
+    context.update(request=request, user=signed_in(request), local=backend.local, readonly=backend.readonly,
+                   github=GITHUB, name=backend.project_name(),
                    status=backend.status_line(), csrf=csrf_token(request), awaiting=backend.awaiting_count(),
                    flash=request.session.pop("flash", None), here=request.url.path, latex_css=LATEX_CSS,
                    sign_in=f"/oauth/huggingface/login?_target_url={here}",
@@ -204,10 +218,31 @@ def done(request: Request, message: str, url: str) -> RedirectResponse:
 
 @app.exception_handler(SpaceError)
 def show_problem(request: Request, exc: SpaceError) -> HTMLResponse:
-    return page(request, "problem.html", status_code=503 if backend.snap is None else 404, problem=str(exc))
+    if backend.snap is None:
+        return page(request, "problem.html", status_code=503, heading="Not available", problem=str(exc))
+    return page(request, "problem.html", status_code=404, heading="Not found", problem=str(exc))
 
 
-# ----- the five pages -----
+@app.exception_handler(StarletteHTTPException)
+def show_http_problem(request: Request, exc: StarletteHTTPException) -> HTMLResponse:
+    """An address that is no page of the Space (404), or a form address opened as a page (405)."""
+    path = request.url.path.replace("`", "")  # shown in a code span, as text
+    if exc.status_code == 404:
+        problem = f"There is no page at `{path}` in this Space."
+    elif exc.status_code == 405:
+        problem = f"`{path}` receives a form when you save; it is not a page to open."
+    else:
+        problem = str(exc.detail)
+    return page(request, "problem.html", status_code=exc.status_code, heading="Not found" if exc.status_code == 404
+                else "Not available", problem=problem)
+
+
+# ----- the five pages, and the help -----
+
+
+@app.get("/help", response_class=HTMLResponse)
+def help_page(request: Request):
+    return page(request, "help.html")
 
 
 def review_page(request: Request, **extra) -> HTMLResponse:
@@ -296,8 +331,9 @@ def paper(request: Request, paper_id: str):
 
 
 @app.get("/file/{rel:path}", response_class=HTMLResponse)
-def file(request: Request, rel: str):
-    return page(request, "file.html", **backend.file(rel))
+def file(request: Request, rel: str, rendered: str = ""):
+    """A file of the workspace; a LaTeX file (a derivation) rendered with ?rendered=1."""
+    return page(request, "file.html", **backend.file(rel, rendered=rendered == "1"))
 
 
 def local_path(url: str) -> str:

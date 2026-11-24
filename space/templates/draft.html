@@ -7,7 +7,8 @@
   <div class="ftools"><a class="btn" href="/draft.pdf">PDF</a><a class="btn" href="/draft/edit">Edit source</a></div>
 </div>
 {% if not results and not conjectures %}
-<div class="empty-note">Nothing is in the draft yet. A result enters it when you tick it in a debrief.
+<div class="empty-note">Nothing is in the draft yet. A result enters it when you tick the line of a debrief that copies it
+  here, or when you edit the source.
   {% if awaiting %}{{ "A session is" if awaiting == 1 else awaiting ~ " sessions are" }} waiting for your response on the <a href="/">Review page</a>.{% endif %}</div>
 {% endif %}
 {% if flags %}

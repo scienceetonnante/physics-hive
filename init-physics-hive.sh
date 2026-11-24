@@ -8,7 +8,8 @@
 # also has a flag:
 #
 #   init-physics-hive.sh [--mode local|create|join] [--harness claude,codex,opencode,pi]
-#                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME] [--yes]
+#                          [--dir PATH] [--org ORG --name NAME] [--repo ORG/NAME]
+#                          [--question TEXT] [--goal TEXT] [--yes]
 #
 # Run it inside an existing workspace to add a harness or refresh the rendered
 # harness files; add --upgrade to replace the workspace's method copy with
@@ -24,4 +25,5 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
+export PHYSICS_HIVE_PROG="init-physics-hive.sh"  # the name its --help shows
 exec uv run --quiet "$SCRIPT_DIR/scripts/init.py" "$@"

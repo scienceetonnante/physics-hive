@@ -1,15 +1,15 @@
 ---
 name: research-plan
-description: Draft an approach and next steps for the project with a fresh-context planner sub-agent. The draft goes in the session folder; you offer it to the researcher as tick lines in your debrief, and project.md changes only when they tick them.
+description: Draft an approach and next steps for the project with a fresh-context planner sub-agent. The draft goes in the session folder; you offer it to the lead as tick lines in your debrief, and project.md changes only when they tick them.
 agent: planner
 arguments_hint: "[feedback or scope hints, optional]"
 ---
 
-Draft or revise the approach and the next steps. The `planner` sub-agent reads `project.md`, the cards, the literature overview, the notes and the handoffs of earlier sessions, and writes a draft. `project.md` is the researcher's: the draft reaches it only through lines they tick.
+Draft or revise the approach and the next steps. The `planner` sub-agent reads `project.md`, the cards, the literature overview, the notes and the handoffs of earlier sessions, and writes a draft. `project.md` is the lead's: the draft reaches it only through lines they tick.
 
 ## Steps
 
-1. **Collect the inputs**: what the researcher asked for (their answers and notes, from `received.md`), and any scope hint from the operator.
+1. **Collect the inputs**: what the lead asked for (their answers and notes, from `received.md`), and any scope hint from the contributor.
 
 2. **Dispatch the `planner` sub-agent** (see the dispatch syntax for your harness in AGENTS.md) with, inline: the session ID, the inputs above, and the output path `sessions/S<n>/plan.md`.
 

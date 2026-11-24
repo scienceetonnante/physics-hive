@@ -6,8 +6,13 @@
     <div class="fleft"><span class="fname">project.md</span><span class="fmeta">Yours. Agents change it only to apply what you ticked, and to remove a step their session finished.</span></div>
     <div class="ftools"><a class="btn" href="/edit/project.md">Edit</a></div>
   </div>
+  {% if unwritten %}
+  <div class="empty-note">Before the first session, write the question in one line as the title of <code>project.md</code>, in place of
+    <em>&lt;the question in one line&gt;</em>, and the goal under <em>Goal</em>: the question in full, and what would count as an
+    answer. The other sections can wait. <a href="/edit/project.md">Edit project.md</a></div>
+  {% endif %}
   <div class="sheet md">{{ project | md }}
-    {% if no_next_step %}<div class="empty-note">No next step. The next session will propose a brief and ask the operator to confirm it in the terminal; <a href="/edit/project.md">add a step</a> to choose it yourself.</div>{% endif %}
+    {% if no_next_step %}<div class="empty-note">No next step. The next session will propose a brief and ask the contributor to confirm it in the terminal; <a href="/edit/project.md">add a step</a> to choose it yourself.</div>{% endif %}
   </div>
 
   <div class="filebar">

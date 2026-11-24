@@ -123,7 +123,7 @@ def test_card_follows_the_surveyor_format():
         "arxiv": "hep-th/9711200",
         "inspire": 451647,
         "doi": "10.4310/ATMP.1998.v2.n2.a1",
-        "why": "",  # written by the surveyor: one sentence for the researcher
+        "why": "",  # written by the surveyor: one sentence for the lead
         "topic": "",
         "rating": "",
         "session": "S3",

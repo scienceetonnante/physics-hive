@@ -2,7 +2,7 @@
 
 - Name to pass to the scripts' `--harness` option: `pi`.
 - Skills are slash commands (`/session-run`, `/derive`, …) from `.pi/prompts/`. The sub-agent roles are in `.pi/agents/`. Pi installs `pi-subagents` and `pi-web-access` from `.pi/settings.json` on first launch.
-- Tool names are literal and lowercase: `read`, `write`, `edit`, `bash` (with an explicit timeout for long commands), `grep`, `find`, `ls`, `web_search`, `fetch_content`. There is no `Task` tool. To ask the operator something, write plain text and wait for the next message.
+- Tool names are literal and lowercase: `read`, `write`, `edit`, `bash` (with an explicit timeout for long commands), `grep`, `find`, `ls`, `web_search`, `fetch_content`. There is no `Task` tool. To ask the contributor something, write plain text and wait for the next message.
 - **Dispatch** a sub-agent with the `subagent` tool (from `pi-subagents`):
 
   ```json

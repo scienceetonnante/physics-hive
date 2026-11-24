@@ -1,5 +1,7 @@
+{# The macros that show forms read `readonly` from the page: import them "with context". #}
 {% macro sign_in_first(local, sign_in, what) -%}
-{% if local %}
+{% if readonly %}{# the form says it at its top #}
+{% elif local %}
 <p class="muted small">Set PHYSICS_HIVE_LOCAL_USER to {{ what }} from this local copy.</p>
 {% else %}
 <p class="muted small"><a class="sign-in" href="{{ sign_in }}">Sign in with Hugging Face</a> to {{ what }}.</p>
@@ -7,7 +9,7 @@
 {%- endmacro %}
 
 {# A session on one page: on the left, what it found (the note, cut to its abstract and results until the reader
-   asks for all of it), what it changed, and its record, folded; on the right, the researcher's response. #}
+   asks for all of it), what it changed, and its record, folded; on the right, the lead's response. #}
 {% macro session_view(v, user, local, sign_in, csrf, back, whole, error) -%}
 {% set d = v.debrief %}
 <section class="review" id="{{ v.id }}">
@@ -93,32 +95,37 @@
 </details>
 {%- endmacro %}
 
-{# The researcher's response to a debrief: answers, ticks and a note, saved together. #}
+{# The lead's response to a debrief: answers, ticks and a note, saved together. #}
 {% macro response_form(d, user, local, sign_in, csrf, back) -%}
-<form class="response" method="post" action="/debrief/{{ d.id }}" data-save aria-label="Your response">
+{% set can_type = user or readonly %}
+<form class="response" method="post" action="/debrief/{{ d.id }}" {{ '' if readonly else 'data-save' }} aria-label="Your response">
+  {% if readonly %}<p class="demo-note">This is a read-only demonstration. You can type answers and tick lines, but
+    they are not saved. In a real space, <em>Save my response</em> commits them to the workspace under your name,
+    and the next session applies the lines you ticked.</p>{% endif %}
   {% for q in d.d.questions %}
   <div class="md question">{{ ("**Question " ~ q.number ~ ".** " ~ q.text) | md }}</div>
   <textarea id="a-{{ d.id }}-{{ q.number }}" name="answer-{{ q.number }}" rows="3" aria-label="Your answer to question {{ q.number }}"
-    placeholder="Your answer" {{ 'disabled' if not user }}>{{ q.answer }}</textarea>
+    placeholder="Your answer" {{ 'disabled' if not can_type }}>{{ q.answer }}</textarea>
   {% endfor %}
   {% if d.d.ticks %}
   {% for label, items in d.groups %}
   <div class="tick-group">{{ label }}</div>
   <ul class="ticks md">
     {% for index, t in items %}
-    <li><label><input type="checkbox" name="tick-{{ index }}" {{ 'checked' if t.checked }} {{ 'disabled' if not user }}> <span>{{ t.text | md_inline }}</span></label></li>
+    <li><label><input type="checkbox" name="tick-{{ index }}" {{ 'checked' if t.checked }} {{ 'disabled' if not can_type }}> <span>{{ t.text | md_inline }}</span></label></li>
     {% endfor %}
   </ul>
   {% endfor %}
   {% endif %}
-  <h3 class="response-h">Anything else for the next session</h3>
-  <textarea name="note" rows="3" aria-label="Anything else for the next session"
-    placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not user }}>{{ d.d.note }}</textarea>
+  <h3 class="response-h"><label for="note-{{ d.id }}">Anything else for the next session</label></h3>
+  <textarea id="note-{{ d.id }}" name="note" rows="3"
+    placeholder="Ask for something, point to a paper, or make a remark." {{ 'disabled' if not can_type }}>{{ d.d.note }}</textarea>
   <input type="hidden" name="base" value="{{ d.text }}">
   <input type="hidden" name="back" value="{{ back }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="actions">
-    {% if user %}<button class="primary" data-label="Save my response">Save my response</button>{% endif %}
+    {% if user %}<button class="primary" data-label="Save my response">Save my response</button>
+    {% elif readonly %}<button class="primary" type="button" disabled>Save my response</button>{% endif %}
     <span class="save-state" aria-live="polite"></span>
   </div>
   <p class="fmeta">Saved choices take effect when the next session starts. Saving does not start a session.</p>
@@ -164,7 +171,7 @@
 {%- endmacro %}
 
 {% macro rating_menu(paper_id, current, agent, ratings, user, csrf, back) -%}
-<form class="rate" method="post" action="/rate" data-save>
+<form class="rate" method="post" action="/rate" {{ '' if readonly else 'data-save' }}>
   <input type="hidden" name="paper_id" value="{{ paper_id }}">
   <input type="hidden" name="back" value="{{ back }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -172,7 +179,7 @@
     <option value="" {{ 'selected' if not current }}>not rated</option>
     {% for r in ratings %}<option value="{{ r }}" {{ 'selected' if r == current }}>{{ r }}</option>{% endfor %}
   </select>
-  <noscript><button class="small">Save</button></noscript>
+  {% if user %}<noscript><button class="small">Save</button></noscript>{% endif %}
   {% if agent %}<span class="agent">agent's estimate: {{ agent }}</span>{% endif %}
   <span class="save-state small" aria-live="polite"></span>
 </form>

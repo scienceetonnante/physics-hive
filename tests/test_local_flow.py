@@ -1,4 +1,4 @@
-"""End-to-end test of a local workspace: init, then three sessions in which the researcher acts only by
+"""End-to-end test of a local workspace: init, then three sessions in which the lead acts only by
 editing debriefs and project.md in a text editor (the acceptance test of phase A of the design).
 
 The scripts are run as a coordinator would run them; the agents' work is simulated by writing the files
@@ -102,10 +102,10 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
 
     scripts = ws / ".physics-hive/scripts"
     r = run(scripts / "session.py", "start", "--harness", "claude", "--model", "m1", cwd=ws)
-    assert r.returncode != 0 and "project.md has no title or goal yet" in r.stderr
+    assert r.returncode != 0 and "project.md does not have both its question and its goal yet" in r.stderr
     assert not (ws / "sessions/S1").exists() and not (ws / ".active-session").exists()
 
-    # The researcher writes the title and the goal in an editor, and does not commit.
+    # The lead writes the title and the goal in an editor, and does not commit.
     project = (ws / "project.md").read_text().replace("# <the question in one line>", "# What is X?")
     (ws / "project.md").write_text(project.replace("## Goal\n", "## Goal\n\nFind the leading correction to X.\n"))
 
@@ -114,7 +114,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert r.returncode == 0, r.stderr + r.stdout
     assert "Committed your edits of project.md as yours." in r.stdout
     assert "Session S1 started" in r.stdout and "From you since the project began" in r.stdout
-    # The templates committed by init are not the researcher's edits; only the title and the goal are.
+    # The templates committed by init are not the lead's edits; only the title and the goal are.
     assert "project.md       +3 −1 lines" in r.stdout and "conventions.md   unchanged" in r.stdout
     assert "draft.tex        unchanged" in r.stdout and "Initialize PhysicsHive" not in r.stdout
     assert "already active" in run(scripts / "session.py", "start", cwd=ws).stderr
@@ -160,7 +160,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert "- `project.md`: unchanged." in changed and "- `draft.tex`: unchanged." in changed
     assert "**S1**" in (ws / "INDEX.md").read_text() and "debrief open" in (ws / "INDEX.md").read_text()
 
-    # ---- The researcher answers S1 in an editor: answer, all three ticks, a note; and adds a step to project.md.
+    # ---- The lead answers S1 in an editor: answer, all three ticks, a note; and adds a step to project.md.
     path = ws / "sessions/S1/debrief.md"
     path.write_text(set_note(set_ticks(set_answer(path.read_text(), 1, "Walks only first."), {0: True, 1: True, 2: True}),
                              "Start on the disk."))
@@ -203,12 +203,13 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     assert r.returncode == 0, r.stderr + r.stdout
     changed = parse_debrief((ws / "sessions/S2/debrief.md").read_text()).changed
     assert "- `draft.tex` (+" in changed and "as you ticked in S1" in changed
-    assert "- `project.md` (+" in changed and "project.md: remove the finished step" in changed
+    # project.md: the apply commit added step 2, then the session removed step 1; the net change is one line replaced.
+    assert "- `project.md` (+1 −1 lines)" in changed and "project.md: remove the finished step" in changed
     index = (ws / "INDEX.md").read_text()
     assert "**CL-S1-1** · established" in index and "**CL-S1-2** · working" in index
     assert "debrief read by S2" in index
 
-    # ---- The researcher ticks the S2 line but leaves its question; S3 asks it, and records the answer as theirs.
+    # ---- The lead ticks the S2 line but leaves its question; S3 asks it, and records the answer as theirs.
     path = ws / "sessions/S2/debrief.md"
     path.write_text(set_ticks(path.read_text(), {0: True}))
     r = run(scripts / "session.py", "start", "--harness", "claude", "--model", "m1", cwd=ws)
@@ -220,7 +221,7 @@ def test_three_local_sessions_driven_by_debriefs(tmp_path):
     r = run(scripts / "session.py", "answer", "S2", "1", "Yes,", "for", "now.", cwd=ws)
     assert r.returncode == 0, r.stderr
     assert parse_debrief(path.read_text()).questions[0].answer == "Yes, for now."
-    assert git(ws, "log", "-1", "--format=%s").startswith("Researcher's answer to question 1 of the S2 debrief")
+    assert git(ws, "log", "-1", "--format=%s").startswith("The lead's answer to question 1 of the S2 debrief")
     received = yaml.safe_load((ws / "sessions/S3/received.md").read_text().split("---")[1])
     assert received["debriefs"]["S2"]["answers"] == {1: "Yes, for now."}
 

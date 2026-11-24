@@ -2,7 +2,7 @@
 
 The Space shows the human view of a workspace (design, section 14): the
 debriefs, project.md and conventions.md, the draft, the session notes and the
-literature. It writes only files: the researcher's answers, ticks and notes in
+literature. It writes only files: the lead's answers, ticks and notes in
 a debrief, their edits of project.md, conventions.md, the draft and the seeds,
 and their ratings of papers. It applies nothing: ticked lines are applied by
 the next session.
@@ -18,8 +18,11 @@ Two ways to reach a workspace:
   was built from, and names the signed-in user in its message.
 - For development, tests and local mode, `PHYSICS_HIVE_LOCAL=/path/to/workspace`
   reads a folder directly and writes files into it without committing; the next
-  `session.py start` commits them as the researcher's. The signed-in user is
+  `session.py start` commits them as the lead's. The signed-in user is
   then `PHYSICS_HIVE_LOCAL_USER`.
+
+With `PHYSICS_HIVE_READONLY=1` (for a public demonstration on an example
+workspace, with `PHYSICS_HIVE_LOCAL`), nobody signs in and every write is refused.
 
 What the files mean (status, evidence, the draft's results, debriefs and which
 session read them, the checks, references.bib, the PDF) comes from the
@@ -70,10 +73,17 @@ KEEP_WORKTREES = 3  # commits of main kept checked out in the Hub clone
 DEBRIEF_RE = re.compile(r"^sessions/S\d+/debrief\.md$")
 EDITABLE = ("project.md", "conventions.md", "draft.tex", "literature/seeds.md")
 CODE_LANGUAGES = {".tex": "latex", ".py": "python", ".json": "json", ".md": "markdown"}
+# A computation's full material, as its card page shows it: the output open, the code open, data files folded.
+OUTPUT_SUFFIXES = (".out", ".txt", ".log")
+DATA_SUFFIXES = (".csv", ".json", ".tsv", ".dat", ".npy", ".npz", ".h5", ".pkl")
 
 
 class SpaceError(Exception):
     """A problem to show to the person using the Space, in plain words."""
+
+
+READONLY_REFUSAL = ("Nothing was saved: this is a read-only demonstration. In a real space, saving commits the "
+                    "file to the workspace under your name.")
 
 
 def now_utc() -> dt.datetime:
@@ -89,6 +99,32 @@ def clip(text: str, limit: int = MAX_CHARS) -> str:
 def normalise(text: str) -> str:
     text = (text or "").replace("\r\n", "\n")
     return text if not text or text.endswith("\n") else text + "\n"
+
+
+def inside(root: Path, rel: str) -> Path | None:
+    """The workspace file or folder that `rel` names, or None if the Space must not open it.
+
+    `rel` comes from a request or from a file's content. Refused: an absolute path, `..`, anything in `.git`,
+    any `.env` or `.env.*` file, and a path that leaves the workspace through a symbolic link (a link committed as
+    `x.md -> /proc/self/environ` would show the Space's token). Links that stay inside the workspace are followed.
+    """
+    rel = str(rel or "")
+    parts = Path(rel).parts
+    if not parts or rel.startswith(("/", "\\")) or ".." in parts or ".git" in parts:
+        return None
+    if any(part == ".env" or part.startswith(".env.") for part in parts):
+        return None
+    base = root.resolve()
+    try:
+        path = (base / rel).resolve()
+    except (OSError, RuntimeError):  # a loop of links
+        return None
+    if not path.is_relative_to(base):
+        return None
+    inner = path.relative_to(base).parts
+    if ".git" in inner or any(part == ".env" or part.startswith(".env.") for part in inner):
+        return None
+    return path
 
 
 def first_sentence(text: str, limit: int = 220) -> str:
@@ -249,7 +285,7 @@ def parse_changed(text: str) -> dict | None:
 
 
 def answered(debrief) -> bool:
-    """The researcher has written an answer or a note, or ticked a line, in this debrief."""
+    """The lead has written an answer or a note, or ticked a line, in this debrief."""
     return bool(debrief.note.strip() or any(q.answer.strip() for q in debrief.questions)
                 or any(t.checked for t in debrief.ticks))
 
@@ -329,7 +365,9 @@ class LocalStore:
     def commit(self, files: dict[str, str], message: str, parent: str | None = None) -> None:
         """Write the files; there is no commit to point to."""
         for rel, content in files.items():
-            path = self.root / rel
+            path = inside(self.root, rel)
+            if path is None:  # a link out of the workspace, in place of one of the lead's files
+                raise SpaceError(f"{rel} is not a file of the workspace; nothing was saved.")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
 
@@ -372,7 +410,9 @@ class HubStore:
             tree = self.cache / sha[:12]
             if not (tree / ".git").exists():
                 run_git(clone, "worktree", "prune")
-                run_git(clone, "worktree", "add", "-q", "--detach", str(tree), sha)
+                # Symbolic links are checked out as plain files that hold the link's text, so that a link
+                # committed to the workspace never opens a file of the Space's machine.
+                run_git(clone, "-c", "core.symlinks=false", "worktree", "add", "-q", "--detach", str(tree), sha)
             self._prune(clone, keep=tree)
         except SpaceError as exc:
             raise SpaceError(f"The Space could not read the workspace {self.repo_id} from the Hub ({exc}). Check "
@@ -434,37 +474,46 @@ class Backend:
     """The data of the pages, and every write the Space makes."""
 
     def __init__(self, store: LocalStore | HubStore | None = None, *, local_user: str | None = None,
-                 error: str | None = None):
+                 error: str | None = None, readonly: bool = False):
         self.store = store
         self.local_user = local_user
+        self.readonly = readonly  # a public demonstration: nobody signs in and nothing is saved
         self.snap: Snapshot | None = None
         self.error = error  # why the workspace cannot be shown, if it cannot
         self.pull_requests: list[dict] = []
         self.notes: list[str] = []  # things that failed without blocking the pages
         self._lock = threading.RLock()
         self._renders: dict[str, latex.Rendered] = {}
+        self._pdf_lock = threading.Lock()  # read-only mode: one compile at a time
+        self._pdfs: dict[str, bytes | SpaceError] = {}  # read-only mode: each source's PDF, or why it failed
 
     @classmethod
     def from_env(cls, env: dict | None = None) -> Backend:
         env = os.environ if env is None else env
+        readonly = env.get("PHYSICS_HIVE_READONLY", "").strip().lower() in ("1", "true", "yes")
         if env.get("PHYSICS_HIVE_LOCAL"):
-            return cls(LocalStore(env["PHYSICS_HIVE_LOCAL"]), local_user=env.get("PHYSICS_HIVE_LOCAL_USER") or None)
+            return cls(LocalStore(env["PHYSICS_HIVE_LOCAL"]), local_user=env.get("PHYSICS_HIVE_LOCAL_USER") or None,
+                       readonly=readonly)
         repo = env.get("PHYSICS_HIVE_WORKSPACE", "").strip()
         token = env.get("HF_TOKEN", "").strip()
         if not repo:
             return cls(error="This Space does not know which workspace to show: the Space variable "
-                             "PHYSICS_HIVE_WORKSPACE (org/name) is not set.")
+                             "PHYSICS_HIVE_WORKSPACE (org/name) is not set.", readonly=readonly)
         if not token:
             return cls(error=f"This Space cannot read the workspace {repo}: the Space secret HF_TOKEN is not set. "
-                             f"Add it in the Space settings (a token that can read and write {repo}).")
-        return cls(HubStore(repo, token))
+                             f"Add it in the Space settings (a token that can read and write {repo}).",
+                       readonly=readonly)
+        return cls(HubStore(repo, token), readonly=readonly)
 
     @property
     def local(self) -> bool:
         return isinstance(self.store, LocalStore)
 
     def user(self, signed_in: str | None) -> str | None:
-        """The person behind a request: the signed-in Hugging Face user, or the local user in local mode."""
+        """The person behind a request: the signed-in Hugging Face user, or the local user in local mode.
+        Nobody in a read-only demonstration."""
+        if self.readonly:
+            return None
         return self.local_user if self.local else signed_in
 
     # --- loading ---
@@ -521,8 +570,10 @@ class Backend:
         return self.snap
 
     def read(self, rel: str) -> str:
-        """Text of a workspace file ('' if it does not exist)."""
-        path = self.current().root / rel
+        """Text of a workspace file ('' if it does not exist, or if the Space must not open it: see `inside`)."""
+        path = inside(self.current().root, rel)
+        if path is None:
+            return ""
         try:
             return path.read_text(encoding="utf-8")
         except (FileNotFoundError, IsADirectoryError):
@@ -545,6 +596,8 @@ class Backend:
             return f"**{self.error}**" if self.error else "Loading…"
         ws = self.snap.ws
         version = (ws.project.get("method") or {}).get("physics_hive_version", "?")
+        if self.readonly:  # files that never change: no folder, no load time
+            return f"An example workspace, **{self.project_name()}**, made with PhysicsHive {version}."
         where = f"local folder `{self.store.label}`" if self.local else f"workspace **{self.store.label}**"
         commit = f", main at `{self.snap.revision[:8]}`" if self.snap.revision else ""
         loaded = time.strftime("%H:%M UTC", time.gmtime(self.snap.loaded_at))
@@ -568,7 +621,7 @@ class Backend:
         return "/".join([f"{HUB}/datasets/{repo}", *parts])
 
     def awaiting_count(self) -> int:
-        """Open debriefs in which the researcher has not answered, ticked or written anything yet."""
+        """Open debriefs in which the lead has not answered, ticked or written anything yet."""
         try:
             snap = self.current()
             readers = snap.m.human.read_by(snap.ws.sessions.values())
@@ -582,7 +635,7 @@ class Backend:
     def debriefs(self) -> list[dict]:
         """Every debrief, newest first, with its state: open until a later session has read it.
 
-        `answered`: the researcher has written an answer or a note, or ticked a line, in it."""
+        `answered`: the lead has written an answer or a note, or ticked a line, in it."""
         snap = self.current()
         readers = snap.m.human.read_by(snap.ws.sessions.values())
         return [self._debrief(session, readers.get(session.id))
@@ -602,11 +655,12 @@ class Backend:
     def review(self, card_footer=None) -> dict:
         """The Review page: the newest debrief still open, as its session's page, and the other open ones.
 
-        With none open, the newest debrief, which the researcher may still add to."""
+        With none open, the newest debrief, which the lead may still add to."""
         rows = self.debriefs()
         waiting = [r for r in rows if r["open"]]
         ws = self.current().ws
-        return {"any": bool(rows), "running": self.running(),
+        doc = ws.project_doc
+        return {"any": bool(rows), "running": self.running(), "unwritten": doc is None or doc.is_template,
                 "view": self.session_page(waiting[0]["id"], card_footer) if waiting else None,
                 "also": [{"id": r["id"], "number": r["number"], "title": self.title_of(ws.sessions[r["id"]])}
                          for r in waiting[1:]],
@@ -619,8 +673,8 @@ class Backend:
     def running(self) -> list[dict]:
         """Sessions running now: open session pull requests (Hub), or the active session of a local folder."""
         if self.local:
-            path = self.current().root / ".active-session"
-            if path.is_file():
+            path = inside(self.current().root, ".active-session")
+            if path is not None and path.is_file():
                 import json
 
                 info = json.loads(path.read_text(encoding="utf-8"))
@@ -637,6 +691,7 @@ class Backend:
         doc = snap.ws.project_doc
         return {"project": self.read("project.md"), "conventions": self.read("conventions.md"),
                 "title": doc.title if doc and not doc.is_template else None,
+                "unwritten": doc is None or doc.is_template,
                 "no_next_step": doc is not None and not doc.next_steps}
 
     # --- LaTeX: the draft and the notes ---
@@ -687,7 +742,7 @@ class Backend:
                 "conjectures": sum(1 for b in ws.draft if b.kind == "conjecture")}
 
     def state_of(self, session, readers: dict, running: set) -> str:
-        """Where a session stands: running, without a debrief, read by a later session, or waiting for the researcher."""
+        """Where a session stands: running, without a debrief, read by a later session, or waiting for the lead."""
         if session.id in running:
             return "Running now"
         if session.debrief is None:
@@ -716,7 +771,7 @@ class Backend:
         return rows
 
     def session_page(self, session_id: str, card_footer=None) -> dict:
-        """One session on one page: its note, cut to the abstract and the results until the researcher asks for
+        """One session on one page: its note, cut to the abstract and the results until the lead asks for
         all of it, the cards that no result of the note names, its debrief, and its record.
 
         card_footer(card_id) gives the HTML shown under a result of the note that names the card."""
@@ -747,11 +802,31 @@ class Backend:
         tex = self.read(rel)
         if not tex:
             raise SpaceError(f"There is no {rel}.")
+        name = "draft.pdf" if rel == "draft.tex" else f"note-{rel.split('/')[1]}.pdf"
+        if not self.readonly:
+            return self._compile(snap, rel, tex), name
+        # In a demonstration the files never change: a PDF beside the source is current, and a source is compiled
+        # at most once, one at a time, its result (or its failure) kept, so that visitors cannot load the Space.
+        ready = inside(snap.root, str(Path(rel).with_suffix(".pdf")))
+        if ready is not None and ready.is_file():
+            return ready.read_bytes(), name
+        key = hashlib.sha256(tex.encode()).hexdigest()
+        with self._pdf_lock:
+            if key not in self._pdfs:
+                try:
+                    self._pdfs[key] = self._compile(snap, rel, tex)
+                except SpaceError as exc:
+                    self._pdfs[key] = exc
+        result = self._pdfs[key]
+        if isinstance(result, SpaceError):
+            raise result
+        return result, name
+
+    def _compile(self, snap: Snapshot, rel: str, tex: str) -> bytes:
         data, log = snap.m.pdf.build_pdf(tex, snap.m.regen.render_bib(snap.ws), Path(rel).stem)
         if data is None:
             raise SpaceError(f"{rel} did not compile to PDF:\n\n```\n{log}\n```")
-        name = "draft.pdf" if rel == "draft.tex" else f"note-{rel.split('/')[1]}.pdf"
-        return data, name
+        return data
 
     # --- Literature ---
 
@@ -817,16 +892,28 @@ class Backend:
                    ("Supersedes", card.supersedes), ("Revised by", ws.revisers(card_id)),
                    ("Refutes", card.refutes), ("Refuted by", ws.refuters(card_id))]
         evidence = []
-        for ev in ws.evidence(card_id):
+        order = list(ARTEFACT_WORDS)  # derivations first
+        for ev in sorted(ws.evidence(card_id), key=lambda e: order.index(k) if (k := ws.artefacts[e.artefact].kind)
+                         in order else len(order)):
             art = ws.artefacts[ev.artefact]
-            title = f"{art.id} ({art.kind})" + (f", attached by the review {ev.attached_by}" if ev.attached_by else "")
-            files = [{"path": p, "text": clip(self.read(p))} for p in art.full]
-            reviews = [{"title": f"Review {regen.review_label(r)}: {r.verdict}", "body": self.body(r.path) or "(no text)"}
-                       for r in ev.reviews]
-            evidence.append({"title": title, "summary": self.body(art.path), "files": files, "reviews": reviews})
+            outcome, tone = review_outcome(ev.reviews)
+            # The material first: a LaTeX derivation opens rendered on its own page (its equation numbers and
+            # labels would clash with another document's on this page); the output and the code show here.
+            tex = [p for p in art.full if p.endswith(".tex")]
+            output = [{"path": p, "text": clip(self.read(p))} for p in art.full if p.endswith(OUTPUT_SUFFIXES)]
+            code = [{"path": p, "text": clip(self.read(p))} for p in art.full
+                    if not p.endswith((".tex", *OUTPUT_SUFFIXES, *DATA_SUFFIXES))]
+            data = [{"path": p, "text": clip(self.read(p))} for p in art.full if p.endswith(DATA_SUFFIXES)]
+            reviews = [{"title": f"Review {regen.review_label(r)}" + ("" if r.by_human else " (agent)"),
+                        "verdict": r.verdict, "tone": {"confirmed": "ok", "refuted": "bad"}.get(r.verdict, "open"),
+                        "body": self.body(r.path) or "(no text)", "path": r.path} for r in ev.reviews]
+            evidence.append({"id": art.id, "kind": art.kind, "label": f"{art.kind.capitalize()} {art.id}",
+                             "outcome": outcome[0].upper() + outcome[1:], "tone": tone,
+                             "attached_by": ev.attached_by, "summary": self.body(art.path), "summary_path": art.path,
+                             "tex": tex, "output": output, "code": code, "data": data, "reviews": reviews})
         produced = card.produced_by
         origin = (f"from {produced.get('user', '?')}" if produced.get("kind") == "human" else
-                  f"agent ({produced.get('model', '?')}), operator {produced.get('operator', '?')}")
+                  f"agent ({produced.get('model', '?')}), contributor {produced.get('operator', '?')}")
         return {"card": card, "row": self.row(card_id), "origin": origin + (f", session {card.session}" if card.session else ""),
                 "related": [(label, [self.row(i) for i in ids]) for label, ids in related if ids],
                 "evidence": evidence, "trace": self.hub_url("traces", "tree/main", card.session) if card.session else None}
@@ -846,15 +933,16 @@ class Backend:
                 "trace": self.hub_url("traces", "tree/main", session.id)}
 
     def file_path(self, rel: str) -> Path | None:
-        parts = Path(rel or "").parts
-        if not parts or rel.startswith("/") or ".." in parts or parts[0] in (".git",):
-            return None
-        path = self.current().root / rel
-        return path if path.is_file() else None
+        """The workspace file that a page may show, or None (see `inside`)."""
+        path = inside(self.current().root, rel)
+        return path if path is not None and path.is_file() else None
 
-    def file(self, rel: str) -> dict:
+    def file(self, rel: str, rendered: bool = False) -> dict:
+        """A workspace file as text; Markdown with its header apart; LaTeX rendered if asked."""
         if self.file_path(rel) is None:
             raise SpaceError(f"There is no file {rel} in the workspace.")
+        if rendered and rel.endswith(".tex"):
+            return {"path": rel, "header": None, "body": None, "text": None, "html": self.render_tex(self.read(rel))}
         text = clip(self.read(rel))
         if not rel.endswith(".md"):
             return {"path": rel, "header": None, "body": None, "text": text}
@@ -867,6 +955,8 @@ class Backend:
     # ----- writes -----
 
     def _require(self, user: str | None, action: str) -> None:
+        if self.readonly:
+            raise SpaceError(READONLY_REFUSAL)
         if not user:
             raise SpaceError(f"Sign in with your Hugging Face account to {action}.")
 
@@ -897,7 +987,7 @@ class Backend:
 
     @timed
     def save_file(self, user: str | None, rel: str, content: str, base: str | None = None) -> str:
-        """Save one of the researcher's files as they typed it."""
+        """Save one of the lead's files as they typed it."""
         self._require(user, "save")
         if not self.editable(rel):
             raise SpaceError(f"{rel} is not one of the files you edit here.")
@@ -925,13 +1015,13 @@ class Backend:
     @timed
     def save_debrief(self, user: str | None, session_id: str, answers: dict[int, str], ticked: set[int],
                      note: str, base: str | None = None) -> str:
-        """Write the researcher's answers, ticks and note into a debrief. The next session applies what is ticked."""
+        """Write the lead's answers, ticks and note into a debrief. The next session applies what is ticked."""
         self._require(user, "answer")
         rel = f"sessions/{session_id}/debrief.md"
         with self._lock:
             snap = self._fresh()
             human = snap.m.human
-            if not DEBRIEF_RE.match(rel) or not (snap.root / rel).is_file():
+            if not DEBRIEF_RE.match(rel) or self.file_path(rel) is None:
                 raise SpaceError(f"There is no debrief for {session_id}.")
             text = self._unchanged_since(rel, base)
             parsed = human.parse_debrief(text)
@@ -952,7 +1042,7 @@ class Backend:
 
     @timed
     def rate(self, user: str | None, paper_id: str, rating: str) -> str:
-        """Set (or clear, with '') the researcher's rating of a paper, in literature/ratings.yaml."""
+        """Set (or clear, with '') the lead's rating of a paper, in literature/ratings.yaml."""
         self._require(user, "rate papers")
         rating = (rating or "").strip().lower()
         with self._lock:

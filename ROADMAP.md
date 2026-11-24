@@ -1,0 +1,62 @@
+# Roadmap
+
+This file lists the open directions and the known limitations of PhysicsHive, each with the context needed to start on it and an honest estimate of its size. Sizes are rough: *small* means a day or two of work, *medium* a week or so, *large* several weeks and design decisions first.
+
+Before starting, read [CONTRIBUTING.md](CONTRIBUTING.md) and [DOCUMENTATION.md](DOCUMENTATION.md). The design, with its reasons, is in [`design/DESIGN-shared-spaces.md`](design/DESIGN-shared-spaces.md); its section 18 lists the questions it left open, which are repeated below.
+
+So far, PhysicsHive has been used on a few problems by one person at a time, who was both the lead and the contributor. Most open directions follow from that.
+
+
+## Done in this release, and what remains
+
+**Secrets in traces.** Before a trace is uploaded, `export_trace.py` replaces the secrets it recognises with a marker and records the number of replacements in `meta.json`; [Traces and secrets](docs/shared-spaces.md#traces-and-secrets) describes what it recognises and what it misses. What remains open: before a traces dataset is made public, a person must still read the traces; no automatic check can replace that reading. The patterns are in `SECRET_PATTERNS` and `PREFIXED_SECRETS` in `scripts/export_trace.py`, with tests in `tests/test_export_trace.py` and `tests/test_hub_trace.py`; adding a format there is small.
+
+**Cost of a session.** `meta.json` now records the tokens each model used (`tokens_by_model`: input, cache read, cache write and output), when the harness's record holds the counts. It does not record a cost in money: that needs each provider's prices per model, which change, and the counts from Codex and Pi records are read on a best-effort basis. Adding a cost in dollars, for sessions and for reviewer-benchmark runs, is small once a source of prices is chosen; the design (section 18) asked for inference costs per session.
+
+
+## Open directions
+
+**Several people.** The format is built for several leads and contributors: IDs embed the session number, every item is its own file, the Space names the signed-in user in its commits, and `project.toml` has a `leads` list. Colleagues can already sign in to a space and write in its debriefs, and a second contributor can join with `--mode join`, but nobody has worked this way yet. Two parts are still built for one person:
+
+- A debrief has one answer per question (`> **Answer:**`). Several leads would need either one answer each, with their names, or a convention for adding to an answer. The format is parsed and written by `scripts/human.py` (`parse_debrief`, `set_answer`), saved from the Space by `save_debrief` in `space/backend.py`, and described to the agents in `commons/workspace-doc.md` §7 and the debrief template.
+- Two sessions that edit the same file at the same time (`draft.tex`, `conventions.md`, `literature/overview.md`) conflict when they merge: the second session's `session.py end` stops at the rebase with nothing pushed (`scripts/hub.py`). With one person working on a project, this has been rare.
+
+Size: medium, and it should start with a real trial by two people, to see which of these matters first.
+
+**Agents in the cloud.** Agents run only on the contributor's machine, in their harness, for the whole session. Sessions could run on Hugging Face infrastructure, or be started from the Space. The Hub side already exists (sessions are pull requests, the traces and sources are datasets); what is missing is a place to run a harness without a terminal, its credentials, a sandbox, and a way to confirm the brief, which is today the one moment the contributor is asked. `export_trace.py` reads the harness's local records, which would also move. Size: large.
+
+**The Ask page.** A read-only assistant in the Space that answers questions about the project and cites the files it read, with three tools: list files, read a file, search text (design, section 14). It matters once a colleague without a terminal joins. Some pieces are in place: `create` makes the `-chat-debug` dataset and sets the Space variable `CHAT_DEBUG` (`scripts/hub.py`), `project.toml` names a chat model under `[models]` (`init.py --chat-model`, default `openai/gpt-oss-20b`), and the permissions recommended for the Space's token include calls to Inference Providers. Nothing in `space/` uses them yet. Size: medium.
+
+**Publishing the record.** A space stays private while the research is done; the record is kept complete so that, at the end of a project, it can be made public with the results: the traces, the leads' answers and decisions, the reviews, and for every result who produced it, how, and with which version of the method. There is no publishing step. It needs a person to read the traces, since the automatic removal of secrets (above) does not guarantee that none is left, a decision on what to publish (all five repositories, or an export), and an answer to the question of credit and authorship (design, section 18). Size: large, mostly design.
+
+**The Space runs the workspace's code with its token in reach.** A Space on the Hub imports the scripts of the workspace's own method copy (`.physics-hive/scripts/`, in `space/backend.py`), and compiles the workspace's LaTeX with `latexmk` (`scripts/pdf.py`), which can read any file the Space can read, including its environment. The Space's token, the secret `HF_TOKEN`, is in reach of both, so anyone who can commit to the workspace, including an agent that follows instructions planted in a paper, can obtain it ([The Space's token](docs/shared-spaces.md#the-spaces-token)). What exists today: `check` refuses a session whose changes touch `.physics-hive/`, and `session.py end` runs it; but the agent runs that check from scripts it can edit, and a commit made outside a session (a push with a Hub token, for example through `hubgit.py`) is not checked at all. Directions: refuse `\input`, `\include`, `\openin` and similar commands with an absolute path or a parent path before compiling, or compile with TeX's file access limited to the compile folder; compile in a process whose environment does not hold the token; have the Space refuse a method copy on `main` that does not match the one it was deployed from, so that `.physics-hive/` changes only through an upgrade (the stamp `METHOD` in the Space repository records the version and a hash of the app's files today, not of the scripts). Size: small for the compile environment and the path filter, medium for checking the method copy, since upgrades and older Spaces must keep working.
+
+**Traces in a format the Hub's trace viewer can open.** Today `export_trace.py` writes one file per session, `S<n>/trace.jsonl` in the traces dataset: it merges the main conversation and the sub-agent transcripts into that file and wraps every line as `{"source", "record"}`, where `source` names the transcript the line came from. The Hub sees it as plain JSONL, and the dataset cards turn the dataset viewer off. The Hub has a viewer for agent sessions; according to its documentation (read on 2026-07-26 and not checked since), it recognises the session files of Claude Code, Codex and Pi when they are uploaded unchanged, one file per row, and other harnesses need the Hub's own format for traces. The change would upload each transcript as its own file, unchanged except for the secrets the export replaces, next to `meta.json`. The gain: a person could read an agent's reasoning and tool calls in the browser, without downloading the trace. The costs: OpenCode keeps its record in a SQLite database, so its traces would need converting to the Hub's format; `investigate-run` reads `trace.jsonl` in the current layout and would need to read the new one; and the viewer works on a private dataset only for paid accounts (PRO, Team or Enterprise), and the cards would need to turn the viewer back on for the traces dataset. Details are in [`design/IDEAS.md`](design/IDEAS.md). Size: medium.
+
+**Model diversity between authors and reviewers.** It is not enforced. In Claude Code, sub-agents can only run Claude models, so the author and the reviewer of an artefact come from the same family. Every card and trace records the models, so a rule can be added if the evidence shows a need. That evidence is meant to come from the reviewer benchmark ([`bench/reviewer/`](bench/reviewer/README.md)), which measures each configuration's catch rate on planted errors and its false-alarm rate on correct work; a run with enough repetitions to compare configurations has not been recorded in the repository. Size: small for the benchmark runs (they cost model usage), medium for the rule.
+
+**Trace export for Codex and Pi.** Export is complete for Claude Code (its JSONL files, including sub-agent transcripts) and OpenCode (its SQLite store), and best effort for Codex rollouts and Pi sessions, which are copied as raw files. `investigate-run` reads traces too. Size: small to medium per harness.
+
+
+## Questions the design left open
+
+From section 18 of the design. None has a decision yet; each needs use on real projects more than code.
+
+- **LaTeX to HTML.** The design proposed LaTeXML. The Space uses its own converter (`space/latex.py`) for a subset of LaTeX, because it is fast enough to run on every view and keeps the preview and the page identical. If notes need more than the subset, LaTeXML can replace it behind the same `render` function.
+- **Note length.** Whether `check` should warn above about four pages, or whether the writer's instructions suffice.
+- **Copying into the draft.** Copying a block unchanged is simple and keeps provenance, but repeated copies make the draft a sequence of note excerpts. How often to tidy it, and whether sessions should suggest it, is to be seen in practice.
+- **"No answer means agreement."** It keeps debriefs short, but a lead who skips a debrief agrees to everything in it. A session could refuse to apply silent agreements older than a week.
+- **Credit and authorship**, if results from the draft are published.
+
+
+## Validation that needs real runs
+
+[`tests/ACCEPTANCE.md`](tests/ACCEPTANCE.md) maps each acceptance test of the design's build plan to how it is checked. Several need real agents and accounts, and the repository does not record whether each was run: the helmholtz problem (the first shared run, described in section 19 of [the design](design/DESIGN-shared-spaces.md#19-a-worked-example-helmholtz-2)) rerun with the lead answering only in the Space; a survey whose choices follow the lead's ratings; and a calibration run on a problem whose answer the lead knows from unpublished notes. Running them, and auditing the runs with `investigate-run` (see [DOCUMENTATION.md](DOCUMENTATION.md#auditing-a-run-investigate-run)), is the most direct way to find what to improve next.
+
+
+## Known limitations with no plan
+
+- Workspaces created with Physics Intern are not supported, and workspaces of the 0.3 format (`problem.md` instead of `project.md`) are not converted.
+- Dispatching custom sub-agents in OpenCode has depended on its version ([opencode #29616](https://github.com/anomalyco/opencode/issues/29616)); `AGENTS.md` tells the coordinator to run the role in its own context when dispatch fails, which loses the context isolation.
+- OpenCode's workspace settings let the agent run commands without asking, and OpenCode does not confine them to the workspace.
+- In a browser that keeps cookies out of frames (Safari by default), the Space opened on huggingface.co cannot see the sign-in; the lead works in the tab the sign-in opened, or at the Space's own address.

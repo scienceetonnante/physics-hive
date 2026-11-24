@@ -16,7 +16,7 @@ no record file edited or deleted after its creation (a file added since the
 base may change until the session ends), the method copy and project.toml
 untouched, and, for the changes the session made itself (its `[S<n>]` commits
 and uncommitted changes): no other session's folder touched, no file of the
-researcher's alone (seeds, ratings) touched, new IDs that belong to the
+lead's alone (seeds, ratings) touched, new IDs that belong to the
 session, a valid draft, and a well-formed note and debrief. Problems in the
 draft or a debrief that the session did not cause are warnings.
 
@@ -93,7 +93,7 @@ def check_cards(ws: Workspace, r: Report) -> None:
         elif card.kind != PREFIX_TO_KIND[prefix]:
             r.error(path, f"kind {card.kind!r} does not match the ID prefix {prefix}- (expected {PREFIX_TO_KIND[prefix]!r})")
         if card.kind not in CARD_KINDS:
-            r.error(path, f"kind must be one of {', '.join(CARD_KINDS)} (questions come from the researcher, "
+            r.error(path, f"kind must be one of {', '.join(CARD_KINDS)} (questions come from the lead, "
                           "through debriefs)")
         if not card.statement:
             r.error(path, "statement is empty")
@@ -202,7 +202,7 @@ def check_reviews(ws: Workspace, r: Report) -> None:
         if review.by_human and not review.by.get("user"):
             r.error(path, "a human verification needs by: {kind: human, user}")
         elif not review.by_human and review.by.get("kind") != "agent":
-            r.error(path, "by must be {kind: agent} or, for a verification by the researcher, {kind: human, user}")
+            r.error(path, "by must be {kind: agent} or, for a verification by the lead, {kind: human, user}")
         for ref in review.supports:
             if ref not in ws.cards:
                 r.error(path, f"supports {ref}, which does not exist in claims/")
@@ -262,7 +262,7 @@ def check_human_files(ws: Workspace, r: Report, session_changed: set[str], sessi
     """The draft, the notes and the debriefs: errors for what the active session wrote, warnings otherwise.
 
     In the draft, a problem is the session's when the session changed draft.tex and the card at fault was
-    not already named that way at the base (so a researcher's own edit never blocks a session).
+    not already named that way at the base (so an edit by the lead never blocks a session).
     """
     before_results: set[str] = set()
     before_cards: set[str] = set()
@@ -304,18 +304,18 @@ def check_changes(ws: Workspace, base: str, session: str | None, r: Report) -> s
             verb = "edited" if status == "M" else "deleted"
             r.error(path, f"{verb} after creation; nothing is edited or deleted, write a new file that names it instead")
         if status in ("M", "D") and path.startswith("literature/P-"):
-            r.error(path, "paper cards are not edited after creation; the researcher's ratings go to "
+            r.error(path, "paper cards are not edited after creation; the lead's ratings go to "
                           f"{RATINGS_FILE}")
         if session and path == "project.toml":
             r.error(path, "a session does not change project.toml")
         if path not in mine:
             continue
         if path in RESEARCHER_FILES:
-            r.error(path, "only the researcher writes this file")
+            r.error(path, "only the lead writes this file")
         m = SESSION_FOLDER_RE.match(path)
         if m and m.group(1) != session:
             r.error(path, f"belongs to session {m.group(1)}, not to {session}; never edit another session's "
-                          "files, and never the researcher's answers in a debrief")
+                          "files, and never the lead's answers in a debrief")
     added = {path for status, path in changes if status == "A"}
     for path in sorted(added & mine):
         name = Path(path).name

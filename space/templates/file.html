@@ -1,12 +1,25 @@
 {% extends "base.html" %}
+{% from "macros.html" import paper_box, toc %}
 {% block title %}{{ path }}{% endblock %}
 {% block content %}
+{% if html %}
+<div class="filebar">
+  <div class="fleft"><span class="fname">{{ path }}</span><span class="fmeta">Session record · rendered from LaTeX</span></div>
+  <div class="ftools"><a class="btn" href="/file/{{ path }}">LaTeX source</a></div>
+</div>
+<div class="ltx-wrap">
+  {{ toc(html) }}
+  {{ paper_box(html) }}
+</div>
+{% else %}
 <div class="narrow">
   <p class="record-note">Session record · file</p>
   <div class="sheet">
-    <div class="filebar"><div class="fleft"><span class="fname">{{ path }}</span></div></div>
+    <div class="filebar"><div class="fleft"><span class="fname">{{ path }}</span></div>
+      {% if path.endswith(".tex") and not path.startswith("sessions/") and path != "draft.tex" %}<div class="ftools"><a class="btn" href="/file/{{ path }}?rendered=1">Rendered</a></div>{% endif %}</div>
     {% if header %}<details><summary class="label">Header</summary><pre>{{ header }}</pre></details>{% endif %}
     {% if body is not none %}<div class="md">{{ body | md }}</div>{% else %}<pre>{{ text }}</pre>{% endif %}
   </div>
 </div>
+{% endif %}
 {% endblock %}

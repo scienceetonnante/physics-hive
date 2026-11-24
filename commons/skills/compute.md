@@ -25,7 +25,7 @@ Run a symbolic and numerical computation. The `computer` sub-agent writes a scri
 
 4. **Integrate** (AGENTS.md §6):
    - Read the return block.
-   - Write the claim card with the reserved ID (or none, if the computation supports existing cards), stating what was actually computed. If the symbolic and numerical paths disagree, do not write a claim; record the disagreement as a flag disposition, and in your debrief if it needs the researcher.
+   - Write the claim card with the reserved ID (or none, if the computation supports existing cards), stating what was actually computed. If the symbolic and numerical paths disagree, do not write a claim; record the disagreement as a flag disposition, and in your debrief if it needs the lead.
    - Disposition every flag in the session log and log the dispatch.
    - Run regen and commit: `[S<n>] compute(<id>): <one-line summary>`. The commit includes the script, its output and its data files.
 

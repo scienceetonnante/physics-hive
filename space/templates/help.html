@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}How this works{% endblock %}
+{% block content %}
+<div class="help md">
+  <h1>How this works</h1>
+  <p>PhysicsHive lets researchers steer AI coding agents on one problem in theoretical physics or mathematics. A project
+    has two roles. The contributor runs the sessions: the agents work in a terminal, on the contributor's machine. The
+    lead sets the question, reads what the agents found and answers them, and decides what enters the draft. One person
+    can be both the lead and the contributor. This site, the Space, is where the lead reads and answers; on this
+    page, "you" means the lead.</p>
+
+  <h2>The cycle</h2>
+  <ol>
+    <li>You write the question and the goal on the <a href="/project">Project</a> page, and the next steps if you have them.</li>
+    <li>The contributor runs <code>/session-run</code> in a terminal. The session proposes a brief, by default the first next
+      step, and the contributor confirms it. The session then works on its own for a few hours: it reads papers, derives and computes, and has every result reviewed blindly by another agent.</li>
+    <li>It comes back with a short note in LaTeX and a debrief: questions for you, and lines to tick. Each line is the exact
+      change that the next session will make if you tick it.</li>
+    <li>On the <a href="/">Review</a> page, you answer the questions, tick the lines you accept, write anything else in the
+      note box, and save.</li>
+    <li>The next session applies the lines you ticked before anything else. The Space applies nothing by itself.</li>
+  </ol>
+
+  <h2>The pages</h2>
+  <ul>
+    <li><b>Review</b>: the session waiting for your response, with its note on the left and your response on the right.
+      Under each result, a link opens its evidence: the derivation, the computation and the reviews.</li>
+    <li><b>Project</b>: <code>project.md</code> (the question, goal, approach and next steps) and <code>conventions.md</code>
+      (notation, units, signs).</li>
+    <li><b>Draft</b>: <code>draft.tex</code>, the best current state of the research, as a draft paper. Only the lead
+      decides what enters it.</li>
+    <li><b>Sessions</b>: every session, each on its page with its note, your response and its record.</li>
+    <li><b>Literature</b>: the papers the agents found, by topic. Your ratings guide the next survey.</li>
+  </ul>
+
+  <h2>What "established" means</h2>
+  <p>A claim is established when a result of the draft names it. A result needs a claim with a confirming review of a
+    derivation or a computation, or a check by the lead; any other claim goes in the draft as a conjecture.</p>
+
+  <p>{% if readonly %}This is a read-only demonstration: nothing you type is saved. In a real space, saving commits the
+    file to the workspace under your name, in a few seconds.{% elif local %}Here, on a local folder, saving writes the
+    file; the next session start commits it under your name.{% else %}Saving commits the file to the workspace under
+    your name, in a few seconds.{% endif %}
+    To install PhysicsHive and read how the method works, see <a href="{{ github }}">PhysicsHive on GitHub</a>.</p>
+</div>
+{% endblock %}

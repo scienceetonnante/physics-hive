@@ -1,20 +1,22 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_box, sign_in_first %}
+{% from "macros.html" import paper_box, sign_in_first with context %}
 {% block title %}Edit the draft{% endblock %}
 {% block content %}
 <div class="filebar">
   <div class="fleft"><a href="/draft" class="fmeta">← Draft</a><span class="fname">draft.tex</span><span class="fmeta">Plain LaTeX. A result needs a claim with a confirming review; put the others in a conjecture.</span></div>
 </div>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
-<form method="post" action="/edit/draft.tex" id="draft-form" data-save {{ 'data-unsaved' if error }}>
+{% if readonly %}<p class="demo-note">This is a read-only demonstration: you can change the source and watch the preview, but
+  nothing is saved. In a real space, <em>Save</em> commits the draft to the workspace under your name.</p>{% endif %}
+<form method="post" action="/edit/draft.tex" id="draft-form" {{ '' if readonly else 'data-save' }} {{ 'data-unsaved' if error }}>
   <div class="split">
-    <textarea class="code" name="text" id="draft-text" spellcheck="false" {{ 'readonly' if not user }}>{{ text }}</textarea>
+    <textarea class="code" name="text" id="draft-text" spellcheck="false" aria-label="The LaTeX source of the draft" {{ 'readonly' if not (user or readonly) }}>{{ text }}</textarea>
     <div id="draft-preview">{{ paper_box(html) }}</div>
   </div>
   <input type="hidden" name="base" value="{{ base }}">
   <input type="hidden" name="csrf" value="{{ csrf }}" id="csrf">
   <div class="actions">
-    {% if user %}<button class="primary">Save</button>{% endif %}
+    {% if user %}<button class="primary">Save</button>{% elif readonly %}<button class="primary" type="button" disabled>Save</button>{% endif %}
     <span class="save-state" aria-live="polite"></span>
     <a href="/draft" class="small" data-discard>Discard my changes</a>
   </div>

@@ -77,3 +77,22 @@ def test_refuses_when_there_is_no_release(tmp_path):
     r = install(tmp_path, origin, tmp_path / "ws")
     assert r.returncode != 0 and "found no release" in r.stderr
     assert not (tmp_path / "ws").exists()
+
+
+def test_help_names_the_installer(tmp_path):
+    origin = fake_github(tmp_path)
+    release(origin, "0.9.0")
+    env = {**os.environ, "PHYSICS_HIVE_REPO": str(origin)}
+    env.pop("PHYSICS_HIVE_VERSION", None)
+    r = subprocess.run(["sh", str(REPO / "install.sh"), "--help"], cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "Downloaded PhysicsHive v0.9.0." in r.stdout and "usage: install.sh " in r.stdout
+
+
+def test_reports_an_unreachable_repository(tmp_path):
+    env = {**os.environ, "PHYSICS_HIVE_REPO": str(tmp_path / "nowhere")}
+    env.pop("PHYSICS_HIVE_VERSION", None)
+    r = subprocess.run(["sh", str(REPO / "install.sh"), "--mode", "local", "--yes"], cwd=tmp_path, env=env,
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    assert r.returncode != 0 and "could not list the releases" in r.stderr

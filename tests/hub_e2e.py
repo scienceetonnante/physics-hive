@@ -3,18 +3,21 @@
 # ///
 """Live end-to-end test of shared mode on the Hub. Not run by pytest.
 
-It plays the researcher and a second checkout: create a shared space, write the
-title and goal of project.md, join it from a second folder, run two sessions in
-parallel (each with a reviewed claim, a note and a debrief), merge both (the
-second needs a rebase), answer and tick the first debrief through the Space's
-own backend against the real Hub, check that the next session receives the
-answer and the tick, applies the tick (a result copied into the draft, so the
-claim becomes established) and lists it under "Changed by this session", and
-abort a session.
+It plays a lead and two contributors, all with your own Hugging Face account,
+in two checkouts: the lead creates a shared space (and the test checks that
+every dataset repository has its card) and writes the question and goal of
+project.md; a second checkout joins it; the two checkouts run a session each in
+parallel (each with a reviewed claim, a note, a debrief and a handoff) and merge
+them (the second needs a rebase); the lead answers and ticks the first debrief
+through the Space's own backend against the real Hub; the next session
+receives the answer, the tick, the note and the handoff, applies the tick (a
+result copied into the draft, so the claim becomes established) and lists it
+under "Changed by this session"; a last session is started and aborted.
 
-It creates private scratch repositories and a private Space under your own
-account (named pi-e2e-<timestamp>) and deletes them at the end, unless you pass
---keep. It needs `hf auth login`, uv and git.
+It creates the private scratch repositories of a project named
+pi-e2e-<timestamp> (physics-hive-pi-e2e-<timestamp> and its -traces, -sources
+and -chat-debug datasets, and the Space) under your own account, and deletes
+them at the end, unless you pass --keep. It needs `hf auth login`, uv and git.
 
 Usage: uv run tests/hub_e2e.py [scratch folder] [--keep]
 """
@@ -114,7 +117,7 @@ WS = f"{ME}/physics-hive-{NAME}"  # the workspace dataset; the Space has the sam
 repos = [WS, f"{WS}-traces", f"{WS}-sources", f"{WS}-chat-debug"]
 space = WS
 try:
-    # 1. The researcher creates the space.
+    # 1. The lead creates the space.
     run(S, REPO / "scripts/init.py", "--mode", "create", "--org", ME, "--name", NAME, "--harness", "claude",
         "--dir", A, "--yes", "--space-token", "none")
     files = set(api.list_repo_files(space, repo_type="space"))
@@ -122,8 +125,11 @@ try:
     variables = api.get_space_variables(space)
     assert variables["PHYSICS_HIVE_WORKSPACE"].value == WS, variables
     print("Space deployed with", sorted(files))
+    for repo in repos:  # every dataset repository has its card, with the tag that finds spaces on the Hub
+        card = Path(api.hf_hub_download(repo, "README.md", repo_type="dataset")).read_text()
+        assert "physics-hive" in yaml.safe_load(card.split("---\n")[1])["tags"], (repo, card)
 
-    # 2. The researcher writes the title and the goal of project.md in A, without committing them:
+    # 2. The lead writes the title and the goal of project.md in A, without committing them:
     #    A's session start commits them as theirs and pushes them to main.
     text = (A / "project.md").read_text().replace("# <the question in one line>", "# What is X?")
     (A / "project.md").write_text(text.replace("## Goal\n", "## Goal\n\nFind the leading correction to X.\n"))
@@ -151,7 +157,7 @@ try:
     assert index.count("**CL-") == 2, index
     assert "Changed by this session" in (B / f"sessions/{sb}/debrief.md").read_text()
 
-    # 6. The researcher answers and ticks A's debrief in the Space (its backend, on the real Hub).
+    # 6. The lead answers and ticks A's debrief in the Space (its backend, on the real Hub).
     import backend as sb_backend
 
     space_backend = sb_backend.Backend(sb_backend.HubStore(WS, get_token(), cache=S / "space-cache"))
@@ -159,7 +165,6 @@ try:
     assert space_backend.error is None, space_backend.error
     debrief = next(d for d in space_backend.debriefs() if d["id"] == sa)
     print(space_backend.save_debrief(ME, sa, {1: "Yes, for now."}, {0}, "Start on the disk.", debrief["text"]))
-    print(space_backend.next_session_receives())
 
     # 7. The next session receives the answer and the tick, applies it, and lists it as changed.
     hubgit(B, "pull", "-q", "origin", "main")
@@ -190,7 +195,8 @@ try:
     print("main history:", [c.title for c in api.list_repo_commits(WS, repo_type="dataset")][:10])
     print("traces:", sorted(api.list_repo_files(f"{WS}-traces", repo_type="dataset")))
     meta = json.loads(Path(api.hf_hub_download(f"{WS}-traces", f"{sa}/meta.json", repo_type="dataset")).read_text())
-    print("meta.json:", {k: meta[k] for k in ("session", "pull_request", "merge_commit", "commits", "trace_note")})
+    print("meta.json:", {k: meta[k] for k in ("session", "pull_request", "merge_commit", "commits", "trace_note",
+                                              "trace_redactions", "tokens_by_model")})
     print("discussions:", [(d.num, d.title, d.status) for d in api.get_repo_discussions(WS, repo_type="dataset")])
     print("ALL CHECKS PASSED")
 finally:

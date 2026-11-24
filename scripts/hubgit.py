@@ -7,7 +7,7 @@
 The workspace repository is private, so `git pull` and `git push` need
 credentials. This passes the token of `hf auth login` in an HTTP header for
 this one command, without storing it. It is for git commands a person runs by
-hand; to publish the researcher's edits, `session.py save` is simpler (it
+hand; to publish the lead's edits, `session.py save` is simpler (it
 commits them as theirs and pushes them to main).
 
 Usage: uv run .physics-hive/scripts/hubgit.py <git arguments>

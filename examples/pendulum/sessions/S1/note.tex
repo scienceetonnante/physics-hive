@@ -1,0 +1,210 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[hidelinks]{hyperref}
+\newtheorem{result}{Result}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{theorem}{Theorem}
+\newcommand{\card}[1]{\textsuperscript{\texttt{[#1]}}}
+
+\title{The amplitude correction to the pendulum's period: $a = 1/16$}
+\author{Note on session S1, 9 November 2026}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The session was asked for the coefficient $a$ of the $\theta_0^2$ correction to
+the period of the simple pendulum, $T = T_0\,(1 + a\,\theta_0^2 + O(\theta_0^4))$,
+derived analytically and checked against a numerical evaluation of the exact
+period. The answer is $a = 1/16$, obtained by expanding the exact period (a
+complete elliptic integral) and independently by a Lindstedt--Poincar\'e
+expansion. A separate computation recovers it symbolically and from numerical
+periods; a fit gives $a = 0.0625000000026 \pm 3.5\times10^{-10}$. As a
+by-product, the next coefficient is $11/3072$; it sets the error of the
+order-two formula, $2.2\times10^{-4}$ at $\theta_0 = 0.5$~rad and
+$3.6\times10^{-3}$ at $1$~rad.
+\end{abstract}
+
+\section*{Setting}
+
+A point mass on a massless rigid rod of length $L$ swings in a vertical plane,
+in uniform gravity $g$, without friction. The angle $\theta$ of the rod from the
+downward vertical, in radians, obeys $\ddot\theta + \omega_0^2 \sin\theta = 0$,
+with $\omega_0 = \sqrt{g/L}$. The pendulum is released from rest at
+$\theta = \theta_0$, with $0 < \theta_0 < \pi$, so $\theta_0$ is the amplitude
+(the largest value of $|\theta|$). The small-oscillation period is
+$T_0 = 2\pi/\omega_0 = 2\pi\sqrt{L/g}$, and $T(\theta_0)$ is the exact period.
+The elliptic modulus is $k = \sin(\theta_0/2)$, and the complete elliptic
+integral of the first kind is written with the modulus, as in
+\texttt{conventions.md}:
+$K(k) = \int_0^{\pi/2} d\varphi\,(1 - k^2 \sin^2\varphi)^{-1/2}$. SciPy's and mpmath's \texttt{ellipk} take the parameter $m = k^2$ as argument
+instead: they write $K$ as a function of $m$. The numerical work called them with
+$m = \sin^2(\theta_0/2)$; this note writes $K$ with the modulus $k$ throughout.
+
+The coefficient depends on how the amplitude is measured. The value $1/16$
+holds for $\theta_0$ in radians, and for any measure of the amplitude equal to
+$\theta_0 + O(\theta_0^3)$. The same correction has coefficient $1/4$ when
+expanded in $k^2$ (Eq.~\eqref{eq:Kseries} below), $1/8$ in
+$1 - \cos\theta_0 = 2k^2$, and $(\pi/180)^2/16$ with $\theta_0$ in degrees.
+
+\section{The coefficient of the $\theta_0^2$ correction}
+
+\emph{Exact period.} Energy conservation gives
+$\dot\theta^2 = 4\omega_0^2\,(k^2 - \sin^2(\theta/2))$. The four quarter-swings
+take equal times, and the substitution $\sin(\theta/2) = k \sin\varphi$ turns
+the period integral into a complete elliptic integral:
+\begin{equation}
+  T(\theta_0) = \frac{2}{\omega_0}\int_0^{\theta_0}
+  \frac{d\theta}{\sqrt{k^2 - \sin^2(\theta/2)}}
+  = \frac{4}{\omega_0}\,K(k), \qquad k = \sin\frac{\theta_0}{2}.
+  \label{eq:TK}
+\end{equation}
+Expanding the integrand of $K$ binomially and integrating term by
+term with the Wallis integrals gives
+\begin{equation}
+  \frac{T}{T_0} = \frac{2}{\pi}K(k) = \sum_{n\ge0} c_n^2\,k^{2n}
+  = 1 + \frac{k^2}{4} + \frac{9k^4}{64} + O(k^6),
+  \qquad c_n = \binom{2n}{n}4^{-n}.
+  \label{eq:Kseries}
+\end{equation}
+With $k^2 = \theta_0^2/4 - \theta_0^4/48 + O(\theta_0^6)$, the $\theta_0^2$
+term is $(1/4)(\theta_0^2/4) = \theta_0^2/16$. The remainder is $O(\theta_0^4)$:
+the tail of the series is bounded by a constant times $k^4$, and $T/T_0$ is an
+analytic, even function of $\theta_0$ for $|\theta_0| < \pi$, so no
+$\theta_0^3$ term appears.
+
+\emph{Lindstedt--Poincar\'e.} This route does not use the elliptic integral.
+With $\tau = \omega t$, where $\omega$ is the unknown angular frequency, write
+$\omega^2 = \omega_0^2(1 + \lambda\theta_0^2 + O(\theta_0^4))$ and
+$\theta = \theta_0\cos\tau + \theta_0^3\,u_3(\tau) + O(\theta_0^5)$, with
+$u_3(0) = u_3'(0) = 0$. At order $\theta_0^3$, the cubic term of $\sin\theta$
+gives
+\begin{equation}
+  u_3'' + u_3 = \left(\lambda + \frac18\right)\cos\tau + \frac{1}{24}\cos 3\tau .
+  \label{eq:LP}
+\end{equation}
+A periodic $u_3$ exists only if the resonant $\cos\tau$ term vanishes, so
+$\lambda = -1/8$ and $u_3 = (\cos\tau - \cos3\tau)/192$. Then
+$\omega = \omega_0(1 - \theta_0^2/16 + \dots)$ and
+$T = 2\pi/\omega = T_0(1 + \theta_0^2/16 + \dots)$. This expansion is formal:
+it gives the coefficient but does not bound the remainder, which rests on the
+first route.
+
+\emph{Numerical check.} The exact period was evaluated in two independent ways
+at amplitudes from $10^{-3}$ to $1$~rad: through Eq.~\eqref{eq:TK} with mpmath
+(40 digits) and SciPy, and by integrating $\ddot\theta = -\omega_0^2\sin\theta$
+numerically, without any elliptic integral. The two agree to $10^{-14}$
+relative. A Richardson extrapolation of $(T/T_0 - 1)/\theta_0^2$ to
+$\theta_0 \to 0$ on the 40-digit values gives $1/16$ to $10^{-23}$. A
+least-squares fit of $T/T_0 - 1$ as a polynomial of degree five in
+$\theta_0^2$, on 25 amplitudes in $[0.05, 0.5]$~rad, gives
+$a = 0.0625000000026 \pm 3.5\times10^{-10}$ from the elliptic-integral periods
+and $a = 0.0625000000032 \pm 3.5\times10^{-10}$ from the integrated
+periods.\footnote{The quoted error is the larger of the fit's standard error and
+the change in $a$ between degrees four and five.} The same computation also
+obtains $a = 1/16$ by three symbolic routes: the series of
+Eq.~\eqref{eq:TK}, a term-by-term integration of the integrand of $K$,
+and a Lindstedt--Poincar\'e expansion.
+
+\begin{result}[The $\theta_0^2$ correction to the period]
+Let a simple pendulum (point mass on a massless rigid rod of length $L$, in
+uniform gravity $g$, without friction) be released from rest at the angle
+$\theta_0$ from the downward vertical, in radians, with $0 < \theta_0 < \pi$,
+and let $T_0 = 2\pi\sqrt{L/g}$ be its small-oscillation period. Its period is
+\begin{equation}
+  T = T_0\left(1 + \frac{\theta_0^2}{16} + O(\theta_0^4)\right),
+  \label{eq:result1}
+\end{equation}
+so the coefficient of the $\theta_0^2$ correction is $a = 1/16$.\footnote{Derivation
+D-S1-1 (exact period and Lindstedt--Poincar\'e) and computation C-S1-1
+(symbolic, elliptic-integral and equation-of-motion paths), each confirmed by a
+blind review. The reviews ran their own checks, among them a high-precision
+integration of the equation of motion and Gauss's formula
+$T/T_0 = 1/\mathrm{AGM}(1, \cos(\theta_0/2))$ at 60 digits.}\card{CL-S1-1}
+\end{result}
+
+The correction is positive because $\sin\theta$ is weaker than $\theta$:
+wide swings are slower. At $\theta_0 = 0.5$~rad the period exceeds $T_0$ by
+about $1.6\%$.
+
+\section{The $\theta_0^4$ coefficient and the error of the order-two formula}
+
+Keeping the next terms of Eq.~\eqref{eq:Kseries} and of $k^2$ gives the
+coefficient of $\theta_0^4$: $-1/192 + 9/1024 = 11/3072$. The
+computation obtains this value from two symbolic series of the exact period,
+and its fits recover it from both sets of numerical periods (fitted
+$0.0035807290$, against $11/3072 = 0.00358072917$). Unlike $1/16$, this
+coefficient changes under any change of the amplitude measure of the form
+$\theta_0 \to \theta_0 + O(\theta_0^3)$; it holds for $\theta_0$ itself, in
+radians.
+
+\begin{result}[The $\theta_0^4$ correction to the period]
+For a simple pendulum (point mass on a massless rigid rod of length $L$, in
+uniform gravity $g$, without friction) released from rest at the angle
+$\theta_0$ from the downward vertical, in radians, with $0 < \theta_0 < \pi$, and
+with small-oscillation period $T_0 = 2\pi\sqrt{L/g}$, the period to the next
+order is
+\begin{equation}
+  T = T_0\left(1 + \frac{\theta_0^2}{16} + \frac{11}{3072}\,\theta_0^4
+  + O(\theta_0^6)\right),
+  \label{eq:result2}
+\end{equation}
+so the coefficient of the $\theta_0^4$ correction is $11/3072$.\footnote{Computation
+C-S1-1, confirmed by a blind review. Derivation D-S1-1 also obtains $11/3072$
+from the exact period, but its review examined only the $\theta_0^2$
+coefficient, so it is not counted as evidence for this result.}\card{CL-S1-2}
+\end{result}
+
+The $\theta_0^4$ term gives the error of the order-two formula. Write
+$T_2 = T_0(1 + \theta_0^2/16)$ and
+$T_4 = T_0(1 + \theta_0^2/16 + 11\theta_0^4/3072)$. Table~\ref{tab:error} gives
+their relative errors against the exact period. $T_2$ underestimates $T$ by
+about $(11/3072)\,\theta_0^4$; this prediction matches the actual error to
+$0.4\%$ at $1$~rad. The error of $T_4$ is of order $\theta_0^6$, as expected.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ccccc}
+\hline
+$\theta_0$ (rad) & $T_0$ & $T_2$ & $-\frac{11}{3072}\theta_0^4$ & $T_4$ \\
+\hline
+0.1 & $-6.25\times10^{-4}$ & $-3.58\times10^{-7}$ & $-3.58\times10^{-7}$ & $-2.35\times10^{-10}$ \\
+0.2 & $-2.50\times10^{-3}$ & $-5.73\times10^{-6}$ & $-5.73\times10^{-6}$ & $-1.50\times10^{-8}$ \\
+0.5 & $-1.56\times10^{-2}$ & $-2.24\times10^{-4}$ & $-2.24\times10^{-4}$ & $-3.68\times10^{-6}$ \\
+1.0 & $-6.22\times10^{-2}$ & $-3.60\times10^{-3}$ & $-3.58\times10^{-3}$ & $-2.38\times10^{-4}$ \\
+\hline
+\end{tabular}
+\caption{Relative error $T_{\mathrm{approx}}/T - 1$ of the approximations $T_0$,
+$T_2$ and $T_4$ to the exact period $T$ (computation C-S1-1). The fifth column
+is the leading-order prediction of the error of $T_2$. A negative value means
+that the approximation underestimates the period. The four amplitudes are
+$5.7^\circ$, $11.5^\circ$, $28.6^\circ$ and $57.3^\circ$.}
+\label{tab:error}
+\end{table}
+
+\section{What did not work}
+
+Nothing failed, but two limits are worth knowing. The Lindstedt--Poincar\'e
+expansion was carried only to the $\theta_0^2$ coefficient, so $11/3072$ rests
+on the elliptic-integral series and the numerical fits. And the argument
+convention of \texttt{ellipk} is a trap: passing the modulus $k$ where the parameter
+$m = k^2$ is expected gives $(T/T_0 - 1)/\theta_0^2 \approx 12.5$ at
+$\theta_0 = 0.01$~rad instead of $0.0625$.
+
+\section{Open question and next steps}
+
+The goal of \texttt{project.md} is reached: the coefficient is derived by two
+analytic routes and checked numerically, and both supporting artefacts were
+confirmed by blind reviews. Neither result is in the draft yet; that is for the
+researcher to decide. Result~2 rests on a single reviewed artefact in the
+record; if the $\theta_0^4$ term is wanted in the draft, a blind review of
+derivation D-S1-1 against Eq.~\eqref{eq:result2} would add a second one. The
+$\theta_0^6$ coefficient, $173/737280$, appears in the computation and was
+reproduced by both reviews, but no claim records it. \texttt{project.md} lists
+no further step: whether the project is complete, or what it should study next,
+is the open question for the researcher.
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

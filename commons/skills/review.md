@@ -19,7 +19,7 @@ Run an independent review of an artefact. The `reviewer` sub-agent checks whethe
    - the output path and the session ID;
    - if useful as cross-checks, a few established statements (statements only) and a pointer to `conventions.md` and to the references the target cites.
 
-   **Blind and without priors.** Do not pass the card's path, the model or operator that produced the work, or the name of a human author. Do not pass earlier verdicts, objections or framing. The reviewer reads the target directly.
+   **Blind and without priors.** Do not pass the card's path, the model or contributor that produced the work, or the name of a human author. Do not pass earlier verdicts, objections or framing. The reviewer reads the target directly.
 
 4. **Integrate** (AGENTS.md §6):
    - Read the verdict and check that the review file exists.

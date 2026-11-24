@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import session_view %}
+{% from "macros.html" import session_view with context %}
 {% block title %}Review{% endblock %}
 {% block content %}
 <div class="narrow">
@@ -10,8 +10,13 @@
   {% if not any %}
   <h1 class="page-title" style="margin-bottom:18px">Review</h1>
   <div class="sheet md">
-    <p><b>No session has ended yet.</b></p>
-    <p>Before the first session, write the question in one line as the title of <a href="/project">project.md</a> and the goal under <em>Goal</em> (the other sections can wait), and list a few seed papers in <a href="/literature">literature/seeds.md</a> if you have some. Then run <code>/session-run</code> in the terminal.</p>
+    <p><b>No session has ended yet.</b> When one ends, this page shows its note and its debrief: the questions it
+      asks you and the changes it proposes, which you answer here.</p>
+    {% if unwritten %}
+    <p>Before the first session, write the question in one line as the title of <a href="/project">project.md</a> and the goal under <em>Goal</em> (the other sections can wait), and list a few seed papers in <a href="/literature">literature/seeds.md</a> if you have some. Then run <code>/session-run</code> in the terminal, in the workspace folder. <a href="/help">How this works</a></p>
+    {% else %}
+    <p>The question and the goal are written on the <a href="/project">Project</a> page. To start the first session, run <code>/session-run</code> in the terminal, in the workspace folder. <a href="/help">How this works</a></p>
+    {% endif %}
   </div>
   {% elif not view %}
   <h1 class="page-title" style="margin-bottom:8px">Review</h1>

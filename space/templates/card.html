@@ -2,37 +2,54 @@
 {% from "macros.html" import card_row %}
 {% block title %}{{ card.id }}{% endblock %}
 {% block content %}
+{# The reader usually arrives from a result of a note, which already gave the claim and its gist: the page leads with
+   the material behind the claim (the derivation, the computation's output and code, the reviews), and folds the
+   summaries and the card's own text. #}
 <div class="narrow">
   <p class="record-note">{% if card.session %}<a href="/session/{{ card.session }}">← Session {{ card.session }}</a> · {% endif %}a card of the session record</p>
   <div class="sheet">
-    <div class="filebar"><div class="fleft"><span class="fname">{{ card.id }}</span>
+    <div class="filebar"><div class="fleft"><h1 class="fname" style="margin:0">{{ card.id }}</h1>
       {% if card.kind == "dead-end" %}<span class="chip">dead end</span>{% endif %}</div></div>
     <div class="claim-box">{{ card.statement | md_inline }}</div>
     {% if row.warning %}<div class="warn">{{ row.warning | md_inline }}</div>{% endif %}
     {% if card.kind == "claim" %}
-    <dl class="facts" style="margin:0 0 16px">
+    <dl class="facts" style="margin:0 0 12px">
       <dt>Evidence</dt><dd class="tone-{{ row.tone }}">{{ row.evidence_text }}</dd>
       <dt>Draft</dt><dd>{{ row.place }}</dd>
     </dl>
     {% endif %}
-    {% if card.body.strip() %}<div class="md">{{ card.body | md }}</div>{% endif %}
-    <p class="fmeta" style="margin-top:14px">Origin: {{ origin | md_inline }}{% if trace %} · <a href="{{ trace }}">trace of {{ card.session }}</a>{% endif %}</p>
+    {% if card.body.strip() and not evidence %}<div class="md">{{ card.body | md }}</div>{% endif %}
+    <p class="fmeta" style="margin:12px 0 0">Origin: {{ origin | md_inline }}{% if trace %} · <a href="{{ trace }}">trace of {{ card.session }}</a>{% endif %}</p>
   </div>
 
-  {% if card.kind == "claim" %}
-  <div class="sheet">
-    <div class="label">Evidence</div>
-    {% for item in evidence %}
-    <div class="evidence">
-      <h3 style="margin:0 0 6px;font-size:1rem">{{ item.title | md_inline }}</h3>
-      <div class="md">{{ (item.summary or "(empty summary)") | md }}</div>
-      {% for f in item.files %}<details><summary>Full material: {{ f.path }}</summary><pre>{{ f.text }}</pre></details>{% endfor %}
-      {% for review in item.reviews %}<details><summary>{{ review.title }}</summary><div class="md">{{ review.body | md }}</div></details>{% endfor %}
+  {% for item in evidence %}
+  <div class="sheet material">
+    <h2 class="material-h">{{ item.label }}</h2>
+    <p class="fmeta tone-{{ item.tone }}" style="margin:0 0 12px">{{ item.outcome }}{% if item.attached_by %}. Attached to this claim by the review {{ item.attached_by }}{% endif %}.</p>
+    {% for path in item.tex %}
+    <div class="actions" style="margin:0 0 14px"><a class="btn primary" href="/file/{{ path }}?rendered=1">Read the derivation</a>
+      <a class="small" href="/file/{{ path }}">LaTeX source</a></div>
+    {% endfor %}
+    {% for f in item.output %}<div class="label">Output · {{ f.path }}</div><pre>{{ f.text }}</pre>{% endfor %}
+    {% for f in item.code %}<div class="label">Code · {{ f.path }}</div><pre>{{ f.text }}</pre>{% endfor %}
+    {% for f in item.data %}<details><summary class="small">Data · {{ f.path }}</summary><pre>{{ f.text }}</pre></details>{% endfor %}
+    {% for review in item.reviews %}
+    <div class="review-body">
+      <div class="label">{{ review.title }} · <span class="tone-{{ review.tone }}">{{ review.verdict }}</span></div>
+      <div class="md">{{ review.body | md }}</div>
     </div>
     {% else %}
-    <p class="muted" style="margin:0">No evidence yet: no derivation or computation supports this claim.</p>
+    <p class="muted">No review of {{ item.id }} yet.</p>
     {% endfor %}
+    <details><summary class="small">The summary of {{ item.id }}, by the agent who wrote it</summary><div class="md">{{ (item.summary or "(empty summary)") | md }}</div></details>
   </div>
+  {% endfor %}
+  {% if card.kind == "claim" and not evidence %}
+  <p class="muted">No evidence yet: no derivation or computation supports this claim.</p>
+  {% endif %}
+
+  {% if evidence and card.body.strip() %}
+  <div class="sheet"><details><summary class="small">The card's own text</summary><div class="md">{{ card.body | md }}</div></details></div>
   {% endif %}
 
   {% for label, rows in related %}

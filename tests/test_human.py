@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 
 from cards import Workspace
-from conftest import DEBRIEF
+from conftest import DEBRIEF, result
 from human import (
     History,
     changed_by_session,
@@ -79,7 +79,7 @@ def test_received_counts_what_no_session_received(toy):
     toy.commit("[S1] debrief")
     toy.received("S1", git(toy.root, "rev-parse", "HEAD~1"), "2026-10-01T10:00:00Z", {})
 
-    # The researcher answers S1, ticks two lines, writes a note, and edits project.md.
+    # The lead answers S1, ticks two lines, writes a note, and edits project.md.
     path = toy.root / "sessions/S1/debrief.md"
     path.write_text(set_note(set_ticks(set_answer(path.read_text(), 1, "Walks only."), {0: True, 2: True}), "Disk."))
     (toy.root / "project.md").write_text((toy.root / "project.md").read_text() + "2. A second step.\n")
@@ -98,7 +98,7 @@ def test_received_counts_what_no_session_received(toy):
     assert "      No answer yet." in text and "✓ Copy Result 1 of note S1" in text and "Your note: Disk." in text
     assert "project.md       +1 −0 lines" in text and "conventions.md   unchanged" in text
 
-    # S2 starts and records what it received; then the researcher answers question 2 and ticks one more line.
+    # S2 starts and records what it received; then the lead answers question 2 and ticks one more line.
     base2 = toy.commit("[S2] apply the lines ticked in the S1 debrief")
     toy.received("S2", base2, "2026-10-02T10:00:00Z", received_record(news))
     path.write_text(set_ticks(set_answer(path.read_text(), 2, "Agreed."), {1: True}))
@@ -119,8 +119,8 @@ def test_changed_by_session(toy):
     toy.commit("[S3] compute(C-S3-1): fix the time convention")
     (toy.root / "draft.tex").write_text((toy.root / "draft.tex").read_text() + "% copied\n")
     toy.commit("[S3] apply the lines ticked in the S2 debrief")
-    (toy.root / "project.md").write_text((toy.root / "project.md").read_text() + "Researcher's line.\n")
-    toy.commit("Researcher's edits")
+    (toy.root / "project.md").write_text((toy.root / "project.md").read_text() + "The lead's line.\n")
+    toy.commit("The lead's edits")
     text = changed_by_session(History(toy.root, None), "S3", base)
     assert "- `project.md`: unchanged." in text
     assert "- `draft.tex` (+1 −0 lines): as you ticked in S2." in text
@@ -138,6 +138,59 @@ def test_changed_by_session(toy):
     toy.commit("[S3] draft: write the introduction, as the next step asks")
     text = changed_by_session(History(toy.root, None), "S3", base)
     assert "+Line 58." in text and "+Line 59." not in text and "… 11 more changed lines: read them in draft.tex." in text
+
+
+def test_changed_by_session_shows_the_net_change_of_conventions(toy):
+    toy.git_init()
+    base = toy.commit("base")
+    conventions = toy.root / "conventions.md"
+    conventions.write_text("# Conventions\n\n- The pendulum has mass $m$.\n- Time is $t$.\n")
+    toy.commit("[S3] conventions.md: write the notation")
+    conventions.write_text(conventions.read_text() + "- Units: SI.\n")
+    toy.commit("The lead's edits")
+    conventions.write_text(conventions.read_text().replace("mass $m$", "mass $M$"))
+    toy.commit("[S3] conventions.md: call the mass M, as the flag asks")
+    text = changed_by_session(History(toy.root, None), "S3", base)
+    # One diff from before the first commit to after the last, without the lead's line in between.
+    assert ("- `conventions.md` (+3 −0 lines): conventions.md: write the notation; "
+            "conventions.md: call the mass M, as the flag asks.") in text
+    assert "+- The pendulum has mass $M$." in text and "+- Time is $t$." in text
+    assert "$m$" not in text and "Units" not in text
+
+
+def test_changed_by_session_shows_only_the_own_wording_of_the_draft(toy):
+    toy.git_init()
+    base = toy.commit("base")
+    draft = toy.root / "draft.tex"
+    draft.write_text(draft.read_text().replace("\\section{Results}\n", "\\section{Results}\nWe study walks.\n"))
+    toy.commit("[S3] draft: open the results section")
+    draft.write_text(draft.read_text().replace("\\end{document}", "% Copied from note S2.\n" + result("CL-S2-1")
+                                               + "\\end{document}"))
+    toy.commit("[S3] apply the lines ticked in the S2 debrief")
+    draft.write_text(draft.read_text().replace("\\section{Results}\nWe study walks.",
+                                               "\\section{Results on the disk}\nWe study random walks."))
+    toy.commit("[S3] draft: say which walks")
+    text = changed_by_session(History(toy.root, None), "S3", base)
+    # The counts cover all the session's commits; the diff only its own wording, net, without the copied result.
+    assert ("- `draft.tex` (+6 −1 lines): draft: open the results section; as you ticked in S2; "
+            "draft: say which walks.") in text
+    own = text.split("The session's own wording in the draft:")[1]
+    assert "-\\section{Results}" in own and "+\\section{Results on the disk}" in own
+    assert "+We study random walks." in own and "We study walks." not in own
+    assert "Copied" not in own and "CL-S2-1" not in own and "Statement." not in own
+
+
+def test_changed_by_session_a_file_changed_then_restored_is_unchanged(toy):
+    toy.git_init()
+    base = toy.commit("base")
+    conventions = toy.root / "conventions.md"
+    before = conventions.read_text()
+    conventions.write_text(before + "- Lengths in units of the radius.\n")
+    toy.commit("[S3] conventions.md: measure lengths in units of the radius")
+    conventions.write_text(before)
+    toy.commit("[S3] conventions.md: go back to SI units")
+    text = changed_by_session(History(toy.root, None), "S3", base)
+    assert "- `conventions.md`: unchanged." in text and "```diff" not in text
 
 
 def test_the_templates_compile_to_pdf():

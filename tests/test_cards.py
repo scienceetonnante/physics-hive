@@ -80,7 +80,7 @@ def test_evidence_from_artefacts_reviews_and_human_verifications(toy):
     toy.review("D-S3-2_R-S3-1", "confirmed", ["CL-S3-2"])
     toy.review("D-S3-2_R-S7-1", "confirmed", ["CL-S7-1"])  # attaches D-S3-2 to a later claim
     toy.computation("C-S5-1", ["CL-S3-2"])
-    toy.review("C-S5-1_R-S8-1", "confirmed", ["CL-S3-2"], human="lead")  # the researcher checked it by hand
+    toy.review("C-S5-1_R-S8-1", "confirmed", ["CL-S3-2"], human="lead")  # the lead checked it by hand
     ws = Workspace(toy.root)
 
     ev = ws.evidence("CL-S3-2")
@@ -181,9 +181,9 @@ def test_session_rules_apply_to_the_sessions_own_commits(toy):
     (toy.root / "literature/seeds.md").write_text("# Seeds\n")
     toy.git_init()
     base = toy.commit("base")
-    # The researcher answers the S1 debrief while S2 runs (local mode, same branch): that is theirs.
+    # The lead answers the S1 debrief while S2 runs (local mode, same branch): that is theirs.
     (toy.root / "sessions/S1/debrief.md").write_text(DEBRIEF.format(s="S1").replace("> **Note:**", "> **Note:** hi"))
-    toy.commit("Researcher's edits")
+    toy.commit("The lead's edits")
     assert run_checks(Workspace(toy.root), base=base, session="S2").errors == []
     # The session itself touches another session's folder, the seeds, project.toml and a foreign ID.
     (toy.root / "sessions/S1/log.md").write_text("tampered\n")
@@ -194,7 +194,7 @@ def test_session_rules_apply_to_the_sessions_own_commits(toy):
     toy.commit("[S2] tamper")
     messages = [str(e) for e in run_checks(Workspace(toy.root), base=base, session="S2").errors]
     assert any("sessions/S1/log.md" in m and "belongs to session S1" in m for m in messages)
-    assert any("literature/seeds.md" in m and "only the researcher" in m for m in messages)
+    assert any("literature/seeds.md" in m and "only the lead" in m for m in messages)
     assert any("CL-S4-1" in m and "belongs to S4" in m for m in messages)
     assert any(".physics-hive/VERSION" in m for m in messages)
     assert not any("sessions/S1/debrief.md" in m for m in messages)
@@ -205,9 +205,9 @@ def test_check_on_the_draft_blames_only_the_session(toy):
     toy.card("CL-S1-2")
     confirmed(toy, "CL-S1-1")
     toy.git_init()
-    # The researcher puts an unreviewed claim in the draft as a result: a warning, never the session's error.
+    # The lead puts an unreviewed claim in the draft as a result: a warning, never the session's error.
     toy.draft(result("CL-S1-2"))
-    base = toy.commit("Researcher's edit of the draft")
+    base = toy.commit("The lead's edit of the draft")
     report = run_checks(Workspace(toy.root), base=base, session="S2")
     assert report.errors == [] and any("CL-S1-2" in p.message for p in report.problems)
     # A session copies a reviewed result: fine. An unreviewed one, or an unknown card: errors.

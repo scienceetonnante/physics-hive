@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v7
+      # The init and session scripts commit in the workspaces the tests create.
+      - name: Set a git identity
+        run: |
+          git config --global user.name "PhysicsHive tests"
+          git config --global user.email "tests@example.com"
+      - name: Render every harness
+        run: python3 commons/render.py --hosts=claude,codex,opencode,pi --target="$RUNNER_TEMP/render"
+      - name: Run the tests
+        run: uv run --no-project --with pytest --with httpx --with-requirements space/requirements.txt --with "mcp>=1.12,<2" pytest -q tests/

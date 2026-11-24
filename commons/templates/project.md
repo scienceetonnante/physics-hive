@@ -1,10 +1,12 @@
 # <the question in one line>
 
 <!--
-This file is yours. Write the title and the goal before the first session; the
-other sections can wait. A session takes the first next step as its brief.
-Agents change this file only to apply a line you ticked in a debrief, and to
-remove the step their session finished.
+This file is yours. Before the first session, replace the title with the
+question in one line, and write the goal. Approach and Next steps can wait: a
+session takes the first next step as its brief, and while there is none, you
+give the brief yourself when the session starts. Agents change this file only
+to apply a line you ticked in a debrief, and to remove the step their session
+finished.
 -->
 
 ## Goal

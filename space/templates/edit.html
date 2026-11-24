@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import sign_in_first %}
+{% from "macros.html" import sign_in_first with context %}
 {% block title %}Edit {{ path }}{% endblock %}
 {% block content %}
 <div class="narrow">
@@ -8,12 +8,14 @@
       <span class="fmeta">Markdown, with equations in LaTeX between $…$. Saving commits the file under your name.</span></div>
   </div>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
-  <form method="post" action="/edit/{{ path }}" data-save {{ 'data-unsaved' if error }}>
-    <textarea class="code" name="text" spellcheck="false" {{ 'readonly' if not user }}>{{ text }}</textarea>
+  {% if readonly %}<p class="demo-note">This is a read-only demonstration: you can change the text, but it is not saved.
+    In a real space, <em>Save</em> commits the file to the workspace under your name.</p>{% endif %}
+  <form method="post" action="/edit/{{ path }}" {{ '' if readonly else 'data-save' }} {{ 'data-unsaved' if error }}>
+    <textarea class="code" name="text" spellcheck="false" aria-label="The text of {{ path }}" {{ 'readonly' if not (user or readonly) }}>{{ text }}</textarea>
     <input type="hidden" name="base" value="{{ base }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="actions">
-      {% if user %}<button class="primary">Save</button>{% endif %}
+      {% if user %}<button class="primary">Save</button>{% elif readonly %}<button class="primary" type="button" disabled>Save</button>{% endif %}
       <span class="save-state" aria-live="polite"></span>
       <a href="{{ back }}" class="small" data-discard>Discard my changes</a>
     </div>

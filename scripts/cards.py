@@ -208,7 +208,7 @@ class Paper:
 
     @property
     def rating(self) -> str:
-        """The agent's estimate of how much the paper matters here (the researcher's is in ratings.yaml)."""
+        """The agent's estimate of how much the paper matters here (the lead's is in ratings.yaml)."""
         return str(self.meta.get("rating") or "").strip().lower()
 
 
@@ -587,7 +587,7 @@ def result_problems(ws: Workspace, card_id: str) -> list[str]:
 
     The card must be a claim, neither refuted nor revised, with at least one
     supporting artefact that has a confirming review (by an agent, or a human
-    verification). Whether the evidence is robust enough is the researcher's
+    verification). Whether the evidence is robust enough is the lead's
     judgment, expressed by ticking the line that copies the result.
     """
     card = ws.cards.get(card_id)

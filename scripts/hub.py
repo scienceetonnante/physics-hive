@@ -7,7 +7,10 @@ repositories of project <name> are named physics-hive-<name> (the workspace and
 the Space, which the Hub keeps apart) and physics-hive-<name>-traces, -sources
 and -chat-debug. The Space's card on the Hub is titled "[Physics Hive] <name>"
 and shows the question of project.md, which `open_session` updates when the
-researcher changes it. A session is a
+lead changes it. Each dataset repository gets a card (its README.md) at
+creation, which says what it holds and carries the tag physics-hive; nothing
+in the method reads these cards, and spaces created without them work the
+same. A session is a
 pull request on the workspace repository: the scripts open it as a draft (its
 number is the session number), push the session branch to `refs/pr/<n>`, mark
 it ready and merge it. The Hub squashes a pull request into one commit when it
@@ -34,6 +37,7 @@ import os
 import re
 import shutil
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 # common before huggingface_hub: importing common sets the environment that huggingface_hub reads on import.
@@ -48,6 +52,8 @@ SPACE_TOKEN_ENV = "PHYSICS_HIVE_SPACE_TOKEN"  # token stored in a new Space, ins
 REPO_PREFIX = "physics-hive-"  # the repositories of project <name> are <org>/physics-hive-<name>[-traces, ...]
 CARD_TITLE = "[Physics Hive] {name}"
 CARD_DESCRIPTION_LIMIT = 60  # the Hub refuses a longer short_description
+CARD_TAG = "physics-hive"  # in the metadata of every repository of a space, so that spaces can be found on the Hub
+PROJECT_URL = "https://github.com/scienceetonnante/physics-hive"
 SPACE_STAMP = "METHOD"  # in the Space repository: the stamp of the app it runs (space_app_stamp)
 
 disable_progress_bars()  # the scripts' output is read by agents; keep it to what they need
@@ -55,10 +61,15 @@ disable_progress_bars()  # the scripts' output is read by agents; keep it to wha
 
 # ----- identity and git authentication -----
 
+# `hf` comes with huggingface_hub, which the scripts install for themselves; `uv tool run` runs it without installing it.
+LOGIN_COMMAND = ("`hf auth login`, or `uv tool run --from huggingface_hub hf auth login` if the `hf` command is not "
+                 "installed")
+LOGIN_HINT = f"you are not logged in to Hugging Face. Log in first, in a terminal: {LOGIN_COMMAND}"
+
 
 def api() -> HfApi:
     if not get_token():
-        raise ScriptError("you are not logged in to Hugging Face; run `hf auth login` first")
+        raise ScriptError(LOGIN_HINT)
     return HfApi()
 
 
@@ -72,7 +83,8 @@ def whoami() -> dict:
                 f"the Hub refused the token in the environment variable HF_TOKEN ({exc}). It takes precedence over "
                 "`hf auth login`: replace it with a valid token where your shell sets it, or remove it, then "
                 "restart your harness so that it reads the new environment") from exc
-        raise ScriptError(f"could not identify you on the Hub ({exc}); run `hf auth login`") from exc
+        raise ScriptError(f"could not identify you on the Hub ({exc}). Log in again in a terminal: "
+                          f"{LOGIN_COMMAND}") from exc
 
 
 def username() -> str:
@@ -93,7 +105,7 @@ def git_env() -> dict:
     """Environment that makes git send the Hub token, without storing it anywhere."""
     token = get_token()
     if not token:
-        raise ScriptError("you are not logged in to Hugging Face; run `hf auth login` first")
+        raise ScriptError(LOGIN_HINT)
     auth = base64.b64encode(f"{username()}:{token}".encode()).decode()
     return {
         "GIT_CONFIG_COUNT": "1",
@@ -138,6 +150,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     for key in ("workspace", "traces", "sources", "chat_debug"):
         hf.create_repo(repos[key], repo_type=DATASET, private=True)
         say(f"Created private dataset {repos[key]}")
+    upload_dataset_cards(repos)
 
     env = git_env()
     git(target, "init", "-q", "-b", "main")
@@ -145,8 +158,11 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
     git(target, "fetch", "-q", "origin", env=env)
     git(target, "reset", "-q", "origin/main")
     # The Hub's default .gitattributes routes many extensions to LFS; a workspace
-    # holds small text files and plain git is simpler for every operator.
+    # holds small text files and plain git is simpler for every contributor.
     git(target, "rm", "-q", "--cached", "--ignore-unmatch", ".gitattributes")
+    # The workspace's card on the Hub, staged so that the first commit includes it. No script reads it.
+    (target / "README.md").write_text(dataset_card("workspace", repos), encoding="utf-8")
+    git(target, "add", "--", "README.md")
     first_commit(target, f"Initialize PhysicsHive workspace (shared space {repos['workspace']})")
     git(target, "push", "-q", "origin", "HEAD:main", env=env)
     git(target, "branch", "-q", "--set-upstream-to=origin/main", check=False)
@@ -155,7 +171,7 @@ def create_shared(target: Path, org: str, name: str, harnesses: list[str], chat_
 
     deploy_space(target, repos, secret)
     say("")
-    say(f"Shared space created: {repos['workspace']} (method {version}). You are its researcher ([people] leads in project.toml).")
+    say(f"Shared space created: {repos['workspace']} (method {version}). You are its lead ([people] leads in project.toml).")
     say(f"  Workspace: {repo_url(repos['workspace'])}")
     say(f"  Space:     {hf_constants.ENDPOINT}/spaces/{repos['space']}")
     host = space_host(repos["space"])
@@ -176,6 +192,70 @@ def repo_names(org: str, name: str) -> dict:
 def project_name(repo_id: str) -> str:
     """The project's name from its workspace repository: org/physics-hive-x gives x."""
     return repo_id.split("/")[-1].removeprefix(REPO_PREFIX)
+
+
+DATASET_CARDS = {
+    "workspace": (
+        "This dataset repository is the workspace of the PhysicsHive project **{name}**: the research "
+        "files that the agents and the lead write. `project.md` states the question and the plan, "
+        "`draft.tex` holds the best current state of the research, the folders `claims/`, `derivations/`, "
+        "`computations/`, `critiques/` and `literature/` hold the record behind it, and `sessions/` holds each "
+        "session's brief, note and debrief. Each session is a pull request on this repository.\n\n"
+        "The project's other repositories:\n\n"
+        "- the Space [{space}]({space_url}), the web app where the lead reads each session and answers it;\n"
+        "- [{traces}]({traces_url}), the agents' transcripts, one folder per session;\n"
+        "- [{sources}]({sources_url}), the source files of the papers the agents downloaded.\n"),
+    "traces": (
+        "This dataset repository holds the agent traces of the PhysicsHive project **{name}**, whose "
+        "workspace is [{workspace}]({workspace_url}). Each folder `S<n>/` is one session: `trace.jsonl` is the "
+        "record the agents' harness kept of it (prompts, responses, tool calls, and the model's reasoning when "
+        "the harness stores it), and `meta.json` says who ran it, with which harness, models and method version, "
+        "which commits it made and how many tokens each model used. `session.py end` uploads them.\n\n"
+        "Before the upload, the export replaces the secrets it recognises (tokens of known formats, and the "
+        "values of the environment's token variables) with a marker such as `[REDACTED:huggingface-token]`. "
+        "This lowers the risk but does not guarantee that a trace holds no secret: read the traces before you "
+        "make this repository public.\n"),
+    "sources": (
+        "This dataset repository holds the source files (LaTeX, or PDF when there is no source) of the "
+        "papers that the agents of the PhysicsHive project **{name}** downloaded, one folder per paper. The "
+        "workspace, [{workspace}]({workspace_url}), keeps them out of git because of their size; each session "
+        "start downloads them into `literature/sources/`. The papers keep their own licences: check them before "
+        "you make this repository public.\n"),
+    "chat_debug": (
+        "This dataset repository belongs to the PhysicsHive project **{name}**, whose workspace is "
+        "[{workspace}]({workspace_url}). It is reserved for the debugging logs of a chat assistant in the "
+        "project's Space. The current version of PhysicsHive does not write to it.\n"),
+}
+DATASET_TITLES = {"workspace": "", "traces": " (traces)", "sources": " (paper sources)", "chat_debug": " (chat logs)"}
+
+
+def dataset_card(key: str, repos: dict) -> str:
+    """The README.md of one dataset repository of a space: what it holds, which project it belongs to, and
+    the tag that lets the Hub's search find spaces. The dataset viewer is off: these files are not tables."""
+    name = project_name(repos["workspace"])
+    title = CARD_TITLE.format(name=name) + DATASET_TITLES[key]
+    fields = {"name": name}
+    for k in ("workspace", "traces", "sources", "space"):
+        fields[k] = repos.get(k, "")
+        fields[f"{k}_url"] = f"{hf_constants.ENDPOINT}/spaces/{fields[k]}" if k == "space" else repo_url(fields[k])
+    body = DATASET_CARDS[key].format(**fields)
+    return (f"---\npretty_name: {json.dumps(title, ensure_ascii=False)}\ntags:\n- {CARD_TAG}\nviewer: false\n---\n\n"
+            f"# {title}\n\n{body}\nMade with [PhysicsHive]({PROJECT_URL}), with which a small team of scientists "
+            "steers AI coding agents on one problem in theoretical physics or mathematics.\n")
+
+
+def upload_dataset_cards(repos: dict) -> None:
+    """Give the traces, sources and chat_debug repositories their card. A failure only warns: the cards are
+    for people who open the repositories on the Hub, and nothing in the method reads them."""
+    hf = api()
+    for key in ("traces", "sources", "chat_debug"):
+        if not repos.get(key):
+            continue
+        try:
+            hf.upload_file(path_or_fileobj=dataset_card(key, repos).encode("utf-8"), path_in_repo="README.md",
+                           repo_id=repos[key], repo_type=DATASET, commit_message="Describe this repository")
+        except (HfHubHTTPError, OSError) as exc:
+            warn(f"warning: could not write the card of {repos[key]} ({exc}); the space works without it.")
 
 
 def space_secret(choice: str) -> dict | None:
@@ -216,7 +296,7 @@ def deploy_space(target: Path, repos: dict, secret: dict | None) -> None:
         say(f"repository {repos['workspace']}. Until then the Space cannot read the workspace.")
         return
     hf.add_space_secret(repos["space"], "HF_TOKEN", secret["token"],
-                        description="Token the Space uses to read the workspace and save the researcher's edits")
+                        description="Token the Space uses to read the workspace and save the lead's edits")
     say(f"The Space secret HF_TOKEN holds {secret['label']}. The Space reads the workspace and saves edits with it.")
     if not secret["env"]:
         say(f"To give new Spaces a dedicated token instead of yours, set {SPACE_TOKEN_ENV} before creating them.")
@@ -367,9 +447,9 @@ def fetch(root: Path, env: dict | None = None) -> None:
 
 
 def push_researcher_edits(root: Path, is_researcher_path, env: dict | None = None) -> list[str]:
-    """Push to main the commits of local main that are not on the Hub, if they only change the researcher's files.
+    """Push to main the commits of local main that are not on the Hub, if they only change the lead's files.
 
-    They are the researcher's edits, committed by `session.py`. If main moved on the Hub meanwhile (for instance
+    They are the lead's edits, committed by `session.py`. If main moved on the Hub meanwhile (for instance
     an edit in the Space), they are rebased on it first. Returns the files pushed.
     """
     env = env if env is not None else git_env()
@@ -380,16 +460,16 @@ def push_researcher_edits(root: Path, is_researcher_path, env: dict | None = Non
     others = [p for p in changed if not is_researcher_path(p)]
     if others:
         listing = ", ".join(others[:8]) + (", …" if len(others) > 8 else "")
-        raise ScriptError(f"main has commits that are not on the Hub and change files other than the researcher's "
+        raise ScriptError(f"main has commits that are not on the Hub and change files other than the lead's "
                           f"({listing}); move them to a pull request, or drop them with "
                           "`git reset --hard origin/main`")
     if not is_ancestor(root, "origin/main"):
         proc = git(root, "rebase", "-q", "origin/main", check=False)
         if proc.returncode != 0:
             git(root, "rebase", "--abort", check=False)
-            raise ScriptError(f"the researcher's edits of {', '.join(changed)} conflict with changes made on the Hub "
+            raise ScriptError(f"the lead's edits of {', '.join(changed)} conflict with changes made on the Hub "
                               f"since (for instance in the Space):\n{(proc.stderr or proc.stdout).strip()}\n"
-                              "Nothing was pushed and the checkout is unchanged. Tell the operator; resolving it "
+                              "Nothing was pushed and the checkout is unchanged. Tell the contributor; resolving it "
                               "needs their decision.")
     git(root, "push", "-q", "origin", "HEAD:main", env=env)
     fetch(root, env)
@@ -414,7 +494,7 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
         )
     hf = api()
     description = (f"Session claimed by **{user}** ({harness}, {model}) on {now_iso()}.\n\n"
-                   "The brief will replace this text once the operator confirms it.")
+                   "The brief will replace this text once the contributor confirms it.")
     pr = hf.create_pull_request(repos["workspace"], title=f"[draft] session by {user}",
                                 description=description, repo_type=DATASET)
     number = pr.num
@@ -430,27 +510,39 @@ def open_session(ws, root: Path, harness: str, model: str) -> dict:
             "branch": branch, "base": base, "operator": user}
 
 
+# Files of the sources repository that are not paper sources: the Hub's .gitattributes and the repository's card.
+# As ignore patterns they match only these paths at the root, so a paper's own README.md is still downloaded.
+SOURCES_NOT_PAPERS = [".gitattributes", "README.md"]
+
+
 def sync_sources_down(root: Path, repos: dict) -> None:
+    """Download the paper sources into literature/sources/.
+
+    The repository's files are listed first: when it holds no paper yet, nothing is downloaded, because
+    snapshot_download would print a warning that every file was ignored."""
     if not repos.get("sources"):
         return
     try:
         from huggingface_hub import snapshot_download
 
+        files = api().list_repo_files(repos["sources"], repo_type=DATASET)
+        if not [path for path in files if path not in SOURCES_NOT_PAPERS]:
+            return
         snapshot_download(repos["sources"], repo_type=DATASET, local_dir=root / "literature" / "sources",
-                          ignore_patterns=[".gitattributes"])
+                          ignore_patterns=SOURCES_NOT_PAPERS)
     except Exception as exc:  # an empty or unreachable sources repo must not block a session
         warn(f"note: could not download paper sources from {repos['sources']} ({type(exc).__name__}); continuing")
 
 
 def sync_sources_up(root: Path, repos: dict, session: str) -> None:
     folder = root / "literature" / "sources"
-    files = [p for p in folder.rglob("*")
-             if p.is_file() and ".cache" not in p.parts and p.name != ".gitattributes"] if folder.is_dir() else []
+    files = [p for p in folder.rglob("*") if p.is_file() and ".cache" not in p.parts
+             and p.name != ".gitattributes" and p.relative_to(folder).as_posix() != "README.md"] if folder.is_dir() else []
     if not repos.get("sources") or not files:
         return
     api().upload_folder(repo_id=repos["sources"], repo_type=DATASET, folder_path=folder,
                         commit_message=f"[{session}] paper sources",
-                        ignore_patterns=[".cache/*", "*.lock", ".gitattributes"])
+                        ignore_patterns=[".cache/*", "*.lock", ".gitattributes", "README.md"])
     say(f"Uploaded paper sources to {repos['sources']}.")
 
 
@@ -465,7 +557,7 @@ def publish_brief(ws, root: Path, active: dict, brief_text: str, goal: str) -> N
     hf.rename_discussion(repos["workspace"], active["pr"], f"[{active['id']}] {goal}"[:200], repo_type=DATASET)
     details = hf.get_discussion_details(repos["workspace"], active["pr"], repo_type=DATASET)
     first = next((e for e in details.events if e.type == "comment"), None)
-    footer = f"\n\n---\nOperator: {active['operator']} · harness: {active['harness']} · model: {active['model']}\n"
+    footer = f"\n\n---\nContributor: {active['operator']} · harness: {active['harness']} · model: {active['model']}\n"
     if first is not None:
         hf.edit_discussion_comment(repos["workspace"], active["pr"], first.id, brief_text + footer, repo_type=DATASET)
 
@@ -484,7 +576,7 @@ def rebase_on_main(root: Path, env: dict) -> bool:
         git(root, "rebase", "--abort", check=False)
         raise ScriptError("the session branch does not rebase cleanly on main (another session changed the "
                           f"same files):\n{(proc.stderr or proc.stdout).strip()}\nThe branch is unchanged. "
-                          "Tell the operator; resolving it needs a human decision.")
+                          "Tell the contributor; resolving it needs a human decision.")
     say("Rebased the session branch on the latest main.")
     return True
 
@@ -494,7 +586,7 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
     from cards import Workspace
 
     from common import clear_active
-    from export_trace import export
+    from export_trace import Redactor, export
     from regen import regenerate
 
     ws = Workspace(root)
@@ -515,7 +607,14 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
     sync_sources_up(root, repos, session)
 
     out = Path(tempfile.mkdtemp(prefix=f"trace-{session}-"))
-    trace = export(active["harness"], root, active["started"], out / session)
+    token = get_token()
+    try:
+        trace = export(active["harness"], root, active["started"], out / session, secrets=[token])
+    except Exception as exc:  # export keeps what it can; this covers the rest, so that the session still ends
+        (out / session).mkdir(parents=True, exist_ok=True)
+        (out / session / "trace.jsonl").write_text("")
+        trace = {"records": 0, "omitted": 0, "models": [], "tokens": {}, "redactions": {},
+                 "note": f"the trace of this session is missing: the export failed ({type(exc).__name__}: {exc})"}
     commits = [line.split(" ", 1) for line in
                git_out(root, "log", "--reverse", "--format=%H %s", f"{base}..HEAD").splitlines() if line.strip()]
     meta = {
@@ -533,8 +632,17 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
         "commits_ref": f"refs/pr/{number}",
         "merge_commit": None,
         "trace_records": trace["records"],
+        "trace_records_omitted": trace["omitted"],
         "trace_note": trace["note"],
+        "tokens_by_model": trace["tokens"],
     }
+    # meta.json is uploaded with the trace: its texts (commit subjects, the note) get the same cleaning, and
+    # the counts cover both files.
+    redactor = Redactor([token])
+    meta = redactor.clean(meta)
+    redactions = Counter(trace["redactions"]) + redactor.counts
+    meta["trace_redactions"] = sum(redactions.values())
+    meta["trace_redactions_by_kind"] = dict(sorted(redactions.items()))
 
     def upload_trace() -> None:
         (out / session / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
@@ -543,8 +651,10 @@ def end_session(root: Path, active: dict, merge: bool, finish) -> None:
                              path_in_repo=session, commit_message=f"[{session}] trace")
 
     upload_trace()
+    redacted = meta["trace_redactions"]
     say(f"Uploaded the trace ({trace['records']} records) to {repos.get('traces')}/{session}."
-        + (f" Note: {trace['note']}." if trace["note"] else ""))
+        + (f" Secrets replaced with a marker in it: {redacted}." if redacted else "")
+        + (f" Note: {meta['trace_note']}." if meta["trace_note"] else ""))
 
     if status == "draft":
         hf.change_discussion_status(repos["workspace"], number, "open", repo_type=DATASET)

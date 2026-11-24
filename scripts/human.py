@@ -1,6 +1,6 @@
-"""The human view of a workspace: the files the researcher reads and writes.
+"""The human view of a workspace: the files the lead reads and writes.
 
-The researcher works with a handful of files, never with the record:
+The lead works with a handful of files, never with the record:
 
 - `project.md`: the question in one line as its title, then Goal, Approach
   and Next steps;
@@ -8,12 +8,12 @@ The researcher works with a handful of files, never with the record:
 - `draft.tex`: the draft paper; a claim is established when a `result`
   environment in it names its card with `\\card{CL-...}`;
 - `sessions/S<n>/note.tex`: what a session found (written by an agent);
-- `sessions/S<n>/debrief.md`: what a session asks of the researcher (questions
-  with an answer line, tick lines, a free note), and the researcher's answers;
+- `sessions/S<n>/debrief.md`: what a session asks of the lead (questions
+  with an answer line, tick lines, a free note), and the lead's answers;
 - `literature/seeds.md` and `literature/ratings.yaml`.
 
 This module parses those files, writes answers, ticks and notes back into a
-debrief, and computes what a new session receives from the researcher: what
+debrief, and computes what a new session receives from the lead: what
 they wrote in debriefs and their edits of the human files since the previous
 session started. That last part reads git history through a small `History`
 object, so that `session.py` (on a checkout) and the Space (on its clone of the
@@ -29,11 +29,11 @@ from pathlib import Path
 
 import yaml
 
-# Files the researcher writes and agents may change only as the design says
+# Files the lead writes and agents may change only as the design says
 # (apply a ticked line, remove a finished step, fix a convention). Every
 # change a session makes to them is listed in its debrief.
 HUMAN_FILES = ("project.md", "conventions.md", "draft.tex")
-# Files only the researcher writes.
+# Files only the lead writes.
 RESEARCHER_FILES = ("literature/seeds.md", "literature/ratings.yaml")
 RATINGS = ("high", "medium", "low", "not relevant")
 RATINGS_FILE = "literature/ratings.yaml"
@@ -326,7 +326,7 @@ def parse_draft(tex: str) -> list[DraftBlock]:
 
 
 def parse_ratings(text: str) -> dict[str, str]:
-    """The researcher's ratings of papers: paper card ID -> high, medium, low or not relevant."""
+    """The lead's ratings of papers: paper card ID -> high, medium, low or not relevant."""
     try:
         data = yaml.safe_load(text or "") or {}
     except yaml.YAMLError:
@@ -409,8 +409,12 @@ class History:
     def patch(self, sha: str, path: str) -> str:
         return self._git("show", "--format=", "--no-color", "-U1", sha, "--", path).strip()
 
+    def diff(self, old: str, new: str, path: str) -> str:
+        """The diff of `path` from commit `old` to commit `new` (`<sha>^` names the state before a commit)."""
+        return self._git("diff", "--no-color", "--no-renames", "-U1", old, new, "--", path)
+
     def uncommitted(self, paths: tuple[str, ...]) -> dict[str, tuple[int, int]]:
-        """Line counts of changes not committed yet (a local researcher's edits), by path."""
+        """Line counts of changes not committed yet (the lead's edits, in local mode), by path."""
         out = self._git("diff", "--numstat", "HEAD", "--", *paths)
         files = {}
         for row in out.splitlines():
@@ -440,7 +444,7 @@ class Received:
     previous: str | None  # the session whose start we count from, or None before the first session
     since: str | None  # the commit it started from
     debriefs: list[DebriefNews] = field(default_factory=list)
-    edits: dict[str, tuple[int, int]] = field(default_factory=dict)  # researcher's edits of HUMAN_FILES
+    edits: dict[str, tuple[int, int]] = field(default_factory=dict)  # the lead's edits of HUMAN_FILES
     patches: list[tuple[str, str, str]] = field(default_factory=list)  # (path, where it comes from, diff)
     ratings: list[tuple[str, str | None, str | None]] = field(default_factory=list)  # (paper, old, new)
     next_step: str | None = None
@@ -500,7 +504,7 @@ def already_received(sessions, debrief_session: str) -> tuple[dict[int, str], se
 
 
 def received(ws, history: History) -> Received:
-    """What a session started now receives from the researcher, computed from the files and git.
+    """What a session started now receives from the lead, computed from the files and git.
 
     `ws` is a cards.Workspace; `history.since` must be the commit the previous
     session started from (see `previous_start`), or None before the first one.
@@ -632,33 +636,76 @@ def handoff(log_text: str) -> str:
 MAX_DRAFT_DIFF_LINES = 60
 
 
+def diff_rows(diff: str) -> list[str]:
+    """The lines that a diff of one file adds (`+…`) and removes (`-…`), without its header."""
+    rows, in_hunks = [], False
+    for row in diff.splitlines():
+        if row.startswith("@@"):
+            in_hunks = True
+        elif in_hunks and row.startswith(("+", "-")):
+            rows.append(row)
+    return rows
+
+
+def net_change(history: History, path: str, commits: list[Commit], picked: set[str]) -> list[str]:
+    """The net change that the commits whose SHA is in `picked` made to `path`, as diff rows.
+
+    `commits` are all the commits that touch `path`, oldest first. The result is the diff from the state
+    before the first picked commit to the state after the last one, without the lines that the other
+    commits in between (the lead's own commits, or apply commits) added or removed. Lines are matched by
+    their text: a line that one of those commits and a picked commit both added counts once, for the other.
+    """
+    where = [i for i, c in enumerate(commits) if c.sha in picked]
+    if not where:
+        return []
+    first, last = where[0], where[-1]
+    others: dict[str, int] = {}
+    for c in commits[first:last + 1]:
+        if c.sha not in picked:
+            for row in diff_rows(history.diff(f"{c.sha}^", c.sha, path)):
+                others[row] = others.get(row, 0) + 1
+    net = []
+    for row in diff_rows(history.diff(f"{commits[first].sha}^", commits[last].sha, path)):
+        if others.get(row):
+            others[row] -= 1
+        else:
+            net.append(row)
+    return net
+
+
 def changed_by_session(history: History, session: str, base: str) -> str:
     """The text of 'Changed by this session' for a debrief, from the session's own commits since `base`.
 
-    It shows as a diff every change to conventions.md, and the changes to draft.tex that the session
-    worded itself (those not made by an apply commit, which only copies what the researcher ticked).
+    For each of the lead's files it gives the net change made by the session's commits: its line counts,
+    the diff of conventions.md, and the diff of what the session worded itself in draft.tex (leaving out
+    what its apply commits copied as the lead ticked). The lead's own commits are left out of both. A file
+    that the session changed and then restored reads "unchanged".
     """
-    commits = [c for c in history.commits(HUMAN_FILES, since=base) if c.subject.startswith(f"[{session}]")]
+    commits = history.commits(HUMAN_FILES, since=base)
     lines = []
     for path in HUMAN_FILES:
         touching = [c for c in commits if path in c.files]
-        if not touching:
+        ours = [c for c in touching if c.subject.startswith(f"[{session}]")]
+        net = net_change(history, path, touching, {c.sha for c in ours})
+        if not net:
             lines.append(f"- `{path}`: unchanged.")
             continue
-        added = sum(c.files[path][0] for c in touching)
-        removed = sum(c.files[path][1] for c in touching)
-        reasons, own = [], []
-        for c in touching:
+        added = sum(row.startswith("+") for row in net)
+        removed = len(net) - added
+        reasons, own = [], set()
+        for c in ours:
             m = re.match(rf"^\[{re.escape(session)}\]\s*apply the lines ticked in the (S\d+) debrief", c.subject, re.I)
             reason = f"as you ticked in {m.group(1)}" if m else re.sub(r"^\[S\d+\]\s*", "", c.subject)
             if reason not in reasons:
                 reasons.append(reason)
             if not m:
-                own.append(c)
+                own.add(c.sha)
         lines.append(f"- `{path}` (+{added} −{removed} lines): " + "; ".join(reasons) + ".")
-        shown = touching if path == "conventions.md" else own if path == "draft.tex" else []
-        diff = [row for c in shown for row in history.patch(c.sha, path).splitlines()
-                if row.startswith(("+", "-")) and not row.startswith(("+++", "---"))]
+        diff = []
+        if path == "conventions.md":
+            diff = net
+        elif path == "draft.tex":
+            diff = net_change(history, path, touching, own)
         if path == "draft.tex" and len(diff) > MAX_DRAFT_DIFF_LINES:
             more = len(diff) - MAX_DRAFT_DIFF_LINES
             diff = diff[:MAX_DRAFT_DIFF_LINES] + [f"… {more} more changed lines: read them in draft.tex."]

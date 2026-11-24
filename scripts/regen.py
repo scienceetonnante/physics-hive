@@ -148,7 +148,7 @@ def render_index(ws: Workspace) -> str:
             parts = [f"- **{paper_id}** [{keys[paper_id]}] — {one_line(paper.title, 160)}{year}"]
             rating = paper.rating or "?"
             mine = ws.ratings.get(paper_id)
-            parts.append(f"rating {rating}" + (f", researcher: {mine}" if mine else ""))
+            parts.append(f"rating {rating}" + (f", lead: {mine}" if mine else ""))
             if paper.topic:
                 parts.append(f"topic: {one_line(paper.topic, 60)}")
             if paper.why:

@@ -1,0 +1,114 @@
+==============================================================================
+0. Exact period: energy integral vs 4 K(k), w0 = 1 (mpmath, 40 digits)
+==============================================================================
+theta0 =  0.001:  T_energy = 6.283185699878690674035805  4K = 6.283185699878690674035805  rel diff = 0.0
+theta0 =    0.1:  T_energy = 6.287114549310479985851184  4K = 6.287114549310479985851184  rel diff = 0.0
+theta0 =    0.5:  T_energy = 6.382789697677741046443819  4K = 6.382789697677741046443819  rel diff = 1.15e-41
+theta0 =    1.0:  T_energy = 6.699975664370452712701211  4K = 6.699975664370452712701211  rel diff = 0.0
+theta0 =    2.0:  T_energy = 8.349752926918494734406372  4K = 8.349752926918494734406372  rel diff = 2.3e-41
+theta0 =    3.0:  T_energy = 16.15553937239337476376028  4K = 16.15553937239337476376028  rel diff = 9.18e-41
+
+==============================================================================
+1. Symbolic (SymPy)
+==============================================================================
+1a. (2/pi) elliptic_k(sin^2(theta0/2)) = 1 + theta0**2/16 + 11*theta0**4/3072 + 173*theta0**6/737280 + O(theta0**8)
+1b. (2/pi) K(m) from term-by-term integration = 25*m**3/256 + 9*m**2/64 + m/4 + 1 + O(m^4)
+    check against ((2n)!/(2^{2n} n!^2))^2: [1, 1/4, 9/64, 25/256] match = True
+    substituted m = sin^2(theta0/2): 173*theta0**6/737280 + 11*theta0**4/3072 + theta0**2/16 + 1
+1c. Lindstedt-Poincare: w2 = -1/8 ; T/T0 = epsilon**2/16 + 1 + O(eps^4)
+    (eps and theta0 differ at O(eps^3), which changes T/T0 only at O(theta0^4))
+
+a (from 1a) = 1/16  (from 1b) = 1/16  (from 1c) = 1/16
+theta0^4 coefficient (1a) = 11/3072  (1b) = 11/3072
+theta0^6 coefficient (1a) = 173/737280  (1b, needs m^3 term, included) = 173/737280
+LaTeX:  T = T_0\left(1 + \frac{\theta_{0}^{2}}{16} + \frac{11 \theta_{0}^{4}}{3072} + \frac{173 \theta_{0}^{6}}{737280} + O(\theta_0^{8})\right)
+LaTeX:  a = \frac{1}{16}
+LaTeX:  \frac{2}{\pi}K(m) = 1 + \frac{m}{4} + \frac{9 m^{2}}{64} + \frac{25 m^{3}}{256} + O(m^4)
+
+==============================================================================
+2. Numerical: exact period via K (mpmath, SciPy) and via ODE integration
+==============================================================================
+  theta0      T/T0 (mpmath, 40 dig)  SciPy - mpmath  ODE - mpmath    (T/T0-1)/theta0^2      minus a
+   0.001    1.000000062500003580729        0.00e+00      6.88e-15   0.0625000035807294   3.5807e-09
+   0.002    1.000000250000057291682        0.00e+00             -  0.06250001432292042   1.4323e-08
+   0.005    1.000001562502237959396       -2.22e-16             -  0.06250008951837582   8.9518e-08
+    0.01    1.000006250035807526315        0.00e+00      7.99e-15  0.06250035807526315   3.5808e-07
+    0.02    1.000025000572931684473        2.22e-16             -  0.06250143232921118   1.4323e-06
+    0.05     1.00015627238322431772        0.00e+00      8.22e-15  0.06250895328972708   8.9533e-06
+     0.1    1.000625358307736634047        0.00e+00      8.44e-15   0.0625358307736634   3.5831e-05
+     0.2    1.002505744228601916418        0.00e+00      8.44e-15   0.0626436057150479   1.4361e-04
+     0.3    1.005654176110364606289        0.00e+00             -  0.06282417900405119   3.2418e-04
+     0.5    1.015852531101436711026       -2.22e-16      1.33e-15  0.06341012440574684   9.1012e-04
+     0.7    1.031513380369900141747        0.00e+00             -  0.06431302116306152   1.8130e-03
+       1    1.066334245579963045695       -2.22e-16      6.66e-16  0.06633424557996305   3.8342e-03
+wrote C-S1-1.periods.csv
+
+ODE consistency: full period vs 4 x quarter period, and tolerance sensitivity
+  theta0 =  0.001: T_full/T0 = 1.000000062500011, (T_full - 4 T_quarter)/T0 = -2.8e-16, tol 1e-13 vs 1e-11: -7.2e-13
+  theta0 =   0.01: T_full/T0 = 1.000006250035816, (T_full - 4 T_quarter)/T0 = 2.7e-15, tol 1e-13 vs 1e-11: -7.1e-13
+  theta0 =   0.05: T_full/T0 = 1.000156272383232, (T_full - 4 T_quarter)/T0 = 3.8e-15, tol 1e-13 vs 1e-11: -7.1e-13
+  theta0 =    0.1: T_full/T0 = 1.000625358307745, (T_full - 4 T_quarter)/T0 = 5.4e-15, tol 1e-13 vs 1e-11: -7.2e-13
+  theta0 =    0.2: T_full/T0 = 1.002505744228610, (T_full - 4 T_quarter)/T0 = 7.6e-15, tol 1e-13 vs 1e-11: -7.3e-13
+  theta0 =    0.5: T_full/T0 = 1.015852531101438, (T_full - 4 T_quarter)/T0 = 2.8e-16, tol 1e-13 vs 1e-11: 2.3e-13
+  theta0 =      1: T_full/T0 = 1.066334245579964, (T_full - 4 T_quarter)/T0 = -2.7e-15, tol 1e-13 vs 1e-11: -1.5e-13
+
+ODE-only estimate of a: (T_ode/T0 - 1)/theta0^2
+  theta0 =  0.001: 0.062500010500   (minus a: 1.050e-08;  g - a - b theta0^2: 6.920e-09)
+  theta0 =   0.01: 0.062500358156   (minus a: 3.582e-07;  g - a - b theta0^2: 8.266e-11)
+  theta0 =   0.05: 0.062508953293   (minus a: 8.953e-06;  g - a - b theta0^2: 1.470e-09)
+  theta0 =    0.1: 0.062535830775   (minus a: 3.583e-05;  g - a - b theta0^2: 2.348e-08)
+  theta0 =    0.2: 0.062643605715   (minus a: 1.436e-04;  g - a - b theta0^2: 3.765e-07)
+  theta0 =    0.5: 0.063410124406   (minus a: 9.101e-04;  g - a - b theta0^2: 1.494e-05)
+  theta0 =      1: 0.066334245580   (minus a: 3.834e-03;  g - a - b theta0^2: 2.535e-04)
+
+==============================================================================
+3. Extract a from the numbers
+==============================================================================
+3a. Richardson extrapolation of g(theta0) = (T/T0-1)/theta0^2 in x = theta0^2 (mpmath values)
+  level 0: 0.0625005594946610265  0.0625001398725911157
+  level 1: 0.0624999999770840012  0.0624999999985678122
+  level 2: 0.0625000000000042384  0.0625000000000000662
+  level 3: 0.0624999999999999966  0.0625
+  level 4: 0.0625  0.0625
+  Richardson limit: a = 0.0625000000000000000000111,  minus 1/16 = 1.11e-23
+
+3b. Least-squares fit of T/T0 - 1 = a x + b x^2 + ... (x = theta0^2), no constant term
+  data: SciPy K, 25 amplitudes in [0.05, 0.5] rad
+    degree 2: a = 0.06249430405128 +/- 5.9e-07  (minus 1/16: -5.7e-06),  b = 0.0036595277 +/- 3.1e-06 (minus 11/3072: +7.9e-05),  max resid 2.3e-07
+    degree 3: a = 0.06250004543809 +/- 6.3e-09  (minus 1/16: +4.5e-08),  b = 0.0035795703 +/- 8.0e-08 (minus 11/3072: -1.2e-06),  max resid 9.4e-10
+    degree 4: a = 0.06249999965043 +/- 5.9e-11  (minus 1/16: -3.5e-10),  b = 0.0035807433 +/- 1.3e-09 (minus 11/3072: +1.4e-08),  max resid 3.8e-12
+    degree 5: a = 0.06250000000260 +/- 5.2e-13  (minus 1/16: +2.6e-12),  b = 0.0035807290 +/- 1.8e-11 (minus 11/3072: -1.5e-10),  max resid 2.5e-14
+  data: mpmath K (rounded to double), 25 amplitudes in [0.05, 0.5] rad
+    degree 2: a = 0.06249430405128 +/- 5.9e-07  (minus 1/16: -5.7e-06),  b = 0.0036595277 +/- 3.1e-06 (minus 11/3072: +7.9e-05),  max resid 2.3e-07
+    degree 3: a = 0.06250004543809 +/- 6.3e-09  (minus 1/16: +4.5e-08),  b = 0.0035795703 +/- 8.0e-08 (minus 11/3072: -1.2e-06),  max resid 9.4e-10
+    degree 4: a = 0.06249999965043 +/- 5.9e-11  (minus 1/16: -3.5e-10),  b = 0.0035807433 +/- 1.3e-09 (minus 11/3072: +1.4e-08),  max resid 3.8e-12
+    degree 5: a = 0.06250000000260 +/- 5.2e-13  (minus 1/16: +2.6e-12),  b = 0.0035807290 +/- 1.8e-11 (minus 11/3072: -1.5e-10),  max resid 2.5e-14
+  data: ODE periods (no elliptic integral), 25 amplitudes in [0.05, 0.5] rad
+    degree 2: a = 0.062494304051 +/- 5.9e-07  (minus 1/16: -5.7e-06),  b = 0.00365953 +/- 3.1e-06, max resid 2.3e-07
+    degree 3: a = 0.062500045438 +/- 6.3e-09  (minus 1/16: +4.5e-08),  b = 0.00357957 +/- 8.0e-08, max resid 9.4e-10
+    degree 4: a = 0.062499999651 +/- 5.9e-11  (minus 1/16: -3.5e-10),  b = 0.00358074 +/- 1.3e-09, max resid 3.8e-12
+    degree 5: a = 0.062500000003 +/- 4.8e-13  (minus 1/16: +3.2e-12),  b = 0.00358073 +/- 1.7e-11, max resid 2.4e-14
+  adopted (SciPy K, degree 5): a = 0.0625000000026 +/- 3.5e-10  (|a - 1/16| / error = 0.01)
+  adopted (ODE, degree 5): a = 0.0625000000032 +/- 3.5e-10  (|a - 1/16| / error = 0.01)
+
+==============================================================================
+4. Relative error of T0(1 + theta0^2/16) and of T0(1 + theta0^2/16 + 11 theta0^4/3072)
+==============================================================================
+ theta0    deg           T/T0 exact  rel err, order 2  -(11/3072)th^4  rel err, order 4  small-angle T0
+   0.10    5.7    1.000625358307737        -3.581e-07      -3.581e-07        -2.347e-10      -6.250e-04
+   0.20   11.5    1.002505744228602        -5.730e-06      -5.729e-06        -1.502e-08      -2.499e-03
+   0.50   28.6    1.015852531101437        -2.240e-04      -2.238e-04        -3.677e-06      -1.561e-02
+   1.00   57.3    1.066334245579963        -3.596e-03      -3.581e-03        -2.377e-04      -6.221e-02
+wrote C-S1-1.truncation.csv
+(relative error = T_truncated / T_exact - 1; negative means the formula underestimates T;
+ -(11/3072) theta0^4 is the leading-order prediction of the order-2 error; last column: T0 alone)
+
+==============================================================================
+5. Sanity checks
+==============================================================================
+theta0 = pi/2: (2/pi)K = 1.180340599016096226, Gamma(1/4)^2/(2 pi^(3/2)) = 1.180340599016096226, ODE = 1.180340599016107
+theta0 = 1e-8: T/T0 - 1 = 6.25e-18 (expected theta0^2/16 = 6.25e-18)
+T/T0 increasing on (0, pi): True
+theta0 = pi - 1e-6: T/T0 = 10.119041 (diverges logarithmically as theta0 -> pi; (2/pi) ln(8/(pi - theta0)) = 10.119041)
+Convention trap at theta0 = 0.01: ellipk(k) instead of ellipk(k^2) gives (T/T0-1)/theta0^2 = 12.5352 instead of 0.062500
+Dimensions: T0 = 2 pi sqrt(L/g) carries time; T/T0 is a function of the angle theta0 only, so a is a pure number (per rad^2).

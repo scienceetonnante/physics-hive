@@ -1,8 +1,7 @@
 # Physics Hive — Shared Spaces on the Hugging Face Hub
 
-*Design proposal, revised in November 2026 after the first shared run (`workspaces/helmholtz-2`).*
-*Audience: people who know Physics Hive, and the coding agent that will implement the revision.*
-*A clickable mock-up of the Space described here is at https://claude.ai/artifact/JV27FRGWrAUhbDmFaA1pBX (private; share it from its page). Its session S1 is the real output of helmholtz-2; sessions S2 and S3 are invented to show the flow.*
+*The design of PhysicsHive's workspace format and shared spaces, as written in November 2026, when it was revised after the first shared run (a workspace called helmholtz-2, which is not in this repository). It was written for the people working on the method and for the coding agent that implemented the revision, and it was not updated afterwards. Where it and the code differ, the code is the reference; [DOCUMENTATION.md](../DOCUMENTATION.md) describes the code, and [ROADMAP.md](../ROADMAP.md) the questions of section 18 that are still open. It says "researcher" and "operator" where the code and the guides now say "lead" and "contributor".*
+*The worked example of section 19 and the "start output" of section 6 come from a mock-up of the Space made at the time, which is not published. Session S1 of that example is the real output of helmholtz-2; sessions S2 and S3 were invented to show the flow. For a real workspace after one session, see [`examples/pendulum/`](../examples/pendulum/).*
 
 ## 1. Summary
 

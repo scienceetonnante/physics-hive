@@ -46,7 +46,7 @@ supports: [<the card ID(s) reserved in the brief>]
 <one line per data file: path, content, shape, units; omit the section if there are none>
 ```
 
-The header carries no authorship: no model, no operator.
+The header carries no authorship: no model, no contributor.
 
 ## Behaviour
 
@@ -76,6 +76,6 @@ When there are no flags, keep the `## Flags` heading and write `- (none)` under 
 
 ## Constraints
 
-- Write only files named after your artefact ID in `computations/`. Do not edit cards, the session folder, the researcher's files or anything else.
+- Write only files named after your artefact ID in `computations/`. Do not edit cards, the session folder, the lead's files or anything else.
 - Use the artefact ID from your dispatch; do not renumber.
 - Flags are for what the coordinator needs to act on or know.

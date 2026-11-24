@@ -1,0 +1,299 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{D-S1-1: the $\theta_0^2$ correction to the period of the simple pendulum}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Target and conventions}
+
+We use the conventions of \texttt{conventions.md}. A point mass on a massless
+rigid rod of length $L$ swings without friction in uniform gravity $g$; $\theta$
+is the angle from the downward vertical, in radians, and the equation of motion is
+\begin{equation}
+  \ddot\theta + \omega_0^2 \sin\theta = 0, \qquad \omega_0 = \sqrt{g/L}.
+  \label{eq:eom}
+\end{equation}
+The pendulum is released from rest at $\theta = \theta_0$, with
+$0 < \theta_0 < \pi$, so that it oscillates and $\theta_0$ is the largest value
+of $|\theta|$. The small-oscillation period is $T_0 = 2\pi/\omega_0$, and
+$T(\theta_0)$ is the exact period. The target is the coefficient $a$ in
+\begin{equation}
+  T(\theta_0) = T_0\left(1 + a\,\theta_0^2 + O(\theta_0^4)\right).
+  \label{eq:target}
+\end{equation}
+The elliptic modulus is $k = \sin(\theta_0/2)$ and
+$K(k) = \int_0^{\pi/2} d\varphi\,(1 - k^2\sin^2\varphi)^{-1/2}$.
+
+We obtain $a$ by two routes that share only Eq.~\eqref{eq:eom}: the exact
+period as an elliptic integral, expanded in $k$ (Section~\ref{sec:route1}), and
+the Lindstedt--Poincar\'e perturbation method applied directly to
+Eq.~\eqref{eq:eom} (Section~\ref{sec:route2}).
+
+\section{Route 1: exact period and its expansion}
+\label{sec:route1}
+
+\subsection{The period as an integral}
+
+Multiplying Eq.~\eqref{eq:eom} by $\dot\theta$ and integrating gives the
+conserved quantity $\tfrac12\dot\theta^2 - \omega_0^2\cos\theta$. Its value at
+the release point ($\theta = \theta_0$, $\dot\theta = 0$) is
+$-\omega_0^2\cos\theta_0$, hence
+\begin{equation}
+  \dot\theta^2 = 2\omega_0^2\left(\cos\theta - \cos\theta_0\right).
+  \label{eq:energy}
+\end{equation}
+With $\cos\theta = 1 - 2\sin^2(\theta/2)$ and $k = \sin(\theta_0/2)$,
+\begin{equation}
+  \dot\theta^2 = 4\omega_0^2\left(k^2 - \sin^2\tfrac{\theta}{2}\right).
+  \label{eq:energy2}
+\end{equation}
+For $|\theta| < \theta_0 < \pi$ we have $\cos\theta > \cos\theta_0$, so
+$\dot\theta \neq 0$ strictly between the turning points $\pm\theta_0$: the motion
+is a back-and-forth swing between them. The potential $-\omega_0^2\cos\theta$ is
+even in $\theta$ and Eq.~\eqref{eq:eom} is invariant under time reversal, so the
+four quarter-swings ($0\to\theta_0$, $\theta_0\to 0$, $0\to-\theta_0$,
+$-\theta_0\to 0$) take equal times. On the quarter-swing $0 \to \theta_0$,
+$\dot\theta > 0$ and $dt = d\theta/\dot\theta$, so
+\begin{equation}
+  T = 4\int_0^{\theta_0}\frac{d\theta}{2\omega_0\sqrt{k^2 - \sin^2(\theta/2)}}.
+  \label{eq:Tint}
+\end{equation}
+The integrand has an integrable inverse-square-root singularity at
+$\theta = \theta_0$ (the factor $k^2 - \sin^2(\theta/2)$ vanishes linearly there,
+since its derivative $-\tfrac12\sin\theta_0 \neq 0$ for $0<\theta_0<\pi$).
+
+\subsection{Reduction to the complete elliptic integral}
+
+Substitute $\sin(\theta/2) = k\sin\varphi$, which maps $\theta\in[0,\theta_0]$
+monotonically onto $\varphi\in[0,\pi/2]$. Then
+$\tfrac12\cos(\theta/2)\,d\theta = k\cos\varphi\,d\varphi$, with
+$\cos(\theta/2) = \sqrt{1 - k^2\sin^2\varphi}$ (positive since
+$|\theta/2| < \pi/2$), and $\sqrt{k^2 - \sin^2(\theta/2)} = k\cos\varphi$.
+Therefore
+\begin{equation}
+  \frac{d\theta}{2\omega_0\sqrt{k^2 - \sin^2(\theta/2)}}
+  = \frac{1}{2\omega_0\,k\cos\varphi}\cdot
+    \frac{2k\cos\varphi\,d\varphi}{\sqrt{1 - k^2\sin^2\varphi}}
+  = \frac{d\varphi}{\omega_0\sqrt{1 - k^2\sin^2\varphi}},
+  \label{eq:subst}
+\end{equation}
+and Eq.~\eqref{eq:Tint} becomes
+\begin{equation}
+  T(\theta_0) = \frac{4}{\omega_0}K(k) = \frac{2}{\pi}\,T_0\,K(k),
+  \qquad k = \sin\frac{\theta_0}{2}.
+  \label{eq:TK}
+\end{equation}
+The singularity has disappeared: for $0 \le k < 1$ the integrand of $K$ is
+bounded on $[0,\pi/2]$. Check: at $k=0$, $K = \pi/2$ and $T = T_0$.
+
+\subsection{Series of $K(k)$}
+
+For $|x| < 1$, the binomial series gives
+\begin{equation}
+  (1-x)^{-1/2} = \sum_{n=0}^{\infty} c_n\,x^n,
+  \qquad c_n = \frac{(2n)!}{4^n (n!)^2} = \binom{2n}{n}4^{-n},
+  \label{eq:binom}
+\end{equation}
+so $c_0 = 1$, $c_1 = \tfrac12$, $c_2 = \tfrac38$. Take $x = k^2\sin^2\varphi$,
+with $0 \le x \le k^2 < 1$. All terms are non-negative and the series converges
+uniformly on $[0,\pi/2]$, so it can be integrated term by term. With the Wallis
+integral
+\begin{equation}
+  \int_0^{\pi/2}\sin^{2n}\varphi\,d\varphi = \frac{\pi}{2}\,c_n,
+  \label{eq:wallis}
+\end{equation}
+we obtain
+\begin{equation}
+  K(k) = \frac{\pi}{2}\sum_{n=0}^{\infty} c_n^2\,k^{2n}
+       = \frac{\pi}{2}\left(1 + \frac{1}{4}k^2 + \frac{9}{64}k^4
+         + \sum_{n\ge3} c_n^2 k^{2n}\right).
+  \label{eq:Kseries}
+\end{equation}
+The series has radius of convergence $1$ in $k^2$ (since $c_n^2 \sim 1/(\pi n)$).
+
+\subsection{Size of the remainder}
+
+Fix any $k_\ast < 1$. For $0 \le k \le k_\ast$,
+\begin{equation}
+  0 \le \frac{2}{\pi}K(k) - 1 - \frac{k^2}{4}
+  = k^4\sum_{n\ge2} c_n^2 k^{2n-4}
+  \le k^4 \sum_{n\ge 2} c_n^2 k_\ast^{2n-4} \equiv C(k_\ast)\,k^4,
+  \label{eq:remK}
+\end{equation}
+with $C(k_\ast)$ finite. So $\tfrac{2}{\pi}K(k) = 1 + k^2/4 + O(k^4)$.
+
+\subsection{Expansion in $\theta_0$}
+
+From $k^2 = \sin^2(\theta_0/2) = \tfrac12(1 - \cos\theta_0)$ and the Taylor series
+of $\cos$,
+\begin{equation}
+  k^2 = \frac{\theta_0^2}{4} - \frac{\theta_0^4}{48} + O(\theta_0^6),
+  \qquad k^4 = \frac{\theta_0^4}{16} + O(\theta_0^6).
+  \label{eq:k2}
+\end{equation}
+In particular $k^4 = O(\theta_0^4)$ and $k^2 = \theta_0^2/4 + O(\theta_0^4)$.
+Inserting into Eqs.~\eqref{eq:TK} and \eqref{eq:remK},
+\begin{equation}
+  \frac{T(\theta_0)}{T_0} = 1 + \frac{k^2}{4} + O(k^4)
+  = 1 + \frac{\theta_0^2}{16} + O(\theta_0^4).
+  \label{eq:result1}
+\end{equation}
+Hence, by Route 1,
+\begin{equation}
+  a = \frac{1}{16}.
+  \label{eq:a1}
+\end{equation}
+
+\paragraph{Why the next term is $O(\theta_0^4)$ and not $O(\theta_0^3)$.}
+$K$ is a power series in $k^2$ converging for $k^2<1$, and
+$k^2 = \sin^2(\theta_0/2)$ is an entire, even function of $\theta_0$. Their
+composition, $T(\theta_0)/T_0$, is therefore analytic and even in $\theta_0$
+for $|\theta_0| < \pi$ (real $\theta_0$): only even powers of $\theta_0$ occur,
+and after the $\theta_0^2$ term the next one is $\theta_0^4$.
+
+\paragraph{By-product: the $\theta_0^4$ coefficient.}
+Keeping the next order in Eqs.~\eqref{eq:Kseries} and \eqref{eq:k2},
+\begin{equation}
+  \frac{T(\theta_0)}{T_0} = 1 + \frac{\theta_0^2}{16}
+  + \left(-\frac{1}{4\cdot48} + \frac{9}{64\cdot16}\right)\theta_0^4 + O(\theta_0^6)
+  = 1 + \frac{\theta_0^2}{16} + \frac{11}{3072}\,\theta_0^4 + O(\theta_0^6),
+  \label{eq:theta4}
+\end{equation}
+using $-\tfrac{1}{192} + \tfrac{9}{1024} = \tfrac{-16 + 27}{3072}$. This is not
+part of the target and is obtained only by this route.
+
+\section{Route 2: Lindstedt--Poincar\'e}
+\label{sec:route2}
+
+This route does not use the energy integral or elliptic functions. It treats
+$\sin\theta$ as a perturbation of $\theta$ and removes secular terms by letting
+the frequency depend on the amplitude.
+
+\subsection{Set-up}
+
+Let $\omega$ be the (unknown) angular frequency of the periodic solution, so that
+$T = 2\pi/\omega$, and introduce $\tau = \omega t$ and $\theta(t) = u(\tau)$, with
+$u$ $2\pi$-periodic in $\tau$. Eq.~\eqref{eq:eom} becomes
+\begin{equation}
+  \omega^2 u'' + \omega_0^2\sin u = 0,
+  \qquad u(0) = \varepsilon,\quad u'(0) = 0,
+  \label{eq:eomtau}
+\end{equation}
+where $' = d/d\tau$. The initial conditions say that the pendulum is released
+from rest at $\theta = \varepsilon$. By energy conservation
+(the first integral of Eq.~\eqref{eq:eom}) $|\theta|$ never exceeds its value at
+a turning point, so the amplitude is exactly $\theta_0 = \varepsilon$.
+
+\paragraph{Only even powers of $\varepsilon$ in $\omega$.}
+If $u(\tau)$ solves Eq.~\eqref{eq:eomtau} with amplitude $\varepsilon$, then
+$-u(\tau)$ solves it with amplitude $-\varepsilon$ and the same $\omega$, because
+$\sin$ is odd. So $\omega(\varepsilon)$ is even in $\varepsilon$, and $u$ is odd
+in $\varepsilon$. We therefore write
+\begin{align}
+  \omega^2 &= \omega_0^2\left(1 + \lambda\,\varepsilon^2 + O(\varepsilon^4)\right),
+  \label{eq:omexp}\\
+  u(\tau) &= \varepsilon\,u_1(\tau) + \varepsilon^3 u_3(\tau) + O(\varepsilon^5),
+  \label{eq:uexp}
+\end{align}
+with $u_1(0) = 1$, $u_1'(0) = 0$, $u_3(0) = 0$, $u_3'(0) = 0$, and each $u_j$
+$2\pi$-periodic. Expanding the sine,
+\begin{equation}
+  \sin u = u - \frac{u^3}{6} + O(u^5)
+  = \varepsilon u_1 + \varepsilon^3\left(u_3 - \frac{u_1^3}{6}\right) + O(\varepsilon^5).
+  \label{eq:sinexp}
+\end{equation}
+
+\subsection{Order $\varepsilon$}
+
+Inserting Eqs.~\eqref{eq:omexp}--\eqref{eq:sinexp} into Eq.~\eqref{eq:eomtau}
+and dividing by $\omega_0^2$, the order-$\varepsilon$ terms give
+\begin{equation}
+  u_1'' + u_1 = 0 \quad\Longrightarrow\quad u_1(\tau) = \cos\tau .
+  \label{eq:order1}
+\end{equation}
+
+\subsection{Order $\varepsilon^3$}
+
+The order-$\varepsilon^3$ terms give
+$u_3'' + \lambda u_1'' + u_3 - u_1^3/6 = 0$, that is, with $u_1'' = -\cos\tau$
+and $\cos^3\tau = \tfrac14(3\cos\tau + \cos3\tau)$,
+\begin{equation}
+  u_3'' + u_3 = \lambda\cos\tau + \frac{3\cos\tau + \cos3\tau}{24}
+  = \left(\lambda + \frac18\right)\cos\tau + \frac{1}{24}\cos3\tau .
+  \label{eq:order3}
+\end{equation}
+The term in $\cos\tau$ drives the oscillator $u_3''+u_3$ at its own frequency and
+would produce a secular term $\propto \tau\sin\tau$, which is not periodic. A
+$2\pi$-periodic $u_3$ exists only if its coefficient vanishes:
+\begin{equation}
+  \lambda = -\frac18 .
+  \label{eq:lambda}
+\end{equation}
+The remaining equation $u_3'' + u_3 = \tfrac{1}{24}\cos3\tau$ has the particular
+solution $-\tfrac{1}{192}\cos3\tau$ (since $(1 - 9)A = \tfrac1{24}$); with the
+initial conditions $u_3(0) = u_3'(0) = 0$,
+\begin{equation}
+  u_3(\tau) = \frac{\cos\tau - \cos3\tau}{192},
+  \label{eq:u3}
+\end{equation}
+which is $2\pi$-periodic, as required.
+
+\subsection{Period}
+
+From Eqs.~\eqref{eq:omexp} and \eqref{eq:lambda},
+$\omega = \omega_0\left(1 - \varepsilon^2/8 + O(\varepsilon^4)\right)^{1/2}
+= \omega_0\left(1 - \varepsilon^2/16 + O(\varepsilon^4)\right)$, and with
+$\varepsilon = \theta_0$,
+\begin{equation}
+  T = \frac{2\pi}{\omega} = T_0\left(1 + \frac{\theta_0^2}{16} + O(\theta_0^4)\right).
+  \label{eq:result2}
+\end{equation}
+Hence, by Route 2,
+\begin{equation}
+  a = \frac{1}{16}.
+  \label{eq:a2}
+\end{equation}
+Route 2 is a formal expansion: it does not by itself bound the remainder. The
+statement that the remainder is $O(\theta_0^4)$ is supplied rigorously by
+Route 1 (Eq.~\eqref{eq:remK} and the analyticity argument after
+Eq.~\eqref{eq:a1}); Route 2 is consistent with it through the parity argument
+above, which excludes odd powers of $\varepsilon$ in $\omega$.
+
+\section{Comparison and checks}
+
+\paragraph{Agreement.} Eqs.~\eqref{eq:a1} and \eqref{eq:a2} agree:
+\begin{equation}
+  T(\theta_0) = 2\pi\sqrt{\frac{L}{g}}\left(1 + \frac{\theta_0^2}{16} + O(\theta_0^4)\right),
+  \qquad a = \frac{1}{16}.
+  \label{eq:final}
+\end{equation}
+
+\paragraph{Limits.} At $\theta_0\to0$, both routes give $T\to T_0$. As
+$\theta_0\to\pi$, $k\to1$ and $K(k)\to\infty$ logarithmically, so
+$T\to\infty$ (the pendulum takes infinitely long to leave the upright position);
+the correction is positive, consistent with this growth.
+
+\paragraph{Sign.} $\sin\theta < \theta$ for $0<\theta<\pi$: the restoring torque
+is weaker than in the linearised problem, so large swings are slower and $a > 0$.
+
+\paragraph{Dimensions.} $\theta_0$ is in radians (dimensionless), so $a$ is a pure
+number, and $T_0 = 2\pi\sqrt{L/g}$ has dimensions of time.
+
+\paragraph{Hand evaluation at $\theta_0 = 0.5$.} Here
+$k^2 = \tfrac12(1-\cos0.5) = 0.0612087$. Summing the series of
+Eq.~\eqref{eq:Kseries} term by term (terms $n = 1,\dots,6$:
+$0.0153022$, $5.2685\times10^{-4}$, $2.2394\times10^{-5}$,
+$1.049\times10^{-6}$, $5.2\times10^{-8}$, $2.7\times10^{-9}$; the rest are below
+$10^{-9}$) gives $T/T_0 \approx 1.0158525$. The truncation
+$1 + \theta_0^2/16 = 1.015625$ differs from it by $2.3\times10^{-4}$, which is of
+order $\theta_0^4 = 0.0625$ times a small coefficient. Adding the by-product term
+of Eq.~\eqref{eq:theta4}, $\tfrac{11}{3072}\theta_0^4 = 2.24\times10^{-4}$, leaves
+a residual of $3.7\times10^{-6} \approx 2.4\times10^{-4}\,\theta_0^6$, consistent
+with an $O(\theta_0^6)$ remainder. This is a rough hand check only; the
+systematic numerical comparison is the job of a separate computation.
+
+\end{document}

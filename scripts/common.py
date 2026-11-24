@@ -140,7 +140,7 @@ def changes_since(root: Path, base: str) -> list[tuple[str, str]]:
 def session_paths(root: Path, base: str, session: str) -> set[str]:
     """Files changed by the session itself since `base`: its `[S<n>]` commits and uncommitted changes.
 
-    In local mode the researcher may commit edits on the same branch while a session runs; those are
+    In local mode the lead may commit edits on the same branch while a session runs; those are
     theirs, not the session's.
     """
     out = git(root, "log", "--no-renames", "--name-only", "--format=\x1e%s", f"{base}..HEAD", check=False).stdout
@@ -183,7 +183,7 @@ def detect_harness() -> str:
 
 
 def operator_name(root: Path) -> str:
-    """Local-mode operator: the git user name, else the login name."""
+    """The contributor's name in local mode: the git user name, else the login name."""
     if shutil.which("git") and is_git_repo(root):
         name = git(root, "config", "user.name", check=False).stdout.strip()
         if name:
